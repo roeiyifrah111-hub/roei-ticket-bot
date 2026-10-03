@@ -1,9 +1,6 @@
 const {
   Client,
   GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder,
   PermissionFlagsBits,
   ChannelType,
   ActionRowBuilder,
@@ -17,31 +14,20 @@ const client = new Client({
 });
 
 const TOKEN = process.env.BOT_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
-const CATEGORY_ID = process.env.CATEGORY_ID;
 
-// רול הצוות שיכול לראות את כל הטיקטים
+// החדר שבו מערכת הטיקטים תישלח אוטומטית
+const PANEL_CHANNEL_ID = "1541390151757078599";
+
+// הרול שרואה את כל הטיקטים
 const SUPPORT_ROLE_ID = "1555587941575696444";
 
-
-// =========================
-// פקודות
-// =========================
-
-const commands = [
-  new SlashCommandBuilder()
-    .setName("ticketpanel")
-    .setDescription("שולח את מערכת הטיקטים")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageChannels
-    )
-].map(command => command.toJSON());
+// אופציונלי - קטגוריית הטיקטים מ-Railway
+const CATEGORY_ID = process.env.CATEGORY_ID;
 
 
-// =========================
+// ========================================
 // סוגי הטיקטים
-// =========================
+// ========================================
 
 const ticketTypes = {
   report: {
@@ -70,9 +56,9 @@ const ticketTypes = {
 };
 
 
-// =========================
-// יצירת התפריט
-// =========================
+// ========================================
+// תפריט בחירת סוג טיקט
+// ========================================
 
 function createTicketMenu() {
   const menu = new StringSelectMenuBuilder()
@@ -94,7 +80,7 @@ function createTicketMenu() {
 
       new StringSelectMenuOptionBuilder()
         .setLabel("כללי")
-        .setDescription("פתיחת פנייה כללית")
+        .setDescription("פתיחת טיקט כללי")
         .setEmoji("💬")
         .setValue("general"),
 
@@ -109,145 +95,289 @@ function createTicketMenu() {
 }
 
 
-// =========================
+// ========================================
+// הודעת מערכת הטיקטים
+// ========================================
+
+function createPanelEmbed() {
+  return new EmbedBuilder()
+    .setTitle("מערכת טיקטים🎫")
+    .setDescription(
+      "**שלום לכולם! ✨**\n\n" +
+
+      "**בחרו סוג פנייה**\n\n" +
+
+      "1️⃣ 🚨 **דיווח על משתמש**\n" +
+      "2️⃣ 🛠️ **תמיכה טכנית**\n" +
+      "3️⃣ 💬 **כללי**\n" +
+      "4️⃣ 🛡️ **בחינה לצוות**\n\n" +
+
+      "**⚠️ פניות שלא קשורות יסגרו ישר, פתחו טיקט רק אם באמת צריך**"
+    );
+}
+
+
+// ========================================
 // כשהבוט עולה
-// =========================
+// ========================================
 
 client.once("ready", async () => {
   console.log(`✅ הבוט מחובר בתור ${client.user.tag}`);
 
   try {
-    const rest = new REST({
-      version: "10"
-    }).setToken(TOKEN);
 
-    await rest.put(
-      Routes.applicationGuildCommands(
-        CLIENT_ID,
-        GUILD_ID
-      ),
-      {
-        body: commands
+    const panelChannel =
+      await client.channels.fetch(PANEL_CHANNEL_ID);
+
+    if (!panelChannel || !panelChannel.isTextBased()) {
+      console.log("❌ החדר של מערכת הטיקטים לא נמצא");
+      return;
+    }
+
+
+    // ========================================
+    // מוחק את פקודת /ticketpanel הישנה
+    // ========================================
+
+    try {
+
+      const commands =
+        await panelChannel.guild.commands.fetch();
+
+      const oldCommand =
+        commands.find(
+          command => command.name === "ticketpanel"
+        );
+
+      if (oldCommand) {
+        await oldCommand.delete();
+        console.log("✅ הפקודה /ticketpanel נמחקה");
       }
-    );
 
-    console.log("✅ הפקודות נטענו בהצלחה");
+    } catch (error) {
+      console.log(
+        "⚠️ לא הצלחתי למחוק את הפקודה הישנה:",
+        error.message
+      );
+    }
+
+
+    // ========================================
+    // מחפש אם כבר קיימת מערכת טיקטים
+    // ========================================
+
+    const messages =
+      await panelChannel.messages.fetch({
+        limit: 100
+      });
+
+    const existingPanel =
+      messages.find(message => {
+
+        if (message.author.id !== client.user.id) {
+          return false;
+        }
+
+        return message.components.some(row =>
+          row.components.some(component =>
+            component.customId === "ticket_type"
+          )
+        );
+      });
+
+
+    // אם כבר יש פאנל - מעדכן אותו
+    if (existingPanel) {
+
+      await existingPanel.edit({
+        embeds: [
+          createPanelEmbed()
+        ],
+
+        components: [
+          createTicketMenu()
+        ]
+      });
+
+      console.log(
+        "✅ מערכת הטיקטים הקיימת עודכנה"
+      );
+
+    }
+
+    // אם אין - שולח חדש
+    else {
+
+      await panelChannel.send({
+        embeds: [
+          createPanelEmbed()
+        ],
+
+        components: [
+          createTicketMenu()
+        ]
+      });
+
+      console.log(
+        "✅ מערכת הטיקטים נשלחה אוטומטית"
+      );
+
+    }
 
   } catch (error) {
+
     console.error(
-      "❌ שגיאה בטעינת הפקודות:",
+      "❌ שגיאה בהפעלת מערכת הטיקטים:",
       error
     );
+
   }
 });
 
 
-// =========================
-// אינטראקציות
-// =========================
+// ========================================
+// לחיצה על סוג טיקט
+// ========================================
 
 client.on("interactionCreate", async interaction => {
 
-  // =========================
-  // /ticketpanel
-  // =========================
-
   if (
-    interaction.isChatInputCommand() &&
-    interaction.commandName === "ticketpanel"
+    !interaction.isStringSelectMenu() ||
+    interaction.customId !== "ticket_type"
   ) {
-
-    const embed = new EmbedBuilder()
-      .setTitle("מערכת טיקטים🎫")
-      .setDescription(
-        "**שלום לכולם! ✨**\n\n" +
-
-        "**בחרו סוג פנייה**\n\n" +
-
-        "1️⃣ 🚨 **דיווח על משתמש**\n" +
-        "2️⃣ 🛠️ **תמיכה טכנית**\n" +
-        "3️⃣ 💬 **כללי**\n" +
-        "4️⃣ 🛡️ **בחינה לצוות**\n\n" +
-
-        "**⚠️ פניות שלא קשורות יסגרו ישר, פתחו טיקט רק אם באמת צריך**"
-      );
-
-    await interaction.reply({
-      embeds: [embed],
-      components: [
-        createTicketMenu()
-      ]
-    });
-
     return;
   }
 
 
-  // =========================
-  // פתיחת טיקט מהתפריט
-  // =========================
-
-  if (
-    interaction.isStringSelectMenu() &&
-    interaction.customId === "ticket_type"
-  ) {
-
-    await interaction.deferReply({
-      ephemeral: true
-    });
-
-    try {
-
-      const typeId = interaction.values[0];
-
-      const ticketType =
-        ticketTypes[typeId];
+  await interaction.deferReply({
+    ephemeral: true
+  });
 
 
-      if (!ticketType) {
-        return interaction.editReply(
-          "❌ סוג הטיקט לא נמצא."
+  try {
+
+    const guild = interaction.guild;
+
+    const typeId =
+      interaction.values[0];
+
+    const ticketType =
+      ticketTypes[typeId];
+
+
+    if (!ticketType) {
+      return interaction.editReply(
+        "❌ סוג הטיקט לא נמצא."
+      );
+    }
+
+
+    // ========================================
+    // בודק שהרול קיים
+    // ========================================
+
+    const supportRole =
+      await guild.roles
+        .fetch(SUPPORT_ROLE_ID)
+        .catch(() => null);
+
+
+    if (!supportRole) {
+
+      console.log(
+        "❌ רול התמיכה לא נמצא:",
+        SUPPORT_ROLE_ID
+      );
+
+      return interaction.editReply(
+        "❌ לא מצאתי את רול צוות התמיכה."
+      );
+    }
+
+
+    // ========================================
+    // טוען את החדרים
+    // ========================================
+
+    await guild.channels.fetch();
+
+
+    // ========================================
+    // בודק אם כבר יש למשתמש טיקט
+    // ========================================
+
+    const existingTicket =
+      guild.channels.cache.find(channel =>
+        channel.topic?.includes(
+          `ticket-owner:${interaction.user.id}`
+        )
+      );
+
+
+    if (existingTicket) {
+
+      await interaction.message.edit({
+        components: [
+          createTicketMenu()
+        ]
+      });
+
+      return interaction.editReply(
+        `❌ כבר יש לך טיקט פתוח: ${existingTicket}`
+      );
+    }
+
+
+    // ========================================
+    // בודק את קטגוריית הטיקטים
+    // ========================================
+
+    let validCategoryId = null;
+
+    if (CATEGORY_ID) {
+
+      const category =
+        await guild.channels
+          .fetch(CATEGORY_ID)
+          .catch(() => null);
+
+      if (
+        category &&
+        category.type === ChannelType.GuildCategory
+      ) {
+
+        validCategoryId = category.id;
+
+      } else {
+
+        console.log(
+          "⚠️ CATEGORY_ID לא תקין - הטיקט ייפתח בלי קטגוריה"
         );
+
       }
+    }
 
 
-      // =========================
-      // בדיקה אם כבר יש טיקט
-      // =========================
+    // ========================================
+    // יוצר את החדר
+    // ========================================
 
-      const existingTicket =
-        interaction.guild.channels.cache.find(
-          channel =>
-            channel.topic?.includes(
-              `ticket-owner:${interaction.user.id}`
-            )
-        );
+    const channelData = {
 
+      name:
+        `${ticketType.channelName}-${interaction.user.id.slice(-5)}`,
 
-      if (existingTicket) {
+      type:
+        ChannelType.GuildText,
 
-        // מאפס את התפריט
-        await interaction.message.edit({
-          components: [
-            createTicketMenu()
-          ]
-        });
+      topic:
+        `ticket-owner:${interaction.user.id}|type:${typeId}`,
 
-        return interaction.editReply(
-          `❌ כבר יש לך טיקט פתוח: ${existingTicket}`
-        );
-      }
+      permissionOverwrites: [
 
-
-      // =========================
-      // הרשאות
-      // =========================
-
-      const permissions = [
-
-        // כולם לא רואים
+        // כל השרת לא רואה
         {
-          id: interaction.guild.id,
+          id: guild.id,
 
           deny: [
             PermissionFlagsBits.ViewChannel
@@ -269,7 +399,7 @@ client.on("interactionCreate", async interaction => {
         },
 
 
-        // צוות
+        // צוות התמיכה
         {
           id: SUPPORT_ROLE_ID,
 
@@ -281,86 +411,102 @@ client.on("interactionCreate", async interaction => {
             PermissionFlagsBits.EmbedLinks,
             PermissionFlagsBits.ManageMessages
           ]
+        },
+
+
+        // הבוט עצמו
+        {
+          id: client.user.id,
+
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.ManageMessages
+          ]
         }
 
-      ];
+      ]
+
+    };
 
 
-      // =========================
-      // יצירת החדר
-      // =========================
-
-      const channelData = {
-        name:
-          `${ticketType.channelName}-${interaction.user.id.slice(-5)}`,
-
-        type:
-          ChannelType.GuildText,
-
-        topic:
-          `ticket-owner:${interaction.user.id}|type:${typeId}`,
-
-        permissionOverwrites:
-          permissions
-      };
+    if (validCategoryId) {
+      channelData.parent =
+        validCategoryId;
+    }
 
 
-      // אם CATEGORY_ID קיים
-      if (CATEGORY_ID) {
-        channelData.parent =
-          CATEGORY_ID;
-      }
+    const channel =
+      await guild.channels.create(
+        channelData
+      );
 
 
-      const channel =
-        await interaction.guild.channels.create(
-          channelData
+    // ========================================
+    // הודעה בתוך הטיקט
+    // ========================================
+
+    const ticketEmbed =
+      new EmbedBuilder()
+
+        .setTitle(
+          `${ticketType.emoji} ${ticketType.name}`
+        )
+
+        .setDescription(
+          `שלום ${interaction.user} 👋\n\n` +
+
+          `**סוג הפנייה:** ${ticketType.name}\n\n` +
+
+          "כתבו כאן את כל הפרטים וצוות השרת יענה לכם בהקדם."
         );
 
 
-      // =========================
-      // הודעה בתוך הטיקט
-      // =========================
+    await channel.send({
 
-      const ticketEmbed =
-        new EmbedBuilder()
-          .setTitle(
-            `${ticketType.emoji} ${ticketType.name}`
-          )
-          .setDescription(
-            `שלום ${interaction.user} 👋\n\n` +
+      content:
+        `${interaction.user} <@&${SUPPORT_ROLE_ID}>`,
 
-            `הטיקט שלך נפתח בהצלחה.\n\n` +
+      embeds: [
+        ticketEmbed
+      ]
 
-            `**סוג הפנייה:** ${ticketType.name}\n\n` +
-
-            "כתוב כאן את כל הפרטים וצוות השרת יענה לך בהקדם."
-          );
+    });
 
 
-      await channel.send({
-        content:
-          `${interaction.user} <@&${SUPPORT_ROLE_ID}>`,
+    // ========================================
+    // מחזיר את התפריט למצב הרגיל
+    // ========================================
 
-        embeds: [
-          ticketEmbed
-        ],
+    await interaction.message.edit({
 
-        allowedMentions: {
-          users: [
-            interaction.user.id
-          ],
+      components: [
+        createTicketMenu()
+      ]
 
-          roles: [
-            SUPPORT_ROLE_ID
-          ]
-        }
-      });
+    });
 
 
-      // =========================
-      // מאפס את התפריט
-      // =========================
+    // ========================================
+    // מודיע שהטיקט נפתח
+    // ========================================
+
+    await interaction.editReply(
+      `✅ הטיקט שלך נפתח: ${channel}`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ שגיאה מלאה בפתיחת טיקט:",
+      error
+    );
+
+
+    try {
 
       await interaction.message.edit({
         components: [
@@ -368,44 +514,19 @@ client.on("interactionCreate", async interaction => {
         ]
       });
 
-
-      // =========================
-      // הודעה למשתמש
-      // =========================
-
-      await interaction.editReply(
-        `✅ הטיקט שלך נפתח בהצלחה: ${channel}`
-      );
+    } catch {}
 
 
-    } catch (error) {
+    await interaction.editReply(
+      "❌ הייתה בעיה בפתיחת הטיקט."
+    );
 
-      console.error(
-        "❌ שגיאה בפתיחת טיקט:",
-        error
-      );
-
-
-      // מנסה להחזיר את התפריט
-      try {
-        await interaction.message.edit({
-          components: [
-            createTicketMenu()
-          ]
-        });
-      } catch {}
-
-
-      await interaction.editReply(
-        "❌ הייתה בעיה בפתיחת הטיקט."
-      );
-    }
   }
 });
 
 
-// =========================
+// ========================================
 // התחברות
-// =========================
+// ========================================
 
 client.login(TOKEN);
