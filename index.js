@@ -4,10 +4,15 @@ const {
   UserSelectMenuBuilder, EmbedBuilder, ModalBuilder, TextInputBuilder,
   TextInputStyle, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes
 } = require("discord.js");
+
 const crypto = require("crypto");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates
+  ]
 });
 
 const TOKEN = process.env.BOT_TOKEN;
@@ -36,7 +41,8 @@ const YOUTUBE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const SOCIALS_CHANNEL_ID = "1555843770518609941";
 const SOCIAL_YOUTUBE_URL = "https://www.youtube.com/@RoeiKing1";
 const SOCIAL_KICK_URL = "https://kick.com/roeiking1";
-const SOCIAL_WHATSAPP_URL = "https://whatsapp.com/channel/0029Vb7TecZK0IBbMbjFcr1T";
+const SOCIAL_WHATSAPP_URL =
+  "https://whatsapp.com/channel/0029Vb7TecZK0IBbMbjFcr1T";
 const DISCORD_USERNAME = "roro_king1234";
 
 const PARTNER_PANEL_CHANNEL_ID = "1542045433323589714";
@@ -44,6 +50,12 @@ const PARTNER_ADS_CHANNEL_ID = "1541376165506187264";
 const PARTNER_ROLE_ID = "1555952744341180466";
 const OUR_SERVER_INVITE = "https://discord.gg/kP7f9rB33";
 const PARTNER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+// ===================== TEMP VOICE =====================
+
+const TEMP_VOICE_PANEL_CHANNEL_ID = "1556011499234009191";
+const TEMP_VOICE_CREATE_CHANNEL_ID = "1556011651013025812";
+const TEMP_VOICE_CATEGORY_ID = "1556011045460508763";
 
 const ROLE_STAFF = "1555587941575696444";
 const ROLE_PROMO_1 = "1555588224636821526";
@@ -93,7 +105,6 @@ const PREFIX_RANKS = {
 const STAFF_PREFIX_REGEX =
   /^\s*(ST|BST|TM|AD|HA|CO)\s*(?:\||｜|│|:|-|–|—)\s*/i;
 
-// כל דבר לפני | נחשב קידומת.
 const ANY_PREFIX_REGEX =
   /^\s*([^|｜│]+?)\s*(?:\||｜|│)\s*/;
 
@@ -106,38 +117,55 @@ const REJECT_COOLDOWN_MS =
 const rejectionCooldowns = new Map();
 const pendingApplications = new Set();
 const processingApplications = new Set();
+
 const activeGiveaways = new Map();
+
 const suggestionStates = new Map();
 const processingSuggestions = new Set();
+
 const partnerStates = new Map();
 const partnerPendingByUser = new Map();
 const partnerCooldowns = new Map();
 const processingPartners = new Set();
+
 const youtubeSeen = new Map();
 
+const tempVoiceOwners = new Map();
+const tempVoiceCreating = new Set();
+
 let youtubeInitialized = false;
+
 let resolvedYouTubeChannelId =
   YOUTUBE_CHANNEL_ID_FROM_ENV;
+
 let youtubePollRunning = false;
+
 let botDataChannelId = null;
 
-const BOT_DATA_CHANNEL_NAME = "bot-data";
+const BOT_DATA_CHANNEL_NAME =
+  "bot-data";
+
 const BOT_DATA_CHANNEL_TOPIC =
   "roei-bot-private-data-v2";
 
 const ticketTypes = {
   report: {
-    channelName: "דיווח"
+    channelName:
+      "דיווח"
   },
 
   technical: {
-    channelName: "תמיכה"
+    channelName:
+      "תמיכה"
   },
 
   general: {
-    channelName: "כללי"
+    channelName:
+      "כללי"
   }
 };
+
+// ===================== BASIC HELPERS =====================
 
 async function getMainGuild() {
   if (!GUILD_ID) {
@@ -145,8 +173,12 @@ async function getMainGuild() {
   }
 
   return client.guilds
-    .fetch(GUILD_ID)
-    .catch(() => null);
+    .fetch(
+      GUILD_ID
+    )
+    .catch(
+      () => null
+    );
 }
 
 async function fetchFreshMember(
@@ -154,25 +186,33 @@ async function fetchFreshMember(
   userId
 ) {
   return guild.members.fetch({
-    user: userId,
-    force: true
+    user:
+      userId,
+
+    force:
+      true
   });
 }
 
-function hasStaffAccess(member) {
+function hasStaffAccess(
+  member
+) {
   if (!member) {
     return false;
   }
 
   if (
-    member.id === OWNER_USER_ID
+    member.id ===
+    OWNER_USER_ID
   ) {
     return true;
   }
 
   return STAFF_ACCESS_ROLE_IDS.some(
     id =>
-      member.roles.cache.has(id)
+      member.roles.cache.has(
+        id
+      )
   );
 }
 
@@ -201,33 +241,50 @@ function getHighestLadderRoleId(
   return null;
 }
 
-function getPromotionTargets(roleId) {
-  if (roleId === ROLE_STAFF) {
+function getPromotionTargets(
+  roleId
+) {
+  if (
+    roleId ===
+    ROLE_STAFF
+  ) {
     return [
       ROLE_PROMO_1,
       ROLE_TEAM
     ];
   }
 
-  if (roleId === ROLE_PROMO_1) {
+  if (
+    roleId ===
+    ROLE_PROMO_1
+  ) {
     return [
       ROLE_TEAM
     ];
   }
 
-  if (roleId === ROLE_TEAM) {
+  if (
+    roleId ===
+    ROLE_TEAM
+  ) {
     return [
       ROLE_ADMIN
     ];
   }
 
-  if (roleId === ROLE_ADMIN) {
+  if (
+    roleId ===
+    ROLE_ADMIN
+  ) {
     return [
       ROLE_HEAD_ADMIN
     ];
   }
 
-  if (roleId === ROLE_HEAD_ADMIN) {
+  if (
+    roleId ===
+    ROLE_HEAD_ADMIN
+  ) {
     return [
       ROLE_TOP
     ];
@@ -236,36 +293,59 @@ function getPromotionTargets(roleId) {
   return [];
 }
 
-function getPromotionLabels(roleId) {
-  if (roleId === ROLE_STAFF) {
+function getPromotionLabels(
+  roleId
+) {
+  if (
+    roleId ===
+    ROLE_STAFF
+  ) {
     return {
-      [ROLE_PROMO_1]: "Big Stuff",
-      [ROLE_TEAM]: "Team"
+      [ROLE_PROMO_1]:
+        "Big Stuff",
+
+      [ROLE_TEAM]:
+        "Team"
     };
   }
 
-  if (roleId === ROLE_PROMO_1) {
+  if (
+    roleId ===
+    ROLE_PROMO_1
+  ) {
     return {
-      [ROLE_TEAM]: "Team"
+      [ROLE_TEAM]:
+        "Team"
     };
   }
 
-  if (roleId === ROLE_TEAM) {
+  if (
+    roleId ===
+    ROLE_TEAM
+  ) {
     return {
-      [ROLE_ADMIN]: "Admin"
+      [ROLE_ADMIN]:
+        "Admin"
     };
   }
 
-  if (roleId === ROLE_ADMIN) {
+  if (
+    roleId ===
+    ROLE_ADMIN
+  ) {
     return {
       [ROLE_HEAD_ADMIN]:
         "Head Admin"
     };
   }
 
-  if (roleId === ROLE_HEAD_ADMIN) {
+  if (
+    roleId ===
+    ROLE_HEAD_ADMIN
+  ) {
     return {
-      [ROLE_TOP]: "Co-owner"
+      [ROLE_TOP]:
+        "Co-owner"
     };
   }
 
@@ -281,18 +361,26 @@ async function getRoleName(
   }
 
   const role =
-    guild.roles.cache.get(roleId) ||
+    guild.roles.cache.get(
+      roleId
+    ) ||
     await guild.roles
-      .fetch(roleId)
-      .catch(() => null);
+      .fetch(
+        roleId
+      )
+      .catch(
+        () => null
+      );
 
-  return role?.name || roleId;
+  return role?.name ||
+    roleId;
 }
 
 function getStaffMentions() {
   return STAFF_ACCESS_ROLE_IDS
     .map(
-      id => `<@&${id}>`
+      id =>
+        `<@&${id}>`
     )
     .join(" ");
 }
@@ -301,32 +389,47 @@ function safeText(
   value,
   max = 1000
 ) {
-  const s =
-    String(value ?? "")
-      .trim();
+  const text =
+    String(
+      value ?? ""
+    ).trim();
 
-  if (!s) {
+  if (!text) {
     return "לא נכתב";
   }
 
-  return s.length > max
-    ? s.slice(
-        0,
-        max - 3
-      ) + "..."
-    : s;
+  if (
+    text.length <=
+    max
+  ) {
+    return text;
+  }
+
+  return (
+    text.slice(
+      0,
+      max - 3
+    ) +
+    "..."
+  );
 }
 
-function encodeSmall(value) {
+function encodeSmall(
+  value
+) {
   return Buffer.from(
-    String(value ?? ""),
+    String(
+      value ?? ""
+    ),
     "utf8"
   ).toString(
     "base64url"
   );
 }
 
-function decodeSmall(value) {
+function decodeSmall(
+  value
+) {
   try {
     return Buffer.from(
       value,
@@ -418,7 +521,7 @@ async function ensureBotDataChannel(
     await channel.send({
       content:
         "🤖 **חדר נתונים של הבוט**\n" +
-        "החדר הזה שומר הצעות, Partner ו-YouTube אחרי Restart/Deploy.\n" +
+        "החדר הזה שומר נתונים גם אחרי Restart / Deploy.\n" +
         "**לא למחוק הודעות מכאן.**"
     });
   }
@@ -430,7 +533,9 @@ async function ensureBotDataChannel(
 }
 
 async function getBotDataChannel() {
-  if (botDataChannelId) {
+  if (
+    botDataChannelId
+  ) {
     const cached =
       client.channels.cache.get(
         botDataChannelId
@@ -457,7 +562,9 @@ async function getBotDataChannel() {
   );
 }
 
-async function logBotData(line) {
+async function logBotData(
+  line
+) {
   const channel =
     await getBotDataChannel();
 
@@ -467,7 +574,8 @@ async function logBotData(line) {
 
   try {
     await channel.send({
-      content: line,
+      content:
+        line,
 
       allowedMentions: {
         parse: []
@@ -475,11 +583,10 @@ async function logBotData(line) {
     });
 
     return true;
-
-  } catch (e) {
+  } catch (error) {
     console.error(
       "❌ שמירת נתונים נכשלה:",
-      e.message
+      error.message
     );
 
     return false;
@@ -492,7 +599,9 @@ async function savePartnerField(
   value
 ) {
   const encoded =
-    encodeSmall(value);
+    encodeSmall(
+      value
+    );
 
   const maxChunk =
     1500;
@@ -537,15 +646,18 @@ async function loadPersistentBotData() {
   }
 
   const all = [];
+
   let before;
   let scanned = 0;
 
   while (
-    scanned < 30000
+    scanned <
+    30000
   ) {
     const batch =
       await channel.messages.fetch({
-        limit: 100,
+        limit:
+          100,
 
         ...(before
           ? {
@@ -554,7 +666,9 @@ async function loadPersistentBotData() {
           : {})
       });
 
-    if (!batch.size) {
+    if (
+      !batch.size
+    ) {
       break;
     }
 
@@ -570,7 +684,8 @@ async function loadPersistentBotData() {
 
     if (
       !before ||
-      batch.size < 100
+      batch.size <
+        100
     ) {
       break;
     }
@@ -586,10 +701,12 @@ async function loadPersistentBotData() {
     new Map();
 
   for (
-    const m of all
+    const message of
+    all
   ) {
     const line =
-      m.content || "";
+      message.content ||
+      "";
 
     if (
       line ===
@@ -641,7 +758,8 @@ async function loadPersistentBotData() {
               : null,
 
           ended:
-            type !== "live"
+            type !==
+            "live"
         }
       );
 
@@ -659,13 +777,13 @@ async function loadPersistentBotData() {
       ] =
         line.split("|");
 
-      const s =
+      const state =
         youtubeSeen.get(
           videoId
         );
 
-      if (s) {
-        s.ended =
+      if (state) {
+        state.ended =
           true;
       }
 
@@ -736,12 +854,12 @@ async function loadPersistentBotData() {
       ] =
         line.split("|");
 
-      const s =
+      const state =
         suggestionStates.get(
           messageId
         );
 
-      if (!s) {
+      if (!state) {
         continue;
       }
 
@@ -749,7 +867,7 @@ async function loadPersistentBotData() {
         choice ===
         "none"
       ) {
-        s.votes.delete(
+        state.votes.delete(
           userId
         );
 
@@ -757,7 +875,7 @@ async function loadPersistentBotData() {
         choice === "up" ||
         choice === "down"
       ) {
-        s.votes.set(
+        state.votes.set(
           userId,
           choice
         );
@@ -777,13 +895,13 @@ async function loadPersistentBotData() {
       ] =
         line.split("|");
 
-      const s =
+      const state =
         suggestionStates.get(
           messageId
         );
 
-      if (s) {
-        s.thresholdNotified =
+      if (state) {
+        state.thresholdNotified =
           true;
       }
 
@@ -802,13 +920,13 @@ async function loadPersistentBotData() {
       ] =
         line.split("|");
 
-      const s =
+      const state =
         suggestionStates.get(
           messageId
         );
 
-      if (s) {
-        s.forwardedBy =
+      if (state) {
+        state.forwardedBy =
           staffId ||
           null;
       }
@@ -829,17 +947,17 @@ async function loadPersistentBotData() {
       ] =
         line.split("|");
 
-      const s =
+      const state =
         suggestionStates.get(
           messageId
         );
 
-      if (s) {
-        s.status =
+      if (state) {
+        state.status =
           status ||
           "open";
 
-        s.statusBy =
+        state.statusBy =
           staffId ||
           null;
       }
@@ -931,10 +1049,14 @@ async function loadPersistentBotData() {
         `${requestId}:${field}`;
 
       const partNumber =
-        Number(partRaw);
+        Number(
+          partRaw
+        );
 
       const totalParts =
-        Number(totalRaw);
+        Number(
+          totalRaw
+        );
 
       if (
         partNumber === 1 ||
@@ -961,11 +1083,14 @@ async function loadPersistentBotData() {
       }
 
       partnerFieldParts
-        .get(key)
+        .get(
+          key
+        )
         .parts
         .set(
           partNumber,
-          data || ""
+          data ||
+          ""
         );
 
       continue;
@@ -1037,8 +1162,10 @@ async function loadPersistentBotData() {
         null;
 
       if (
-        status === "approved" ||
-        status === "rejected"
+        status ===
+          "approved" ||
+        status ===
+          "rejected"
       ) {
         partnerPendingByUser.delete(
           state.applicantId
@@ -1058,6 +1185,78 @@ async function loadPersistentBotData() {
         partnerPendingByUser.set(
           state.applicantId,
           requestId
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "TEMP_CREATE|"
+      )
+    ) {
+      const [
+        ,
+        channelId,
+        ownerId
+      ] =
+        line.split("|");
+
+      if (
+        channelId &&
+        ownerId
+      ) {
+        tempVoiceOwners.set(
+          channelId,
+          ownerId
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "TEMP_OWNER|"
+      )
+    ) {
+      const [
+        ,
+        channelId,
+        ownerId
+      ] =
+        line.split("|");
+
+      if (
+        channelId &&
+        ownerId
+      ) {
+        tempVoiceOwners.set(
+          channelId,
+          ownerId
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "TEMP_DELETE|"
+      )
+    ) {
+      const [
+        ,
+        channelId
+      ] =
+        line.split("|");
+
+      if (
+        channelId
+      ) {
+        tempVoiceOwners.delete(
+          channelId
         );
       }
 
@@ -1116,7 +1315,8 @@ async function loadPersistentBotData() {
       continue;
     }
 
-    let merged = "";
+    let merged =
+      "";
 
     for (
       let i = 1;
@@ -1124,7 +1324,9 @@ async function loadPersistentBotData() {
       i++
     ) {
       merged +=
-        data.parts.get(i) ||
+        data.parts.get(
+          i
+        ) ||
         "";
     }
 
@@ -1179,7 +1381,7 @@ async function loadPersistentBotData() {
   }
 
   console.log(
-    `✅ נטענו ${suggestionStates.size} הצעות, ${partnerStates.size} בקשות Partner ו-${youtubeSeen.size} פריטי YouTube`
+    `✅ נטענו ${suggestionStates.size} הצעות, ${partnerStates.size} בקשות Partner, ${youtubeSeen.size} פריטי YouTube ו-${tempVoiceOwners.size} חדרים אישיים`
   );
 }
 
@@ -1205,7 +1407,8 @@ function getAttemptedStaffPrefix(
 ) {
   const match =
     String(
-      name || ""
+      name ||
+      ""
     )
       .trim()
       .match(
@@ -1217,18 +1420,24 @@ function getAttemptedStaffPrefix(
     : null;
 }
 
-function hasAnyPrefix(name) {
+function hasAnyPrefix(
+  name
+) {
   return ANY_PREFIX_REGEX.test(
     String(
-      name || ""
+      name ||
+      ""
     ).trim()
   );
 }
 
-function stripAnyPrefix(name) {
+function stripAnyPrefix(
+  name
+) {
   let value =
     String(
-      name || ""
+      name ||
+      ""
     ).trim();
 
   while (
@@ -1248,7 +1457,9 @@ function stripAnyPrefix(name) {
   return value;
 }
 
-function getBaseName(member) {
+function getBaseName(
+  member
+) {
   let base =
     stripAnyPrefix(
       member.nickname ||
@@ -1258,7 +1469,8 @@ function getBaseName(member) {
 
   if (
     !base ||
-    base === "אין שם"
+    base ===
+      "אין שם"
   ) {
     base =
       stripAnyPrefix(
@@ -1274,14 +1486,16 @@ function getBaseName(member) {
   ).trim();
 }
 
-function getDesiredPrefix(member) {
-  const staffPrefix =
+function getDesiredPrefix(
+  member
+) {
+  const staff =
     getStaffNicknamePrefix(
       member
     );
 
-  if (staffPrefix) {
-    return staffPrefix;
+  if (staff) {
+    return staff;
   }
 
   if (
@@ -1293,6 +1507,94 @@ function getDesiredPrefix(member) {
   }
 
   return null;
+}
+
+async function applyPreferredNickname(
+  member
+) {
+  if (
+    !member?.manageable
+  ) {
+    return;
+  }
+
+  const prefix =
+    getDesiredPrefix(
+      member
+    );
+
+  if (!prefix) {
+    const current =
+      member.nickname ||
+      member.user.globalName ||
+      member.user.username;
+
+    const clean =
+      (
+        stripAnyPrefix(
+          current
+        ) ||
+        stripAnyPrefix(
+          member.user.globalName
+        ) ||
+        member.user.username ||
+        "אין שם"
+      )
+        .slice(
+          0,
+          32
+        );
+
+    if (
+      member.nickname !==
+      clean
+    ) {
+      await member
+        .setNickname(
+          clean,
+          "הסרת קידומת אוטומטית"
+        )
+        .catch(
+          () => {}
+        );
+    }
+
+    return;
+  }
+
+  const prefixText =
+    `${prefix} | `;
+
+  const base =
+    getBaseName(
+      member
+    )
+      .slice(
+        0,
+        Math.max(
+          1,
+          32 -
+          prefixText.length
+        )
+      );
+
+  const wanted =
+    prefixText +
+    base;
+
+  if (
+    member.nickname !==
+    wanted
+  ) {
+    await member
+      .setNickname(
+        wanted,
+        "עדכון ניקניים אוטומטי לפי תפקיד"
+      )
+      .catch(
+        () => {}
+      );
+  }
 }
 
 async function notifyOwnerFakeName(
@@ -1314,19 +1616,18 @@ async function notifyOwnerFakeName(
 
   const embed =
     new EmbedBuilder()
-      .setColor(
-        0xED4245
-      )
       .setTitle(
         "⚠️ נמצאה קידומת לא מורשית"
       )
       .setDescription(
         `${member.user} השתמש/ה בקידומת לפני השם בלי רול שמאפשר אותה.\n\n` +
-        `👤 **משתמש:** ${member.user}\n` +
-        `🆔 **ID:** \`${member.id}\`\n` +
-        `📝 **השם שהיה:** \`${safeText(attemptedName, 200)}\`\n` +
-        `🔄 **הניקניים שונה ל:** \`אין שם\``
+        `📝 **השם שהיה:** \`${attemptedName}\`\n` +
+        "🔄 **הניקניים שונה ל:** `אין שם`"
       )
+      .setFooter({
+        text:
+          `User ID: ${member.id}`
+      })
       .setTimestamp();
 
   const row =
@@ -1365,115 +1666,33 @@ async function handleUnauthorizedPrefix(
   attemptedName
 ) {
   if (
-    !member ||
-    member.user.bot
-  ) {
-    return false;
-  }
-
-  if (
     getDesiredPrefix(
       member
-    )
-  ) {
-    return false;
-  }
-
-  if (
+    ) ||
     !hasAnyPrefix(
       attemptedName
     )
   ) {
-    return false;
+    return;
   }
 
   if (
     member.manageable
   ) {
-    await member.setNickname(
-      "אין שם",
-      "שימוש בקידומת לא מורשית"
-    ).catch(
-      () => {}
-    );
+    await member
+      .setNickname(
+        "אין שם",
+        "שימוש בקידומת לא מורשית"
+      )
+      .catch(
+        () => {}
+      );
   }
 
   await notifyOwnerFakeName(
     member,
     attemptedName
   );
-
-  return true;
-}
-
-async function applyPreferredNickname(
-  member
-) {
-  if (!member) {
-    return;
-  }
-
-  const prefix =
-    getDesiredPrefix(
-      member
-    );
-
-  if (!prefix) {
-    const current =
-      member.nickname ||
-      member.user.globalName ||
-      member.user.username;
-
-    if (
-      hasAnyPrefix(
-        current
-      )
-    ) {
-      await handleUnauthorizedPrefix(
-        member,
-        current
-      );
-    }
-
-    return;
-  }
-
-  if (
-    !member.manageable
-  ) {
-    return;
-  }
-
-  const prefixText =
-    `${prefix} | `;
-
-  const base =
-    getBaseName(
-      member
-    ).slice(
-      0,
-      Math.max(
-        1,
-        32 -
-        prefixText.length
-      )
-    );
-
-  const wanted =
-    prefixText +
-    base;
-
-  if (
-    member.nickname !==
-    wanted
-  ) {
-    await member.setNickname(
-      wanted,
-      "עדכון ניקניים אוטומטי לפי תפקיד"
-    ).catch(
-      () => {}
-    );
-  }
 }
 
 async function handleFakePromotion(
@@ -1551,9 +1770,6 @@ async function handleFakePromotion(
     await owner.send({
       embeds: [
         new EmbedBuilder()
-          .setColor(
-            0xED4245
-          )
           .setTitle(
             "🚨 ניסיון לזייף דרגת צוות"
           )
@@ -1561,7 +1777,7 @@ async function handleFakePromotion(
             `${member.user} ניסה/תה לשים תג של דרגה גבוהה יותר.\n\n` +
             `🎖️ **הדרגה האמיתית:** ${roleName} (\`${realPrefix}\`)\n` +
             `⚠️ **התג שניסה/תה:** \`${attemptedPrefix}\`\n` +
-            `📝 **השם שניסה/תה:** \`${safeText(attemptedName, 200)}\`\n\n` +
+            `📝 **השם שניסה/תה:** \`${attemptedName}\`\n\n` +
             (
               timeoutSuccess
                 ? "⏱️ ניתן Timeout ל-15 דקות והשם תוקן."
@@ -1601,6 +1817,7 @@ async function sendStaffChangeDM(
 
   let title;
   let description;
+
   let color =
     0x5865F2;
 
@@ -1625,8 +1842,7 @@ async function sendStaffChangeDM(
       "❌ הוסרת מהצוות";
 
     description =
-      `הוסרת מצוות השרת.\n` +
-      `הדרגה הקודמת שלך הייתה **${oldName}**.`;
+      `הוסרת מצוות השרת.\nהדרגה הקודמת שלך הייתה **${oldName}**.`;
 
     color =
       0xED4245;
@@ -1720,9 +1936,6 @@ async function sendWelcomeMessage(
 
   const embed =
     new EmbedBuilder()
-      .setColor(
-        0x5865F2
-      )
       .setTitle(
         "👋 ברוך/ה הבא/ה לשרת!"
       )
@@ -1730,7 +1943,7 @@ async function sendWelcomeMessage(
         `היי ${member} — כיף שהצטרפת! 🎉\n\n` +
         `📜 קודם כל כדאי לעבור על החוקים ב-<#${RULES_CHANNEL_ID}>\n` +
         `🎫 צריך עזרה? מערכת הטיקטים נמצאת ב-<#${PANEL_CHANNEL_ID}>\n` +
-        `💡 יש רעיון? יש לנו גם מערכת הצעות.\n\n` +
+        "💡 יש רעיון? יש לנו גם מערכת הצעות.\n\n" +
         `👥 **את/ה חבר/ה מספר ${member.guild.memberCount} בשרת!**`
       )
       .setThumbnail(
@@ -1899,11 +2112,13 @@ async function loadApplicationState() {
   let scanned = 0;
 
   while (
-    scanned < 2000
+    scanned <
+    2000
   ) {
     const batch =
       await channel.messages.fetch({
-        limit: 100,
+        limit:
+          100,
 
         ...(before
           ? {
@@ -1986,7 +2201,8 @@ async function loadApplicationState() {
 
     if (
       !before ||
-      batch.size < 100
+      batch.size <
+        100
     ) {
       break;
     }
@@ -2002,7 +2218,8 @@ function createStaffApplicationModal(
         `staff_application_modal:${type}`
       )
       .setTitle(
-        type === "promotion"
+        type ===
+          "promotion"
           ? "בחינת קידום בצוות 🛡️"
           : "בחינה לצוות 🛡️"
       );
@@ -2111,6 +2328,7 @@ function setStatusField(
 
   embed.setFields(
     ...fields,
+
     {
       name:
         "📋 סטטוס",
@@ -2168,10 +2386,12 @@ async function sendApplicantDM(
   }
 
   const embed =
-    status === "pending"
+    status ===
+      "pending"
       ? new EmbedBuilder()
           .setTitle(
-            type === "promotion"
+            type ===
+              "promotion"
               ? "⬆️ בקשת הקידום שלך בבדיקה"
               : "🛡️ הבקשה שלך בבדיקה"
           )
@@ -2183,12 +2403,14 @@ async function sendApplicantDM(
 
       : new EmbedBuilder()
           .setTitle(
-            type === "promotion"
+            type ===
+              "promotion"
               ? "❌ בקשת הקידום לא אושרה"
               : "❌ עדכון לגבי הבקשה שלך"
           )
           .setDescription(
-            type === "promotion"
+            type ===
+              "promotion"
               ? "בקשת הקידום נבדקה, אך הפעם לא אושרה."
               : "הבקשה נבדקה, אך הפעם לא אושרה.\n\n⏳ ניתן להגיש בקשה חדשה בעוד **7 ימים**."
           );
@@ -2383,7 +2605,7 @@ function createManagementButtons(
           )
           .setDisabled(
             roleId ===
-            ROLE_TOP
+              ROLE_TOP
           ),
 
         new ButtonBuilder()
@@ -2660,7 +2882,7 @@ function createTicketPermissions(
   guild,
   userId
 ) {
-  const arr = [
+  const permissions = [
     {
       id:
         guild.id,
@@ -2701,7 +2923,7 @@ function createTicketPermissions(
     const roleId of
     STAFF_ACCESS_ROLE_IDS
   ) {
-    arr.push({
+    permissions.push({
       id:
         roleId,
 
@@ -2716,7 +2938,7 @@ function createTicketPermissions(
     });
   }
 
-  return arr;
+  return permissions;
 }
 
 async function setupTicketPanel() {
@@ -2737,7 +2959,8 @@ async function setupTicketPanel() {
 
   const messages =
     await channel.messages.fetch({
-      limit: 100
+      limit:
+        100
     });
 
   const old =
@@ -2783,7 +3006,8 @@ function parseGiveawayDuration(
 ) {
   const match =
     String(
-      input || ""
+      input ||
+      ""
     )
       .trim()
       .toLowerCase()
@@ -2914,8 +3138,7 @@ function createGiveawayEmbed(
       .setDescription(
         ended
           ? "**תודה לכל מי שהשתתף!**"
-          : "**רוצים להשתתף? לחצו על 🎉 למטה!**\n" +
-            "לחיצה נוספת תוציא אתכם מההגרלה."
+          : "**רוצים להשתתף? לחצו על 🎉 למטה!**\nלחיצה נוספת תוציא אתכם מההגרלה."
       )
       .addFields(
         {
@@ -2991,7 +3214,9 @@ function createGiveawayEmbed(
     );
   }
 
-  if (ended) {
+  if (
+    ended
+  ) {
     embed.addFields({
       name:
         winners.length === 1
@@ -3462,9 +3687,11 @@ function createSuggestionEmbed(
 
   return new EmbedBuilder()
     .setColor(
-      state.status === "approved"
+      state.status ===
+        "approved"
         ? 0x57F287
-        : state.status === "closed"
+        : state.status ===
+          "closed"
           ? 0x747F8D
           : 0xFEE75C
     )
@@ -3488,7 +3715,9 @@ function createSuggestionEmbed(
           "👍 בעד",
 
         value:
-          String(up),
+          String(
+            up
+          ),
 
         inline:
           true
@@ -3499,7 +3728,9 @@ function createSuggestionEmbed(
           "👎 נגד",
 
         value:
-          String(down),
+          String(
+            down
+          ),
 
         inline:
           true
@@ -3663,13 +3894,13 @@ function getSuggestionIdea(
 function hydrateSuggestion(
   message
 ) {
-  const old =
+  const existing =
     suggestionStates.get(
       message.id
     );
 
-  if (old) {
-    return old;
+  if (existing) {
+    return existing;
   }
 
   const footer =
@@ -3806,7 +4037,9 @@ async function sendSuggestionThresholdDM(
               "👍 בעד",
 
             value:
-              String(up),
+              String(
+                up
+              ),
 
             inline:
               true
@@ -3817,7 +4050,9 @@ async function sendSuggestionThresholdDM(
               "👎 נגד",
 
             value:
-              String(down),
+              String(
+                down
+              ),
 
             inline:
               true
@@ -3916,7 +4151,9 @@ async function sendSuggestionForwardDM(
               "👍 בעד",
 
             value:
-              String(up),
+              String(
+                up
+              ),
 
             inline:
               true
@@ -3927,7 +4164,9 @@ async function sendSuggestionForwardDM(
               "👎 נגד",
 
             value:
-              String(down),
+              String(
+                down
+              ),
 
             inline:
               true
@@ -4038,7 +4277,8 @@ async function setupSuggestionsPanel() {
 
   const messages =
     await channel.messages.fetch({
-      limit: 100
+      limit:
+        100
     });
 
   const old =
@@ -4410,11 +4650,14 @@ function createPartnerOwnerEmbed(
 ) {
   return new EmbedBuilder()
     .setColor(
-      state.status === "approved"
+      state.status ===
+        "approved"
         ? 0x57F287
-        : state.status === "rejected"
+        : state.status ===
+          "rejected"
           ? 0xED4245
-          : state.status === "waiting_publication"
+          : state.status ===
+            "waiting_publication"
             ? 0xFEE75C
             : 0x5865F2
     )
@@ -4470,8 +4713,10 @@ function createPartnerOwnerButtons(
   state
 ) {
   const handled =
-    state.status === "approved" ||
-    state.status === "rejected";
+    state.status ===
+      "approved" ||
+    state.status ===
+      "rejected";
 
   return [
     new ActionRowBuilder()
@@ -5069,11 +5314,1385 @@ async function finalizePartnerApproval(
   );
 }
 
+// ===================== TEMP VOICE =====================
+
+function createTempVoicePanelEmbed() {
+  return new EmbedBuilder()
+    .setColor(
+      0x5865F2
+    )
+    .setTitle(
+      "🎙️・ניהול חדר קולי אישי"
+    )
+    .setDescription(
+      `כדי לפתוח חדר אישי, היכנסו ל-<#${TEMP_VOICE_CREATE_CHANNEL_ID}>.\n` +
+      "הבוט ייצור לכם חדר קולי משלכם ויעביר אתכם אליו אוטומטית.\n\n" +
+      "**שליטה בחדר:**\n" +
+      "🔒 נעילה • 🔓 פתיחה • 🙈 הסתרה • 👁️ הצגה\n" +
+      "👥 הגבלת משתמשים • ✏️ שינוי שם\n" +
+      "💌 הזמנה • ✅ אישור משתמש • ⛔ חסימת משתמש\n" +
+      "👢 הוצאה מהחדר • 👑 העברת בעלות • 🗑️ מחיקת החדר\n\n" +
+      "⚠️ הכפתורים עובדים רק על **החדר האישי שלך**."
+    )
+    .setFooter({
+      text:
+        "temp-voice-panel-v1"
+    });
+}
+
+function createTempVoicePanelRows() {
+  return [
+    new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_lock"
+          )
+          .setLabel(
+            "נעילה"
+          )
+          .setEmoji(
+            "🔒"
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_unlock"
+          )
+          .setLabel(
+            "פתיחה"
+          )
+          .setEmoji(
+            "🔓"
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_hide"
+          )
+          .setLabel(
+            "הסתרה"
+          )
+          .setEmoji(
+            "🙈"
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_show"
+          )
+          .setLabel(
+            "הצגה"
+          )
+          .setEmoji(
+            "👁️"
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_limit"
+          )
+          .setLabel(
+            "הגבלה"
+          )
+          .setEmoji(
+            "👥"
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          )
+      ),
+
+    new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_rename"
+          )
+          .setLabel(
+            "שינוי שם"
+          )
+          .setEmoji(
+            "✏️"
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_invite"
+          )
+          .setLabel(
+            "הזמנה"
+          )
+          .setEmoji(
+            "💌"
+          )
+          .setStyle(
+            ButtonStyle.Success
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_permit"
+          )
+          .setLabel(
+            "אישור"
+          )
+          .setEmoji(
+            "✅"
+          )
+          .setStyle(
+            ButtonStyle.Success
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_reject"
+          )
+          .setLabel(
+            "חסימה"
+          )
+          .setEmoji(
+            "⛔"
+          )
+          .setStyle(
+            ButtonStyle.Danger
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_kick"
+          )
+          .setLabel(
+            "הוצאה"
+          )
+          .setEmoji(
+            "👢"
+          )
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      ),
+
+    new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_transfer"
+          )
+          .setLabel(
+            "העברת בעלות"
+          )
+          .setEmoji(
+            "👑"
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            "temp_delete"
+          )
+          .setLabel(
+            "מחיקת החדר"
+          )
+          .setEmoji(
+            "🗑️"
+          )
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
+  ];
+}
+
+async function setupTempVoicePanel() {
+  const channel =
+    await client.channels
+      .fetch(
+        TEMP_VOICE_PANEL_CHANNEL_ID
+      )
+      .catch(
+        () => null
+      );
+
+  if (
+    !channel?.isTextBased()
+  ) {
+    console.log(
+      "⚠️ חדר הפאנל של החדרים האישיים לא נמצא."
+    );
+
+    return;
+  }
+
+  const messages =
+    await channel.messages
+      .fetch({
+        limit:
+          100
+      })
+      .catch(
+        () => null
+      );
+
+  if (!messages) {
+    return;
+  }
+
+  const old =
+    messages.find(
+      message =>
+        message.author.id ===
+          client.user.id &&
+        message.embeds[0]
+          ?.footer
+          ?.text ===
+          "temp-voice-panel-v1"
+    );
+
+  const payload = {
+    embeds: [
+      createTempVoicePanelEmbed()
+    ],
+
+    components:
+      createTempVoicePanelRows()
+  };
+
+  if (old) {
+    await old.edit(
+      payload
+    ).catch(
+      () => {}
+    );
+  } else {
+    await channel.send(
+      payload
+    ).catch(
+      () => {}
+    );
+  }
+}
+
+function buildTempRoomName(
+  member
+) {
+  const raw =
+    stripAnyPrefix(
+      member.displayName ||
+      member.user.globalName ||
+      member.user.username ||
+      "User"
+    );
+
+  const clean =
+    (
+      raw ||
+      member.user.username ||
+      "User"
+    )
+      .replace(
+        /[\r\n]/g,
+        " "
+      )
+      .trim();
+
+  return (
+    `TW | ${clean}'s Channel`
+  ).slice(
+    0,
+    100
+  );
+}
+
+function getTempRoomOwnerId(
+  channelId
+) {
+  return tempVoiceOwners.get(
+    channelId
+  ) ||
+  null;
+}
+
+async function getTempRoomOwnedBy(
+  guild,
+  ownerId
+) {
+  for (
+    const [
+      channelId,
+      mappedOwnerId
+    ] of
+    tempVoiceOwners.entries()
+  ) {
+    if (
+      mappedOwnerId !==
+      ownerId
+    ) {
+      continue;
+    }
+
+    const channel =
+      guild.channels.cache.get(
+        channelId
+      ) ||
+      await guild.channels
+        .fetch(
+          channelId
+        )
+        .catch(
+          () => null
+        );
+
+    if (
+      channel?.type ===
+        ChannelType.GuildVoice &&
+      channel.parentId ===
+        TEMP_VOICE_CATEGORY_ID
+    ) {
+      return channel;
+    }
+
+    tempVoiceOwners.delete(
+      channelId
+    );
+  }
+
+  return null;
+}
+
+async function getControlledTempRoom(
+  interaction,
+  explicitChannelId = null
+) {
+  if (
+    !interaction.guild
+  ) {
+    return null;
+  }
+
+  const member =
+    await fetchFreshMember(
+      interaction.guild,
+      interaction.user.id
+    )
+      .catch(
+        () => null
+      );
+
+  if (!member) {
+    return null;
+  }
+
+  const channelId =
+    explicitChannelId ||
+    member.voice.channelId;
+
+  if (!channelId) {
+    return null;
+  }
+
+  const ownerId =
+    getTempRoomOwnerId(
+      channelId
+    );
+
+  if (
+    ownerId !==
+    interaction.user.id
+  ) {
+    return null;
+  }
+
+  const channel =
+    interaction.guild
+      .channels
+      .cache
+      .get(
+        channelId
+      ) ||
+    await interaction.guild
+      .channels
+      .fetch(
+        channelId
+      )
+      .catch(
+        () => null
+      );
+
+  if (
+    !channel ||
+    channel.type !==
+      ChannelType.GuildVoice ||
+    channel.parentId !==
+      TEMP_VOICE_CATEGORY_ID
+  ) {
+    return null;
+  }
+
+  if (
+    member.voice.channelId !==
+    channel.id
+  ) {
+    return null;
+  }
+
+  return channel;
+}
+
+async function createTempVoiceRoom(
+  member
+) {
+  if (
+    !member ||
+    member.user.bot
+  ) {
+    return null;
+  }
+
+  if (
+    tempVoiceCreating.has(
+      member.id
+    )
+  ) {
+    return null;
+  }
+
+  tempVoiceCreating.add(
+    member.id
+  );
+
+  try {
+    const guild =
+      member.guild;
+
+    const existing =
+      await getTempRoomOwnedBy(
+        guild,
+        member.id
+      );
+
+    if (existing) {
+      await member.voice
+        .setChannel(
+          existing,
+          "חזרה לחדר הקולי האישי"
+        )
+        .catch(
+          () => {}
+        );
+
+      return existing;
+    }
+
+    const category =
+      await guild.channels
+        .fetch(
+          TEMP_VOICE_CATEGORY_ID
+        )
+        .catch(
+          () => null
+        );
+
+    if (
+      !category ||
+      category.type !==
+        ChannelType.GuildCategory
+    ) {
+      throw new Error(
+        "Temp voice category not found"
+      );
+    }
+
+    const permissionOverwrites = [
+      {
+        id:
+          guild.id,
+
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.Connect,
+          PermissionFlagsBits.Speak,
+          PermissionFlagsBits.Stream,
+          PermissionFlagsBits.UseVAD
+        ]
+      },
+
+      {
+        id:
+          member.id,
+
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.Connect,
+          PermissionFlagsBits.Speak,
+          PermissionFlagsBits.Stream,
+          PermissionFlagsBits.UseVAD
+        ]
+      }
+    ];
+
+    for (
+      const roleId of
+      STAFF_ACCESS_ROLE_IDS
+    ) {
+      permissionOverwrites.push({
+        id:
+          roleId,
+
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.Connect,
+          PermissionFlagsBits.Speak,
+          PermissionFlagsBits.MoveMembers
+        ]
+      });
+    }
+
+    const room =
+      await guild.channels.create({
+        name:
+          buildTempRoomName(
+            member
+          ),
+
+        type:
+          ChannelType.GuildVoice,
+
+        parent:
+          TEMP_VOICE_CATEGORY_ID,
+
+        permissionOverwrites,
+
+        reason:
+          `חדר קולי אישי של ${member.user.tag}`
+      });
+
+    tempVoiceOwners.set(
+      room.id,
+      member.id
+    );
+
+    await logBotData(
+      `TEMP_CREATE|${room.id}|${member.id}`
+    );
+
+    try {
+      await member.voice.setChannel(
+        room,
+        "יצירת חדר קולי אישי"
+      );
+
+    } catch (error) {
+      tempVoiceOwners.delete(
+        room.id
+      );
+
+      await logBotData(
+        `TEMP_DELETE|${room.id}`
+      );
+
+      await room
+        .delete(
+          "לא ניתן היה להעביר את בעל החדר"
+        )
+        .catch(
+          () => {}
+        );
+
+      throw error;
+    }
+
+    return room;
+
+  } finally {
+    tempVoiceCreating.delete(
+      member.id
+    );
+  }
+}
+
+async function deleteTempVoiceRoom(
+  channel,
+  reason =
+    "החדר האישי התרוקן"
+) {
+  if (!channel) {
+    return;
+  }
+
+  const channelId =
+    channel.id;
+
+  tempVoiceOwners.delete(
+    channelId
+  );
+
+  await logBotData(
+    `TEMP_DELETE|${channelId}`
+  );
+
+  await channel
+    .delete(
+      reason
+    )
+    .catch(
+      () => {}
+    );
+}
+
+async function restoreTempVoiceRooms(
+  guild
+) {
+  for (
+    const [
+      channelId
+    ] of
+    [
+      ...tempVoiceOwners.entries()
+    ]
+  ) {
+    const channel =
+      guild.channels.cache.get(
+        channelId
+      ) ||
+      await guild.channels
+        .fetch(
+          channelId
+        )
+        .catch(
+          () => null
+        );
+
+    if (
+      !channel ||
+      channel.type !==
+        ChannelType.GuildVoice ||
+      channel.parentId !==
+        TEMP_VOICE_CATEGORY_ID
+    ) {
+      tempVoiceOwners.delete(
+        channelId
+      );
+
+      await logBotData(
+        `TEMP_DELETE|${channelId}`
+      );
+
+      continue;
+    }
+
+    if (
+      channel.members.size ===
+      0
+    ) {
+      await deleteTempVoiceRoom(
+        channel,
+        "ניקוי חדר אישי ריק אחרי הפעלה מחדש"
+      );
+    }
+  }
+}
+
+function tempUserSelectRow(
+  action,
+  channelId,
+  placeholder
+) {
+  return new ActionRowBuilder()
+    .addComponents(
+      new UserSelectMenuBuilder()
+        .setCustomId(
+          `temp_${action}_select:${channelId}`
+        )
+        .setPlaceholder(
+          placeholder
+        )
+        .setMinValues(
+          1
+        )
+        .setMaxValues(
+          1
+        )
+    );
+}
+
+function createTempRenameModal(
+  channel
+) {
+  return new ModalBuilder()
+    .setCustomId(
+      `temp_rename_modal:${channel.id}`
+    )
+    .setTitle(
+      "שינוי שם החדר"
+    )
+    .addComponents(
+      new ActionRowBuilder()
+        .addComponents(
+          new TextInputBuilder()
+            .setCustomId(
+              "room_name"
+            )
+            .setLabel(
+              "השם החדש של החדר"
+            )
+            .setStyle(
+              TextInputStyle.Short
+            )
+            .setRequired(
+              true
+            )
+            .setMinLength(
+              1
+            )
+            .setMaxLength(
+              100
+            )
+            .setValue(
+              channel.name.slice(
+                0,
+                100
+              )
+            )
+        )
+    );
+}
+
+function createTempLimitModal(
+  channel
+) {
+  return new ModalBuilder()
+    .setCustomId(
+      `temp_limit_modal:${channel.id}`
+    )
+    .setTitle(
+      "הגבלת משתמשים"
+    )
+    .addComponents(
+      new ActionRowBuilder()
+        .addComponents(
+          new TextInputBuilder()
+            .setCustomId(
+              "room_limit"
+            )
+            .setLabel(
+              "כמה משתמשים? 0 = ללא הגבלה"
+            )
+            .setPlaceholder(
+              "לדוגמה: 5"
+            )
+            .setStyle(
+              TextInputStyle.Short
+            )
+            .setRequired(
+              true
+            )
+            .setMaxLength(
+              2
+            )
+            .setValue(
+              String(
+                channel.userLimit ||
+                0
+              )
+            )
+        )
+    );
+}
+
+async function handleTempVoiceButton(
+  interaction
+) {
+  const room =
+    await getControlledTempRoom(
+      interaction
+    );
+
+  if (!room) {
+    return interaction.reply({
+      content:
+        "❌ כדי להשתמש בפאנל, צריך להיות בתוך **החדר האישי שלך**.\n" +
+        `היכנס קודם ל-<#${TEMP_VOICE_CREATE_CHANNEL_ID}>.`,
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_lock"
+  ) {
+    await room.permissionOverwrites.edit(
+      interaction.guild.id,
+      {
+        Connect:
+          false
+      }
+    );
+
+    return interaction.reply({
+      content:
+        "🔒 החדר ננעל. רק משתמשים שאישרת יוכלו להיכנס.",
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_unlock"
+  ) {
+    await room.permissionOverwrites.edit(
+      interaction.guild.id,
+      {
+        Connect:
+          true
+      }
+    );
+
+    return interaction.reply({
+      content:
+        "🔓 החדר פתוח עכשיו לכולם.",
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_hide"
+  ) {
+    await room.permissionOverwrites.edit(
+      interaction.guild.id,
+      {
+        ViewChannel:
+          false
+      }
+    );
+
+    return interaction.reply({
+      content:
+        "🙈 החדר הוסתר ממשתמשים רגילים.",
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_show"
+  ) {
+    await room.permissionOverwrites.edit(
+      interaction.guild.id,
+      {
+        ViewChannel:
+          true
+      }
+    );
+
+    return interaction.reply({
+      content:
+        "👁️ החדר מוצג שוב לכולם.",
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_rename"
+  ) {
+    return interaction.showModal(
+      createTempRenameModal(
+        room
+      )
+    );
+  }
+
+  if (
+    interaction.customId ===
+    "temp_limit"
+  ) {
+    return interaction.showModal(
+      createTempLimitModal(
+        room
+      )
+    );
+  }
+
+  if (
+    interaction.customId ===
+    "temp_invite"
+  ) {
+    return interaction.reply({
+      content:
+        "💌 בחר את מי להזמין לחדר:",
+
+      components: [
+        tempUserSelectRow(
+          "invite",
+          room.id,
+          "בחר משתמש להזמנה"
+        )
+      ],
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_permit"
+  ) {
+    return interaction.reply({
+      content:
+        "✅ בחר למי לתת גישה לחדר:",
+
+      components: [
+        tempUserSelectRow(
+          "permit",
+          room.id,
+          "בחר משתמש לאישור"
+        )
+      ],
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_reject"
+  ) {
+    return interaction.reply({
+      content:
+        "⛔ בחר את מי לחסום מהחדר:",
+
+      components: [
+        tempUserSelectRow(
+          "reject",
+          room.id,
+          "בחר משתמש לחסימה"
+        )
+      ],
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_kick"
+  ) {
+    return interaction.reply({
+      content:
+        "👢 בחר את מי להוציא מהחדר:",
+
+      components: [
+        tempUserSelectRow(
+          "kick",
+          room.id,
+          "בחר משתמש להוצאה"
+        )
+      ],
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_transfer"
+  ) {
+    return interaction.reply({
+      content:
+        "👑 בחר למי להעביר את הבעלות על החדר:",
+
+      components: [
+        tempUserSelectRow(
+          "transfer",
+          room.id,
+          "בחר בעלים חדש"
+        )
+      ],
+
+      ephemeral:
+        true
+    });
+  }
+
+  if (
+    interaction.customId ===
+    "temp_delete"
+  ) {
+    await interaction.reply({
+      content:
+        "🗑️ החדר האישי נמחק.",
+
+      ephemeral:
+        true
+    });
+
+    await deleteTempVoiceRoom(
+      room,
+      `נמחק על ידי ${interaction.user.tag}`
+    );
+
+    return;
+  }
+}
+
+async function handleTempVoiceUserSelect(
+  interaction
+) {
+  const [
+    prefix,
+    channelId
+  ] =
+    interaction.customId
+      .split(":");
+
+  const action =
+    prefix
+      .replace(
+        "temp_",
+        ""
+      )
+      .replace(
+        "_select",
+        ""
+      );
+
+  const room =
+    await getControlledTempRoom(
+      interaction,
+      channelId
+    );
+
+  if (!room) {
+    return interaction.update({
+      content:
+        "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+
+      components: []
+    });
+  }
+
+  const targetId =
+    interaction.values[0];
+
+  if (
+    targetId ===
+    interaction.user.id
+  ) {
+    return interaction.update({
+      content:
+        "❌ אי אפשר לבחור את עצמך בפעולה הזאת.",
+
+      components: []
+    });
+  }
+
+  const target =
+    await fetchFreshMember(
+      interaction.guild,
+      targetId
+    )
+      .catch(
+        () => null
+      );
+
+  if (
+    !target ||
+    target.user.bot
+  ) {
+    return interaction.update({
+      content:
+        "❌ המשתמש לא נמצא או שהוא בוט.",
+
+      components: []
+    });
+  }
+
+  if (
+    action ===
+    "invite"
+  ) {
+    await room.permissionOverwrites.edit(
+      target.id,
+      {
+        ViewChannel:
+          true,
+
+        Connect:
+          true,
+
+        Speak:
+          true
+      }
+    );
+
+    const inviteUrl =
+      `https://discord.com/channels/${interaction.guild.id}/${room.id}`;
+
+    await target.user.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(
+            0x57F287
+          )
+          .setTitle(
+            "💌 הוזמנת לחדר קולי אישי"
+          )
+          .setDescription(
+            `${interaction.user} הזמין/ה אותך לחדר הקולי **${room.name}** בשרת **${interaction.guild.name}**.`
+          )
+      ],
+
+      components: [
+        new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setLabel(
+                "היכנס לחדר"
+              )
+              .setEmoji(
+                "🔊"
+              )
+              .setStyle(
+                ButtonStyle.Link
+              )
+              .setURL(
+                inviteUrl
+              )
+          )
+      ]
+    }).catch(
+      () => {}
+    );
+
+    return interaction.update({
+      content:
+        `✅ ${target} קיבל/ה גישה והזמנה לחדר.`,
+
+      components: []
+    });
+  }
+
+  if (
+    action ===
+    "permit"
+  ) {
+    await room.permissionOverwrites.edit(
+      target.id,
+      {
+        ViewChannel:
+          true,
+
+        Connect:
+          true,
+
+        Speak:
+          true
+      }
+    );
+
+    return interaction.update({
+      content:
+        `✅ ${target} יכול/ה עכשיו להיכנס לחדר.`,
+
+      components: []
+    });
+  }
+
+  if (
+    action ===
+    "reject"
+  ) {
+    await room.permissionOverwrites.edit(
+      target.id,
+      {
+        Connect:
+          false,
+
+        ViewChannel:
+          null,
+
+        Speak:
+          null
+      }
+    );
+
+    if (
+      target.voice.channelId ===
+      room.id
+    ) {
+      await target.voice
+        .disconnect(
+          "נחסם מהחדר האישי"
+        )
+        .catch(
+          () => {}
+        );
+    }
+
+    return interaction.update({
+      content:
+        `⛔ ${target} נחסם/ה מכניסה לחדר.`,
+
+      components: []
+    });
+  }
+
+  if (
+    action ===
+    "kick"
+  ) {
+    if (
+      target.voice.channelId !==
+      room.id
+    ) {
+      return interaction.update({
+        content:
+          "❌ המשתמש הזה לא נמצא כרגע בחדר שלך.",
+
+        components: []
+      });
+    }
+
+    await target.voice
+      .disconnect(
+        "הוצאה מחדר קולי אישי"
+      )
+      .catch(
+        () => {}
+      );
+
+    return interaction.update({
+      content:
+        `👢 ${target} הוצא/ה מהחדר.`,
+
+      components: []
+    });
+  }
+
+  if (
+    action ===
+    "transfer"
+  ) {
+    if (
+      target.voice.channelId !==
+      room.id
+    ) {
+      return interaction.update({
+        content:
+          "❌ אפשר להעביר בעלות רק למישהו שנמצא איתך בתוך החדר.",
+
+        components: []
+      });
+    }
+
+    const oldOwnerId =
+      interaction.user.id;
+
+    tempVoiceOwners.set(
+      room.id,
+      target.id
+    );
+
+    await logBotData(
+      `TEMP_OWNER|${room.id}|${target.id}`
+    );
+
+    await room.permissionOverwrites.edit(
+      target.id,
+      {
+        ViewChannel:
+          true,
+
+        Connect:
+          true,
+
+        Speak:
+          true,
+
+        Stream:
+          true,
+
+        UseVAD:
+          true
+      }
+    );
+
+    await room.permissionOverwrites
+      .delete(
+        oldOwnerId
+      )
+      .catch(
+        () => {}
+      );
+
+    await room
+      .setName(
+        buildTempRoomName(
+          target
+        ),
+        "העברת בעלות על חדר אישי"
+      )
+      .catch(
+        () => {}
+      );
+
+    return interaction.update({
+      content:
+        `👑 הבעלות על החדר הועברה ל-${target}.`,
+
+      components: []
+    });
+  }
+
+  return interaction.update({
+    content:
+      "❌ הפעולה לא נמצאה.",
+
+    components: []
+  });
+}
+
 // ===================== YOUTUBE =====================
 
-function decodeXml(text) {
+function decodeXml(
+  text
+) {
   return String(
-    text || ""
+    text ||
+    ""
   )
     .replace(
       /&amp;/g,
@@ -5100,7 +6719,8 @@ function decodeXml(text) {
 function parseYouTubeFeed(
   xml
 ) {
-  const entries = [];
+  const entries =
+    [];
 
   const regex =
     /<entry>([\s\S]*?)<\/entry>/g;
@@ -5113,7 +6733,8 @@ function parseYouTubeFeed(
         regex.exec(
           xml
         )
-    ) !== null
+    ) !==
+    null
   ) {
     const block =
       match[1];
@@ -5133,7 +6754,9 @@ function parseYouTubeFeed(
         /<published>([^<]+)<\/published>/
       )?.[1];
 
-    if (videoId) {
+    if (
+      videoId
+    ) {
       entries.push({
         videoId,
 
@@ -5163,7 +6786,8 @@ function extractJsonObjectAfter(
     );
 
   if (
-    markerIndex === -1
+    markerIndex ===
+    -1
   ) {
     return null;
   }
@@ -5176,7 +6800,8 @@ function extractJsonObjectAfter(
     );
 
   if (
-    start === -1
+    start ===
+    -1
   ) {
     return null;
   }
@@ -5193,19 +6818,25 @@ function extractJsonObjectAfter(
     const char =
       html[i];
 
-    if (inString) {
-      if (escaped) {
+    if (
+      inString
+    ) {
+      if (
+        escaped
+      ) {
         escaped =
           false;
 
       } else if (
-        char === "\\"
+        char ===
+        "\\"
       ) {
         escaped =
           true;
 
       } else if (
-        char === '"'
+        char ===
+        '"'
       ) {
         inString =
           false;
@@ -5215,7 +6846,8 @@ function extractJsonObjectAfter(
     }
 
     if (
-      char === '"'
+      char ===
+      '"'
     ) {
       inString =
         true;
@@ -5224,19 +6856,22 @@ function extractJsonObjectAfter(
     }
 
     if (
-      char === "{"
+      char ===
+      "{"
     ) {
       depth++;
     }
 
     if (
-      char === "}"
+      char ===
+      "}"
     ) {
       depth--;
     }
 
     if (
-      depth === 0
+      depth ===
+      0
     ) {
       try {
         return JSON.parse(
@@ -5300,7 +6935,9 @@ async function resolveYouTubeChannelId() {
         pattern
       )?.[1];
 
-    if (found) {
+    if (
+      found
+    ) {
       resolvedYouTubeChannelId =
         found;
 
@@ -5340,11 +6977,8 @@ async function getYouTubeFeedEntries() {
     );
   }
 
-  const xml =
-    await response.text();
-
   return parseYouTubeFeed(
-    xml
+    await response.text()
   );
 }
 
@@ -5399,7 +7033,8 @@ async function getYouTubeVideoMeta(
     const html =
       await response.text();
 
-    let player = null;
+    let player =
+      null;
 
     for (
       const marker of
@@ -5456,13 +7091,15 @@ async function getYouTubeVideoMeta(
       null;
 
     const isLiveNow =
-      live.isLiveNow === true ||
+      live.isLiveNow ===
+        true ||
       /"isLiveNow":true/.test(
         html
       );
 
     const isLiveContent =
-      details.isLiveContent === true ||
+      details.isLiveContent ===
+        true ||
       /"isLiveContent":true/.test(
         html
       ) ||
@@ -5475,8 +7112,10 @@ async function getYouTubeVideoMeta(
       "";
 
     const isShortsEligible =
-      details.isShortsEligible === true ||
-      micro.isShortsEligible === true ||
+      details.isShortsEligible ===
+        true ||
+      micro.isShortsEligible ===
+        true ||
       /"isShortsEligible":true/.test(
         html
       ) ||
@@ -5570,12 +7209,15 @@ async function sendYouTubeAnnouncement(
     meta?.thumbnail ||
     `https://i.ytimg.com/vi/${entry.videoId}/hqdefault.jpg`;
 
-  let content = null;
+  let content =
+    null;
+
   let embed;
   let button;
 
   if (
-    type === "live"
+    type ===
+    "live"
   ) {
     content =
       "@everyone 🔴 **אנחנו בלייב עכשיו!**";
@@ -5617,7 +7259,8 @@ async function sendYouTubeAnnouncement(
         );
 
   } else if (
-    type === "short"
+    type ===
+    "short"
   ) {
     embed =
       new EmbedBuilder()
@@ -5705,7 +7348,8 @@ async function sendYouTubeAnnouncement(
     ],
 
     allowedMentions:
-      type === "live"
+      type ===
+        "live"
         ? {
             parse: [
               "everyone"
@@ -5714,10 +7358,9 @@ async function sendYouTubeAnnouncement(
         : {
             parse: []
           }
-  })
-    .catch(
-      () => null
-    );
+  }).catch(
+    () => null
+  );
 }
 
 async function markYouTubeLiveEnded(
@@ -5974,6 +7617,10 @@ async function pollYouTube() {
           entry.videoId
         );
 
+      if (!meta) {
+        continue;
+      }
+
       if (
         meta.isLiveContent &&
         !meta.isLiveNow &&
@@ -6047,7 +7694,8 @@ async function pollYouTube() {
             sent.channel.id,
 
           ended:
-            type !== "live"
+            type !==
+            "live"
         }
       );
 
@@ -6075,6 +7723,10 @@ async function pollYouTube() {
         await getYouTubeVideoMeta(
           videoId
         );
+
+      if (!meta) {
+        continue;
+      }
 
       if (
         !meta.isLiveNow &&
@@ -6303,6 +7955,28 @@ client.once(
         console.error
       );
 
+    await setupTempVoicePanel()
+      .catch(
+        console.error
+      );
+
+    try {
+      const guild =
+        await client.guilds.fetch(
+          GUILD_ID
+        );
+
+      await restoreTempVoiceRooms(
+        guild
+      );
+
+    } catch (error) {
+      console.error(
+        "❌ שחזור חדרים אישיים נכשל:",
+        error
+      );
+    }
+
     await pollYouTube();
 
     setInterval(
@@ -6312,6 +7986,95 @@ client.once(
             () => {}
           ),
       YOUTUBE_CHECK_INTERVAL_MS
+    );
+  }
+);
+
+// ===================== TEMP VOICE EVENTS =====================
+
+client.on(
+  "voiceStateUpdate",
+  async (
+    oldState,
+    newState
+  ) => {
+    try {
+      if (
+        newState.member
+          ?.user
+          .bot
+      ) {
+        return;
+      }
+
+      if (
+        newState.channelId ===
+          TEMP_VOICE_CREATE_CHANNEL_ID &&
+        oldState.channelId !==
+          TEMP_VOICE_CREATE_CHANNEL_ID
+      ) {
+        await createTempVoiceRoom(
+          newState.member
+        );
+      }
+
+      if (
+        oldState.channelId &&
+        oldState.channelId !==
+          newState.channelId &&
+        tempVoiceOwners.has(
+          oldState.channelId
+        )
+      ) {
+        const oldChannel =
+          oldState.guild
+            .channels
+            .cache
+            .get(
+              oldState.channelId
+            );
+
+        if (
+          oldChannel?.type ===
+            ChannelType.GuildVoice &&
+          oldChannel.members.size ===
+            0
+        ) {
+          await deleteTempVoiceRoom(
+            oldChannel,
+            "החדר האישי התרוקן"
+          );
+        }
+      }
+
+    } catch (error) {
+      console.error(
+        "❌ voiceStateUpdate temp voice:",
+        error
+      );
+    }
+  }
+);
+
+client.on(
+  "channelDelete",
+  async channel => {
+    if (
+      !tempVoiceOwners.has(
+        channel.id
+      )
+    ) {
+      return;
+    }
+
+    tempVoiceOwners.delete(
+      channel.id
+    );
+
+    await logBotData(
+      `TEMP_DELETE|${channel.id}`
+    ).catch(
+      () => {}
     );
   }
 );
@@ -6494,7 +8257,7 @@ client.on(
     if (
       newUser.bot ||
       oldUser.globalName ===
-      newUser.globalName
+        newUser.globalName
     ) {
       return;
     }
@@ -6563,7 +8326,186 @@ client.on(
   "interactionCreate",
   async interaction => {
 
-    // ---------- OWNER NICKNAME ----------
+    // ===================== TEMP VOICE BUTTONS =====================
+
+    if (
+      interaction.isButton() &&
+      [
+        "temp_lock",
+        "temp_unlock",
+        "temp_hide",
+        "temp_show",
+        "temp_limit",
+        "temp_rename",
+        "temp_invite",
+        "temp_permit",
+        "temp_reject",
+        "temp_kick",
+        "temp_transfer",
+        "temp_delete"
+      ].includes(
+        interaction.customId
+      )
+    ) {
+      return handleTempVoiceButton(
+        interaction
+      );
+    }
+
+    if (
+      interaction.isUserSelectMenu() &&
+      interaction.customId.startsWith(
+        "temp_"
+      ) &&
+      interaction.customId.includes(
+        "_select:"
+      )
+    ) {
+      return handleTempVoiceUserSelect(
+        interaction
+      );
+    }
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId.startsWith(
+        "temp_rename_modal:"
+      )
+    ) {
+      const channelId =
+        interaction.customId
+          .split(":")[1];
+
+      const room =
+        await getControlledTempRoom(
+          interaction,
+          channelId
+        );
+
+      if (!room) {
+        return interaction.reply({
+          content:
+            "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      const name =
+        interaction.fields
+          .getTextInputValue(
+            "room_name"
+          )
+          .replace(
+            /[\r\n]/g,
+            " "
+          )
+          .trim()
+          .slice(
+            0,
+            100
+          );
+
+      if (!name) {
+        return interaction.reply({
+          content:
+            "❌ צריך לכתוב שם לחדר.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      await room.setName(
+        name,
+        `שינוי שם על ידי ${interaction.user.tag}`
+      );
+
+      return interaction.reply({
+        content:
+          `✏️ שם החדר שונה ל-**${name}**.`,
+
+        ephemeral:
+          true
+      });
+    }
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId.startsWith(
+        "temp_limit_modal:"
+      )
+    ) {
+      const channelId =
+        interaction.customId
+          .split(":")[1];
+
+      const room =
+        await getControlledTempRoom(
+          interaction,
+          channelId
+        );
+
+      if (!room) {
+        return interaction.reply({
+          content:
+            "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      const raw =
+        interaction.fields
+          .getTextInputValue(
+            "room_limit"
+          )
+          .trim();
+
+      const limit =
+        Number(
+          raw
+        );
+
+      if (
+        !/^\d{1,2}$/.test(
+          raw
+        ) ||
+        !Number.isInteger(
+          limit
+        ) ||
+        limit < 0 ||
+        limit > 99
+      ) {
+        return interaction.reply({
+          content:
+            "❌ צריך לכתוב מספר בין **0 ל-99**. 0 = בלי הגבלה.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      await room.setUserLimit(
+        limit,
+        `שינוי הגבלה על ידי ${interaction.user.tag}`
+      );
+
+      return interaction.reply({
+        content:
+          limit ===
+            0
+            ? "👥 הוסרה הגבלת המשתמשים מהחדר."
+            : `👥 החדר הוגבל ל-**${limit}** משתמשים.`,
+
+        ephemeral:
+          true
+      });
+    }
+
+    // ===================== OWNER NICKNAME =====================
 
     if (
       interaction.isButton() &&
@@ -6697,12 +8639,14 @@ client.on(
         });
       }
 
-      await member.setNickname(
-        nickname,
-        "שינוי ידני על ידי הבעלים"
-      ).catch(
-        () => {}
-      );
+      await member
+        .setNickname(
+          nickname,
+          "שינוי ידני על ידי הבעלים"
+        )
+        .catch(
+          () => {}
+        );
 
       return interaction.reply({
         content:
@@ -6713,12 +8657,12 @@ client.on(
       });
     }
 
-    // ---------- GIVEAWAY ----------
+    // ===================== GIVEAWAY =====================
 
     if (
       interaction.isChatInputCommand() &&
       interaction.commandName ===
-      "giveaway"
+        "giveaway"
     ) {
       const member =
         await fetchFreshMember(
@@ -6864,7 +8808,7 @@ client.on(
     if (
       interaction.isButton() &&
       interaction.customId ===
-      "giveaway_join"
+        "giveaway_join"
     ) {
       const giveaway =
         activeGiveaways.get(
@@ -6951,7 +8895,7 @@ client.on(
     if (
       interaction.isButton() &&
       interaction.customId ===
-      "giveaway_end"
+        "giveaway_end"
     ) {
       const member =
         await fetchFreshMember(
@@ -7010,12 +8954,12 @@ client.on(
       );
     }
 
-    // ---------- STAFFMANAGE ----------
+    // ===================== STAFF MANAGE =====================
 
     if (
       interaction.isChatInputCommand() &&
       interaction.commandName ===
-      "staffmanage"
+        "staffmanage"
     ) {
       if (
         interaction.user.id !==
@@ -7061,7 +9005,7 @@ client.on(
     if (
       interaction.isUserSelectMenu() &&
       interaction.customId ===
-      "manage_select_user"
+        "manage_select_user"
     ) {
       if (
         interaction.user.id !==
@@ -7114,12 +9058,12 @@ client.on(
       });
     }
 
-    // ---------- PARTNER APPLY ----------
+    // ===================== PARTNER =====================
 
     if (
       interaction.isButton() &&
       interaction.customId ===
-      "partner_apply"
+        "partner_apply"
     ) {
       if (
         partnerPendingByUser.has(
@@ -7158,7 +9102,7 @@ client.on(
     if (
       interaction.isModalSubmit() &&
       interaction.customId ===
-      "partner_modal"
+        "partner_modal"
     ) {
       if (
         partnerPendingByUser.has(
@@ -7302,8 +9246,6 @@ client.on(
         "✅ בקשת ה-Partner נשלחה לבדיקה!"
       );
     }
-
-    // ---------- PARTNER OWNER ----------
 
     if (
       interaction.isButton() &&
@@ -7496,7 +9438,7 @@ client.on(
         return interaction.editReply({
           content:
             error.message ===
-            "Applicant is not in the server"
+              "Applicant is not in the server"
               ? "❌ המשתמש כבר לא נמצא בשרת, לכן אי אפשר לתת לו רול Partner."
               : "❌ הייתה בעיה באישור. הבקשה נשארה פתוחה.",
 
@@ -7742,12 +9684,12 @@ client.on(
       });
     }
 
-    // ---------- SUGGESTIONS ----------
+    // ===================== SUGGESTIONS =====================
 
     if (
       interaction.isStringSelectMenu() &&
       interaction.customId ===
-      "suggestion_type"
+        "suggestion_type"
     ) {
       const type =
         interaction.values[0];
@@ -7984,7 +9926,7 @@ client.on(
       try {
         const choice =
           interaction.customId ===
-          "suggestion_vote_up"
+            "suggestion_vote_up"
             ? "up"
             : "down";
 
@@ -7994,7 +9936,7 @@ client.on(
           ) ||
           null;
 
-        let text;
+        let responseText;
 
         if (
           previous ===
@@ -8008,7 +9950,7 @@ client.on(
             `SUGG_VOTE|${interaction.message.id}|${interaction.user.id}|none`
           );
 
-          text =
+          responseText =
             "↩️ ההצבעה שלך בוטלה.";
 
         } else {
@@ -8021,8 +9963,9 @@ client.on(
             `SUGG_VOTE|${interaction.message.id}|${interaction.user.id}|${choice}`
           );
 
-          text =
-            choice === "up"
+          responseText =
+            choice ===
+              "up"
               ? "👍 הצבעת **בעד**."
               : "👎 הצבעת **נגד**.";
         }
@@ -8057,7 +10000,7 @@ client.on(
         }
 
         return interaction.editReply(
-          text
+          responseText
         );
 
       } finally {
@@ -8070,7 +10013,7 @@ client.on(
     if (
       interaction.isButton() &&
       interaction.customId ===
-      "suggestion_staff_options"
+        "suggestion_staff_options"
     ) {
       const member =
         await fetchFreshMember(
@@ -8472,12 +10415,12 @@ client.on(
       );
     }
 
-    // ---------- TICKET MENU ----------
+    // ===================== TICKET MENU =====================
 
     if (
       interaction.isStringSelectMenu() &&
       interaction.customId ===
-      "ticket_type"
+        "ticket_type"
     ) {
       const type =
         interaction.values[0];
@@ -8758,7 +10701,7 @@ client.on(
     if (
       interaction.isButton() &&
       interaction.customId ===
-      "close_ticket"
+        "close_ticket"
     ) {
       const member =
         await fetchFreshMember(
@@ -8813,7 +10756,7 @@ client.on(
       return;
     }
 
-    // ---------- STAFF APPLICATION SUBMIT ----------
+    // ===================== STAFF APPLICATION SUBMIT =====================
 
     if (
       interaction.isModalSubmit() &&
@@ -9117,7 +11060,7 @@ client.on(
       }
     }
 
-    // ---------- APP APPROVE ----------
+    // ===================== APP APPROVE =====================
 
     if (
       interaction.isButton() &&
@@ -9322,7 +11265,7 @@ client.on(
       }
     }
 
-    // ---------- APP REJECT ----------
+    // ===================== APP REJECT =====================
 
     if (
       interaction.isButton() &&
@@ -9459,7 +11402,7 @@ client.on(
       }
     }
 
-    // ---------- APP ASSIGN ----------
+    // ===================== APP ASSIGN =====================
 
     if (
       interaction.isButton() &&
@@ -9555,7 +11498,8 @@ client.on(
           );
 
         const allowed =
-          type === "initial"
+          type ===
+            "initial"
             ? [
                 ROLE_STAFF,
                 ROLE_TEAM
@@ -9610,7 +11554,8 @@ client.on(
             interaction.user,
 
           title:
-            type === "initial"
+            type ===
+              "initial"
               ? "✅ צירוף חדש לצוות"
               : "⬆️ קידום צוות",
 
@@ -9635,9 +11580,7 @@ client.on(
 
         setStatusField(
           embed,
-          `✅ **אושר**\n` +
-          `🎖️ דרגה: **${roleName}**\n` +
-          `טופל על ידי ${interaction.user}`
+          `✅ **אושר**\n🎖️ דרגה: **${roleName}**\nטופל על ידי ${interaction.user}`
         );
 
         embed.setFooter({
@@ -9668,7 +11611,7 @@ client.on(
       }
     }
 
-    // ---------- MANAGE ADD ----------
+    // ===================== MANAGE ADD =====================
 
     if (
       interaction.isButton() &&
@@ -9881,7 +11824,7 @@ client.on(
       );
     }
 
-    // ---------- MANAGE PROMOTE ----------
+    // ===================== MANAGE PROMOTE =====================
 
     if (
       interaction.isButton() &&
@@ -10087,7 +12030,7 @@ client.on(
       );
     }
 
-    // ---------- MANAGE DEMOTE ----------
+    // ===================== MANAGE DEMOTE =====================
 
     if (
       interaction.isButton() &&
@@ -10173,7 +12116,9 @@ client.on(
         }
       }
 
-      if (!previousRoleId) {
+      if (
+        !previousRoleId
+      ) {
         return refreshManagementPanel(
           interaction,
           targetId,
@@ -10225,7 +12170,7 @@ client.on(
       );
     }
 
-    // ---------- MANAGE REMOVE ----------
+    // ===================== MANAGE REMOVE =====================
 
     if (
       interaction.isButton() &&
@@ -10337,6 +12282,40 @@ client.on(
     }
   }
 );
+
+// ===================== ERRORS =====================
+
+client.on(
+  "error",
+  error => {
+    console.error(
+      "❌ Discord client error:",
+      error
+    );
+  }
+);
+
+process.on(
+  "unhandledRejection",
+  error => {
+    console.error(
+      "❌ Unhandled Promise Rejection:",
+      error
+    );
+  }
+);
+
+process.on(
+  "uncaughtException",
+  error => {
+    console.error(
+      "❌ Uncaught Exception:",
+      error
+    );
+  }
+);
+
+// ===================== LOGIN =====================
 
 if (
   !TOKEN ||
