@@ -9,9 +9,7 @@ const {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
-  EmbedBuilder,
-  ButtonBuilder,
-  ButtonStyle
+  EmbedBuilder
 } = require("discord.js");
 
 const client = new Client({
@@ -22,62 +20,114 @@ const TOKEN = process.env.BOT_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 const CATEGORY_ID = process.env.CATEGORY_ID;
-const SUPPORT_ROLE_ID = process.env.SUPPORT_ROLE_ID;
+
+// הרול היחיד שיכול לראות את הטיקטים חוץ ממי שפתח אותם
+const SUPPORT_ROLE_ID = "1555587941575696444";
 
 const commands = [
   new SlashCommandBuilder()
     .setName("ticketpanel")
-    .setDescription("שולח את פאנל פתיחת הטיקטים")
+    .setDescription("שולח את מערכת הטיקטים")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
 ].map(command => command.toJSON());
 
+
 const ticketTypes = {
+
+  report: {
+    name: "דיווח על משתמש",
+    emoji: "🚨",
+    channelName: "דיווח"
+  },
+
   technical: {
     name: "תמיכה טכנית",
     emoji: "🛠️",
-    channelName: "technical"
-  },
-
-  report: {
-    name: "דיווח על שחקן",
-    emoji: "🚨",
-    channelName: "report"
+    channelName: "תמיכה"
   },
 
   staff: {
-    name: "בחינות לצוות",
+    name: "בחינה לצוות",
     emoji: "🛡️",
-    channelName: "staff"
+    channelName: "בחינה"
   },
 
   general: {
     name: "כללי",
     emoji: "💬",
-    channelName: "general"
+    channelName: "כללי"
   }
+
 };
 
+
+function createTicketMenu() {
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("ticket_type")
+    .setPlaceholder("בחרו את סוג הפנייה שלכם")
+    .addOptions(
+
+      new StringSelectMenuOptionBuilder()
+        .setLabel("דיווח על משתמש")
+        .setDescription("פתיחת דיווח על משתמש")
+        .setEmoji("🚨")
+        .setValue("report"),
+
+      new StringSelectMenuOptionBuilder()
+        .setLabel("תמיכה טכנית")
+        .setDescription("קבלת עזרה ותמיכה טכנית")
+        .setEmoji("🛠️")
+        .setValue("technical"),
+
+      new StringSelectMenuOptionBuilder()
+        .setLabel("בחינה לצוות")
+        .setDescription("פתיחת בחינה להצטרפות לצוות")
+        .setEmoji("🛡️")
+        .setValue("staff"),
+
+      new StringSelectMenuOptionBuilder()
+        .setLabel("כללי")
+        .setDescription("פתיחת טיקט כללי")
+        .setEmoji("💬")
+        .setValue("general")
+    );
+
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+
 client.once("ready", async () => {
+
   console.log(`✅ הבוט מחובר בתור ${client.user.tag}`);
 
   try {
+
     const rest = new REST({ version: "10" }).setToken(TOKEN);
 
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
+      {
+        body: commands
+      }
     );
 
-    console.log("✅ הפקודות נטענו בהצלחה");
+    console.log("✅ הפקודות נטענו");
+
   } catch (error) {
+
     console.error("❌ שגיאה בטעינת הפקודות:", error);
+
   }
+
 });
+
 
 client.on("interactionCreate", async interaction => {
 
+
   // =========================
-  // /ticketpanel
+  // שליחת פאנל הטיקטים
   // =========================
 
   if (
@@ -86,53 +136,39 @@ client.on("interactionCreate", async interaction => {
   ) {
 
     const embed = new EmbedBuilder()
-      .setTitle("🎫 פתיחת טיקט")
+
+      .setTitle("מערכת טיקטים🎫")
+
       .setDescription(
-        "צריכים עזרה?\n\nבחרו את סוג הפנייה שלכם בתפריט למטה."
+        "**שלום לכולם! ✨**\n\n" +
+
+        "**בחרו סוג פנייה**\n\n" +
+
+        "1️⃣ 🚨 **דיווח על משתמש**\n" +
+        "2️⃣ 🛠️ **תמיכה טכנית**\n" +
+        "3️⃣ 🛡️ **בחינה לצוות**\n\n" +
+
+        "**⚠️ פניות שלא קשורות יסגרו ישר, פתחו טיקט רק אם באמת צריך**"
       );
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("ticket_type")
-      .setPlaceholder("בחרו את סוג הפנייה שלכם")
-      .addOptions(
-
-        new StringSelectMenuOptionBuilder()
-          .setLabel("תמיכה טכנית")
-          .setDescription("קבלת עזרה ותמיכה טכנית")
-          .setEmoji("🛠️")
-          .setValue("technical"),
-
-        new StringSelectMenuOptionBuilder()
-          .setLabel("דיווח על שחקן")
-          .setDescription("פתיחת טיקט לדיווח על משתמש")
-          .setEmoji("🚨")
-          .setValue("report"),
-
-        new StringSelectMenuOptionBuilder()
-          .setLabel("בחינות לצוות")
-          .setDescription("הגשת בקשה להצטרפות לצוות")
-          .setEmoji("🛡️")
-          .setValue("staff"),
-
-        new StringSelectMenuOptionBuilder()
-          .setLabel("כללי")
-          .setDescription("פתיחת פנייה כללית")
-          .setEmoji("💬")
-          .setValue("general")
-      );
-
-    const row = new ActionRowBuilder().addComponents(menu);
 
     await interaction.reply({
+
       embeds: [embed],
-      components: [row]
+
+      components: [
+        createTicketMenu()
+      ]
+
     });
 
     return;
   }
 
+
+
   // =========================
-  // בחירת סוג הטיקט
+  // בחירת סוג טיקט
   // =========================
 
   if (
@@ -144,69 +180,104 @@ client.on("interactionCreate", async interaction => {
       ephemeral: true
     });
 
+
     try {
 
       const typeId = interaction.values[0];
+
       const ticketType = ticketTypes[typeId];
 
+
       if (!ticketType) {
+
         return interaction.editReply(
           "❌ סוג הטיקט לא נמצא."
         );
+
       }
 
-      // בדיקה אם כבר קיים טיקט
+
+      // אם כבר יש למשתמש טיקט
       const existingTicket =
-        interaction.guild.channels.cache.find(channel =>
-          channel.topic?.startsWith(
-            `ticket-owner:${interaction.user.id}`
-          )
+        interaction.guild.channels.cache.find(
+          channel =>
+            channel.topic?.startsWith(
+              `ticket-owner:${interaction.user.id}`
+            )
         );
 
+
       if (existingTicket) {
+
+        // מחזיר את התפריט למצב הרגיל
+        await interaction.message.edit({
+          components: [
+            createTicketMenu()
+          ]
+        });
+
         return interaction.editReply(
           `❌ כבר יש לך טיקט פתוח: ${existingTicket}`
         );
+
       }
 
+
+      // =========================
       // יצירת הטיקט
+      // =========================
+
       const channel =
         await interaction.guild.channels.create({
 
           name:
-            `${ticketType.channelName}-${interaction.user.id.slice(-5)}`,
+            `${ticketType.channelName}-${interaction.user.username}`,
 
-          type: ChannelType.GuildText,
+          type:
+            ChannelType.GuildText,
 
-          parent: CATEGORY_ID,
+          parent:
+            CATEGORY_ID || undefined,
 
           topic:
             `ticket-owner:${interaction.user.id}|type:${typeId}`,
 
           permissionOverwrites: [
 
+            // אף אחד בשרת לא רואה
             {
               id: interaction.guild.id,
+
               deny: [
                 PermissionFlagsBits.ViewChannel
               ]
             },
 
+
+            // מי שפתח את הטיקט
             {
               id: interaction.user.id,
+
               allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory
+                PermissionFlagsBits.ReadMessageHistory,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.EmbedLinks
               ]
             },
 
+
+            // צוות התמיכה
             {
               id: SUPPORT_ROLE_ID,
+
               allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory
+                PermissionFlagsBits.ReadMessageHistory,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.EmbedLinks
               ]
             }
 
@@ -214,85 +285,84 @@ client.on("interactionCreate", async interaction => {
 
         });
 
-      const closeButton =
-        new ButtonBuilder()
-          .setCustomId("close_ticket")
-          .setLabel("סגור טיקט")
-          .setEmoji("🔒")
-          .setStyle(ButtonStyle.Danger);
 
-      const closeRow =
-        new ActionRowBuilder()
-          .addComponents(closeButton);
+
+      // =========================
+      // הודעה בתוך הטיקט
+      // =========================
 
       const ticketEmbed =
         new EmbedBuilder()
+
           .setTitle(
             `${ticketType.emoji} ${ticketType.name}`
           )
+
           .setDescription(
             `שלום ${interaction.user} 👋\n\n` +
-            `פתחת טיקט מסוג **${ticketType.name}**.\n\n` +
-            `כתוב כאן את כל הפרטים וצוות השרת יענה לך בהקדם.`
+            `הטיקט שלך נפתח בהצלחה.\n` +
+            `סוג הפנייה: **${ticketType.name}**\n\n` +
+            `כתוב כאן את כל הפרטים וצוות השרת יעזור לך.`
           );
 
+
       await channel.send({
+
         content:
           `${interaction.user} <@&${SUPPORT_ROLE_ID}>`,
-        embeds: [ticketEmbed],
-        components: [closeRow]
+
+        embeds: [
+          ticketEmbed
+        ]
+
       });
 
+
+
+      // מחזיר את התפריט ל"בחרו את סוג הפנייה"
+      await interaction.message.edit({
+
+        components: [
+          createTicketMenu()
+        ]
+
+      });
+
+
+
       await interaction.editReply(
-        `✅ הטיקט נפתח בהצלחה: ${channel}`
+        `✅ הטיקט שלך נפתח: ${channel}`
       );
+
 
     } catch (error) {
 
       console.error(
-        "❌ שגיאה ביצירת טיקט:",
+        "❌ שגיאה בפתיחת טיקט:",
         error
       );
 
+
+      try {
+
+        await interaction.message.edit({
+          components: [
+            createTicketMenu()
+          ]
+        });
+
+      } catch {}
+
+
       await interaction.editReply(
-        "❌ הייתה בעיה בפתיחת הטיקט. בדוק את ה־CATEGORY_ID וה־SUPPORT_ROLE_ID ב־Railway."
+        "❌ הייתה בעיה בפתיחת הטיקט."
       );
 
     }
 
-    return;
-  }
-
-  // =========================
-  // סגירת הטיקט
-  // =========================
-
-  if (
-    interaction.isButton() &&
-    interaction.customId === "close_ticket"
-  ) {
-
-    if (
-      !interaction.channel.topic?.startsWith(
-        "ticket-owner:"
-      )
-    ) return;
-
-    await interaction.reply(
-      "🔒 הטיקט ייסגר בעוד 3 שניות..."
-    );
-
-    setTimeout(async () => {
-
-      try {
-        await interaction.channel.delete();
-      } catch (error) {
-        console.error(error);
-      }
-
-    }, 3000);
   }
 
 });
+
 
 client.login(TOKEN);
