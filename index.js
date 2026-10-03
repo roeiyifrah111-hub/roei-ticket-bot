@@ -24,16 +24,13 @@ const TOKEN = process.env.BOT_TOKEN;
 
 
 // ======================================================
-// IDS
+// IDs
 // ======================================================
 
-// החדר שבו נמצא פאנל הטיקטים
 const PANEL_CHANNEL_ID = "1541390151757078599";
 
-// החדר שאליו נשלחות הבחינות לצוות
 const STAFF_APPLICATION_CHANNEL_ID = "1541391169936687195";
 
-// כל הרולים שיכולים לטפל בטיקטים ובבקשות לצוות
 const STAFF_ROLE_IDS = [
   "1555587941575696444",
   "1541371707011629077",
@@ -42,7 +39,6 @@ const STAFF_ROLE_IDS = [
   "1555588224636821526"
 ];
 
-// קטגוריית הטיקטים מ-Railway
 const CATEGORY_ID = process.env.CATEGORY_ID;
 
 
@@ -79,7 +75,28 @@ const ticketTypes = {
 
 
 // ======================================================
-// יצירת התפריט הראשי
+// בדיקה אם משתמש הוא צוות
+// ======================================================
+
+function memberIsStaff(member) {
+
+  if (
+    member.permissions.has(
+      PermissionFlagsBits.Administrator
+    )
+  ) {
+    return true;
+  }
+
+  return STAFF_ROLE_IDS.some(
+    roleId =>
+      member.roles.cache.has(roleId)
+  );
+}
+
+
+// ======================================================
+// תפריט הטיקטים
 // ======================================================
 
 function createTicketMenu() {
@@ -124,7 +141,7 @@ function createTicketMenu() {
 
 
 // ======================================================
-// פאנל הטיקטים
+// הפאנל הראשי
 // ======================================================
 
 function createPanelEmbed() {
@@ -149,6 +166,28 @@ function createPanelEmbed() {
 
 
 // ======================================================
+// כפתור סגירת טיקט
+// ======================================================
+
+function createCloseTicketButton() {
+
+  const closeButton = new ButtonBuilder()
+
+    .setCustomId("close_ticket")
+
+    .setLabel("סגור טיקט")
+
+    .setEmoji("🔒")
+
+    .setStyle(ButtonStyle.Danger);
+
+
+  return new ActionRowBuilder()
+    .addComponents(closeButton);
+}
+
+
+// ======================================================
 // הודעה בתוך טיקט
 // ======================================================
 
@@ -165,24 +204,23 @@ function createTicketEmbed(type, user) {
 
         "**תודה שפנית לצוות השרת.**\n\n" +
 
-        "כדי שנוכל לבדוק את הדיווח בצורה מסודרת, כתבו בבקשה:\n\n" +
+        "כדי שנוכל לבדוק את המקרה, כתבו:\n\n" +
 
         "👤 **על מי הדיווח?**\n" +
-        "כתבו שם משתמש או ID.\n\n" +
+        "שם משתמש או ID.\n\n" +
 
         "📝 **מה קרה?**\n" +
-        "הסבירו את המקרה בצורה ברורה.\n\n" +
+        "תארו את המקרה בצורה ברורה.\n\n" +
 
-        "📸 **יש הוכחות?**\n" +
-        "צרפו תמונות, סרטונים או צילומי מסך אם יש.\n\n" +
+        "📸 **הוכחות**\n" +
+        "צרפו תמונות או סרטונים אם יש.\n\n" +
 
         "🕒 **מתי זה קרה?**\n" +
         "כתבו זמן משוער אם אתם זוכרים.\n\n" +
 
-        "⚠️ אין צורך להתווכח או לתייג את המשתמש שעליו דיווחתם.\n\n" +
-
-        "**צוות השרת יעבור על המקרה ויטפל בו בהקדם.**"
+        "**צוות השרת יטפל בדיווח בהקדם.**"
       );
+
   }
 
 
@@ -195,24 +233,18 @@ function createTicketEmbed(type, user) {
       .setDescription(
         `שלום ${user} 👋\n\n` +
 
-        "**ברוכים הבאים לתמיכה הטכנית.**\n\n" +
+        "**נשמח לעזור לכם לפתור את הבעיה.**\n\n" +
 
-        "כדי שנוכל לעזור לכם במהירות, כתבו בבקשה:\n\n" +
+        "כתבו בבקשה:\n\n" +
 
         "🔧 **מה הבעיה?**\n" +
-        "הסבירו בדיוק מה לא עובד.\n\n" +
-
         "📱 **איפה הבעיה מתרחשת?**\n" +
-        "לדוגמה: Discord, משחק, אתר או משהו אחר.\n\n" +
-
-        "📸 **צילום מסך / סרטון**\n" +
-        "אם אפשר, צרפו צילום שמראה את התקלה.\n\n" +
-
-        "✅ **מה כבר ניסיתם לעשות?**\n" +
-        "ספרו לנו מה כבר ניסיתם כדי לפתור את הבעיה.\n\n" +
+        "📸 **צילום מסך / סרטון אם יש**\n" +
+        "✅ **מה כבר ניסיתם לעשות?**\n\n" +
 
         "**אחד מאנשי הצוות יענה לכם בהקדם.**"
       );
+
   }
 
 
@@ -225,17 +257,94 @@ function createTicketEmbed(type, user) {
 
       "**פתחתם פנייה כללית לצוות.**\n\n" +
 
-      "כתבו כאן בצורה ברורה במה אתם צריכים עזרה או על מה תרצו לדבר.\n\n" +
+      "כתבו כאן במה אתם צריכים עזרה והוסיפו כמה שיותר פרטים.\n\n" +
 
-      "📝 מומלץ להסביר את כל הפרטים כבר בהודעה הראשונה כדי שנוכל לעזור לכם מהר יותר.\n\n" +
-
-      "**צוות השרת יענה לכם בהקדם האפשרי.**"
+      "**צוות השרת יענה לכם בהקדם.**"
     );
 }
 
 
 // ======================================================
-// טופס בחינה לצוות
+// הרשאות לטיקט
+// ======================================================
+
+function createTicketPermissions(guild, userId) {
+
+  const permissions = [
+
+    {
+      id: guild.id,
+
+      deny: [
+        PermissionFlagsBits.ViewChannel
+      ]
+    },
+
+    {
+      id: userId,
+
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks
+      ]
+    },
+
+    {
+      id: client.user.id,
+
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageMessages
+      ]
+    }
+
+  ];
+
+
+  for (const roleId of STAFF_ROLE_IDS) {
+
+    permissions.push({
+
+      id: roleId,
+
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks,
+        PermissionFlagsBits.ManageMessages
+      ]
+
+    });
+
+  }
+
+
+  return permissions;
+}
+
+
+// ======================================================
+// פינג לרולים
+// ======================================================
+
+function getStaffMentions() {
+
+  return STAFF_ROLE_IDS
+    .map(roleId => `<@&${roleId}>`)
+    .join(" ");
+}
+
+
+// ======================================================
+// טופס בחינה
 // ======================================================
 
 function createStaffApplicationModal() {
@@ -257,8 +366,6 @@ function createStaffApplicationModal() {
 
     .setStyle(TextInputStyle.Short)
 
-    .setMaxLength(50)
-
     .setRequired(true);
 
 
@@ -271,8 +378,6 @@ function createStaffApplicationModal() {
     .setPlaceholder("אני הייתי...")
 
     .setStyle(TextInputStyle.Paragraph)
-
-    .setMaxLength(1000)
 
     .setRequired(true);
 
@@ -287,8 +392,6 @@ function createStaffApplicationModal() {
 
     .setStyle(TextInputStyle.Short)
 
-    .setMaxLength(100)
-
     .setRequired(true);
 
 
@@ -301,8 +404,6 @@ function createStaffApplicationModal() {
     .setPlaceholder("כן, יש לי... / לא, אין לי...")
 
     .setStyle(TextInputStyle.Paragraph)
-
-    .setMaxLength(1000)
 
     .setRequired(true);
 
@@ -317,27 +418,20 @@ function createStaffApplicationModal() {
 
     .setStyle(TextInputStyle.Paragraph)
 
-    .setMaxLength(1000)
-
     .setRequired(false);
 
 
   modal.addComponents(
 
-    new ActionRowBuilder()
-      .addComponents(ageInput),
+    new ActionRowBuilder().addComponents(ageInput),
 
-    new ActionRowBuilder()
-      .addComponents(situationInput),
+    new ActionRowBuilder().addComponents(situationInput),
 
-    new ActionRowBuilder()
-      .addComponents(nameInput),
+    new ActionRowBuilder().addComponents(nameInput),
 
-    new ActionRowBuilder()
-      .addComponents(experienceInput),
+    new ActionRowBuilder().addComponents(experienceInput),
 
-    new ActionRowBuilder()
-      .addComponents(notesInput)
+    new ActionRowBuilder().addComponents(notesInput)
 
   );
 
@@ -347,275 +441,112 @@ function createStaffApplicationModal() {
 
 
 // ======================================================
-// בדיקה אם משתמש הוא צוות
-// ======================================================
-
-function memberIsStaff(member) {
-
-  if (
-    member.permissions.has(
-      PermissionFlagsBits.Administrator
-    )
-  ) {
-    return true;
-  }
-
-
-  return STAFF_ROLE_IDS.some(
-    roleId =>
-      member.roles.cache.has(roleId)
-  );
-}
-
-
-// ======================================================
-// יצירת הרשאות לטיקט
-// ======================================================
-
-function createTicketPermissions(
-  guild,
-  userId
-) {
-
-  const overwrites = [
-
-    // כל השרת לא רואה
-    {
-      id: guild.id,
-
-      deny: [
-        PermissionFlagsBits.ViewChannel
-      ]
-    },
-
-
-    // מי שפתח את הטיקט
-    {
-      id: userId,
-
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.AttachFiles,
-        PermissionFlagsBits.EmbedLinks
-      ]
-    },
-
-
-    // הבוט
-    {
-      id: client.user.id,
-
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.ManageChannels,
-        PermissionFlagsBits.ManageMessages
-      ]
-    }
-
-  ];
-
-
-  // מוסיף את כל רולי הצוות
-  for (
-    const roleId of STAFF_ROLE_IDS
-  ) {
-
-    overwrites.push({
-
-      id: roleId,
-
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.AttachFiles,
-        PermissionFlagsBits.EmbedLinks,
-        PermissionFlagsBits.ManageMessages
-      ]
-
-    });
-
-  }
-
-
-  return overwrites;
-}
-
-
-// ======================================================
-// פינג לכל רולי הצוות
-// ======================================================
-
-function getStaffMentions() {
-
-  return STAFF_ROLE_IDS
-    .map(
-      roleId => `<@&${roleId}>`
-    )
-    .join(" ");
-}
-
-
-// ======================================================
 // כשהבוט עולה
 // ======================================================
 
-client.once(
-  "ready",
-  async () => {
+client.once("ready", async () => {
 
-    console.log(
-      `✅ הבוט מחובר בתור ${client.user.tag}`
-    );
+  console.log(
+    `✅ הבוט מחובר בתור ${client.user.tag}`
+  );
 
 
-    try {
+  try {
 
-      const panelChannel =
-        await client.channels.fetch(
-          PANEL_CHANNEL_ID
-        );
-
-
-      if (
-        !panelChannel ||
-        !panelChannel.isTextBased()
-      ) {
-
-        console.log(
-          "❌ לא מצאתי את חדר מערכת הטיקטים"
-        );
-
-        return;
-      }
+    const panelChannel =
+      await client.channels.fetch(
+        PANEL_CHANNEL_ID
+      );
 
 
-      // ====================================
-      // מוחק /ticketpanel ישן
-      // ====================================
+    if (
+      !panelChannel ||
+      !panelChannel.isTextBased()
+    ) {
 
-      try {
+      console.log(
+        "❌ חדר הפאנל לא נמצא"
+      );
 
-        const commands =
-          await panelChannel.guild.commands.fetch();
-
-
-        const oldCommand =
-          commands.find(
-            command =>
-              command.name ===
-              "ticketpanel"
-          );
+      return;
+    }
 
 
-        if (oldCommand) {
+    const messages =
+      await panelChannel.messages.fetch({
+        limit: 100
+      });
 
-          await oldCommand.delete();
 
-          console.log(
-            "✅ /ticketpanel נמחק"
-          );
+    const oldPanel =
+      messages.find(message => {
 
+        if (
+          message.author.id !==
+          client.user.id
+        ) {
+          return false;
         }
 
-      } catch (error) {
 
-        console.log(
-          "⚠️ לא הצלחתי לבדוק פקודות ישנות"
+        return message.components.some(
+          row =>
+            row.components.some(
+              component =>
+                component.customId ===
+                "ticket_type"
+            )
         );
 
-      }
+      });
 
 
-      // ====================================
-      // מחפש פאנל קיים
-      // ====================================
+    if (oldPanel) {
 
-      const messages =
-        await panelChannel.messages.fetch({
-          limit: 100
-        });
+      await oldPanel.edit({
 
+        embeds: [
+          createPanelEmbed()
+        ],
 
-      const oldPanel =
-        messages.find(message => {
+        components: [
+          createTicketMenu()
+        ]
 
-          if (
-            message.author.id !==
-            client.user.id
-          ) {
-            return false;
-          }
+      });
 
+    } else {
 
-          return message.components.some(
-            row =>
-              row.components.some(
-                component =>
-                  component.customId ===
-                  "ticket_type"
-              )
-          );
+      await panelChannel.send({
 
-        });
+        embeds: [
+          createPanelEmbed()
+        ],
 
+        components: [
+          createTicketMenu()
+        ]
 
-      if (oldPanel) {
-
-        await oldPanel.edit({
-
-          embeds: [
-            createPanelEmbed()
-          ],
-
-          components: [
-            createTicketMenu()
-          ]
-
-        });
-
-
-        console.log(
-          "✅ מערכת הטיקטים עודכנה"
-        );
-
-      } else {
-
-        await panelChannel.send({
-
-          embeds: [
-            createPanelEmbed()
-          ],
-
-          components: [
-            createTicketMenu()
-          ]
-
-        });
-
-
-        console.log(
-          "✅ מערכת הטיקטים נשלחה"
-        );
-
-      }
-
-
-    } catch (error) {
-
-      console.error(
-        "❌ שגיאה בפאנל:",
-        error
-      );
+      });
 
     }
 
+
+    console.log(
+      "✅ מערכת הטיקטים מוכנה"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ שגיאה בפאנל:",
+      error
+    );
+
   }
-);
+
+});
 
 
 // ======================================================
@@ -641,9 +572,9 @@ client.on(
         interaction.values[0];
 
 
-      // ================================================
+      // =================================================
       // בחינה לצוות
-      // ================================================
+      // =================================================
 
       if (type === "staff") {
 
@@ -666,7 +597,7 @@ client.on(
         } catch (error) {
 
           console.error(
-            "❌ שגיאה בפתיחת הבחינה:",
+            "❌ שגיאה בפתיחת הטופס:",
             error
           );
 
@@ -677,9 +608,9 @@ client.on(
       }
 
 
-      // ================================================
+      // =================================================
       // טיקט רגיל
-      // ================================================
+      // =================================================
 
       await interaction.deferReply({
         ephemeral: true
@@ -691,26 +622,12 @@ client.on(
         const guild =
           interaction.guild;
 
-
         const ticketType =
           ticketTypes[type];
 
 
-        if (!ticketType) {
-
-          return interaction.editReply(
-            "❌ סוג הטיקט לא נמצא."
-          );
-
-        }
-
-
         await guild.channels.fetch();
 
-
-        // ==============================================
-        // כבר יש טיקט?
-        // ==============================================
 
         const existingTicket =
           guild.channels.cache.find(
@@ -739,10 +656,6 @@ client.on(
         }
 
 
-        // ==============================================
-        // בדיקת קטגוריה
-        // ==============================================
-
         let validCategoryId = null;
 
 
@@ -767,10 +680,6 @@ client.on(
 
         }
 
-
-        // ==============================================
-        // יצירת החדר
-        // ==============================================
 
         const channelData = {
 
@@ -806,10 +715,6 @@ client.on(
           );
 
 
-        // ==============================================
-        // הודעה בתוך הטיקט
-        // ==============================================
-
         await channel.send({
 
           content:
@@ -820,6 +725,10 @@ client.on(
               type,
               interaction.user
             )
+          ],
+
+          components: [
+            createCloseTicketButton()
           ],
 
           allowedMentions: {
@@ -836,10 +745,6 @@ client.on(
         });
 
 
-        // ==============================================
-        // מאפס תפריט
-        // ==============================================
-
         await interaction.message.edit({
 
           components: [
@@ -850,7 +755,7 @@ client.on(
 
 
         await interaction.editReply(
-          `✅ הטיקט שלך נפתח בהצלחה: ${channel}`
+          `✅ הטיקט שלך נפתח: ${channel}`
         );
 
 
@@ -860,19 +765,6 @@ client.on(
           "❌ שגיאה בפתיחת טיקט:",
           error
         );
-
-
-        try {
-
-          await interaction.message.edit({
-
-            components: [
-              createTicketMenu()
-            ]
-
-          });
-
-        } catch {}
 
 
         await interaction.editReply(
@@ -887,7 +779,94 @@ client.on(
 
 
     // ==================================================
-    // שליחת בחינה לצוות
+    // כפתור סגור טיקט
+    // ==================================================
+
+    if (
+      interaction.isButton() &&
+      interaction.customId ===
+      "close_ticket"
+    ) {
+
+      try {
+
+        const member =
+          await interaction.guild.members.fetch(
+            interaction.user.id
+          );
+
+
+        if (!memberIsStaff(member)) {
+
+          return interaction.reply({
+
+            content:
+              "❌ רק צוות השרת יכול לסגור טיקט.",
+
+            ephemeral: true
+
+          });
+
+        }
+
+
+        if (
+          !interaction.channel.topic?.includes(
+            "ticket-owner:"
+          )
+        ) {
+
+          return interaction.reply({
+
+            content:
+              "❌ החדר הזה אינו טיקט.",
+
+            ephemeral: true
+
+          });
+
+        }
+
+
+        await interaction.reply(
+          "🔒 הטיקט ייסגר בעוד 3 שניות..."
+        );
+
+
+        setTimeout(async () => {
+
+          try {
+
+            await interaction.channel.delete();
+
+          } catch (error) {
+
+            console.error(
+              "❌ לא הצלחתי למחוק טיקט:",
+              error
+            );
+
+          }
+
+        }, 3000);
+
+
+      } catch (error) {
+
+        console.error(
+          "❌ שגיאה בסגירת טיקט:",
+          error
+        );
+
+      }
+
+
+      return;
+    }
+
+
+    // ==================================================
+    // שליחת טופס בחינה
     // ==================================================
 
     if (
@@ -905,43 +884,25 @@ client.on(
 
         const age =
           interaction.fields
-            .getTextInputValue(
-              "age"
-            );
-
+            .getTextInputValue("age");
 
         const situation =
           interaction.fields
-            .getTextInputValue(
-              "situation"
-            );
-
+            .getTextInputValue("situation");
 
         const name =
           interaction.fields
-            .getTextInputValue(
-              "name"
-            );
-
+            .getTextInputValue("name");
 
         const experience =
           interaction.fields
-            .getTextInputValue(
-              "experience"
-            );
-
+            .getTextInputValue("experience");
 
         const notes =
           interaction.fields
-            .getTextInputValue(
-              "notes"
-            ) ||
+            .getTextInputValue("notes") ||
           "לא נכתבו הערות";
 
-
-        // ==============================================
-        // חדר הבחינות
-        // ==============================================
 
         const applicationChannel =
           await client.channels.fetch(
@@ -949,92 +910,53 @@ client.on(
           );
 
 
-        if (
-          !applicationChannel ||
-          !applicationChannel.isTextBased()
-        ) {
-
-          return interaction.editReply(
-            "❌ הייתה בעיה בשליחת הטופס."
-          );
-
-        }
-
-
-        // ==============================================
-        // Embed
-        // ==============================================
-
         const applicationEmbed =
           new EmbedBuilder()
 
             .setTitle(
-              "🛡️ בקשה חדשה להצטרפות לצוות"
+              "🛡️ בקשה חדשה לצוות"
             )
 
             .setDescription(
-              `בקשה חדשה התקבלה מ־${interaction.user}.`
+              `${interaction.user} שלח/ה בקשה להצטרפות לצוות.`
             )
 
             .addFields(
 
               {
-                name:
-                  "👤 המשתמש ששלח את הבקשה",
-
-                value:
-                  `${interaction.user}\n` +
-                  `ID: \`${interaction.user.id}\``
+                name: "🎂 גיל",
+                value: age
               },
 
               {
-                name:
-                  "🎂 בן כמה את/ה?",
-
-                value:
-                  age
+                name: "⚠️ שני אנשים רבים ומקללים",
+                value: situation
               },
 
               {
-                name:
-                  "⚠️ אם שני אנשים רבים ומקללים, מה את/ה עושה?",
-
-                value:
-                  situation
+                name: "📛 שם",
+                value: name
               },
 
               {
-                name:
-                  "📛 איך קוראים לך?",
-
-                value:
-                  name
+                name: "🛡️ ניסיון בניהול",
+                value: experience
               },
 
               {
-                name:
-                  "🛡️ יש לך ניסיון בניהול?",
-
-                value:
-                  experience
-              },
-
-              {
-                name:
-                  "📝 הערות",
-
-                value:
-                  notes
+                name: "📝 הערות",
+                value: notes
               }
 
             )
 
+            .setFooter({
+              text:
+                `User ID: ${interaction.user.id}`
+            })
+
             .setTimestamp();
 
-
-        // ==============================================
-        // כפתורים
-        // ==============================================
 
         const approveButton =
           new ButtonBuilder()
@@ -1068,109 +990,72 @@ client.on(
             );
 
 
-        const buttons =
-          new ActionRowBuilder()
-
-            .addComponents(
-              approveButton,
-              rejectButton
-            );
-
-
-        // ==============================================
-        // שולח לחדר הבחינות
-        // ==============================================
-
         await applicationChannel.send({
-
-          content:
-            getStaffMentions(),
 
           embeds: [
             applicationEmbed
           ],
 
           components: [
-            buttons
-          ],
 
-          allowedMentions: {
-            roles:
-              STAFF_ROLE_IDS
-          }
+            new ActionRowBuilder()
+              .addComponents(
+                approveButton,
+                rejectButton
+              )
+
+          ]
 
         });
 
 
-        // ==============================================
-        // DM למשתמש
-        // ==============================================
+        // =================================================
+        // DM ראשוני - קצר וברור
+        // =================================================
 
         const dmEmbed =
           new EmbedBuilder()
 
             .setTitle(
-              "🛡️ הבקשה שלך התקבלה"
+              "🛡️ הבקשה שלך בבדיקה"
             )
 
             .setDescription(
-              `שלום ${interaction.user.username} 👋\n\n` +
+              "**הבקשה שלך להצטרפות לצוות התקבלה! ✅**\n\n" +
 
-              "**הבקשה שלך להצטרפות לצוות התקבלה ונשלחה לבדיקה.**\n\n" +
+              "⏳ **סטטוס: בבדיקה**\n\n" +
 
-              "צוות השרת יעבור על התשובות שלך ויבחן את הבקשה בצורה מסודרת.\n\n" +
-
-              "אין צורך לשלוח את הטופס שוב או לפתוח פנייה נוספת בנוגע לבקשה בזמן ההמתנה.\n\n" +
-
-              "**נענה לבקשה בהקדם האפשרי. תודה על ההתעניינות ובהצלחה! ✨**"
+              "צוות השרת יעבור על התשובות שלך.\n" +
+              "כשתתקבל החלטה, תקבל/י ממני הודעה פרטית כאן."
             );
-
-
-        let dmSent = true;
 
 
         try {
 
           await interaction.user.send({
-
             embeds: [
               dmEmbed
             ]
-
           });
 
-        } catch {
-
-          dmSent = false;
-
-        }
+        } catch {}
 
 
-        if (dmSent) {
-
-          await interaction.editReply(
-            "✅ הטופס נשלח בהצלחה! שלחנו לך גם אישור בהודעה פרטית."
-          );
-
-        } else {
-
-          await interaction.editReply(
-            "✅ הטופס נשלח בהצלחה! לא הצלחתי לשלוח לך הודעה פרטית בגלל הגדרות הפרטיות שלך."
-          );
-
-        }
+        await interaction.editReply(
+          "✅ הבקשה נשלחה! היא נמצאת עכשיו בבדיקה."
+        );
 
 
       } catch (error) {
 
         console.error(
-          "❌ שגיאה בשליחת הבחינה:",
+          "❌ שגיאה בשליחת טופס:",
           error
         );
 
 
         await interaction.editReply(
-          "❌ הייתה בעיה בשליחת הטופס. נסה שוב."
+          "❌ הייתה בעיה בשליחת הבקשה."
         );
 
       }
@@ -1181,7 +1066,7 @@ client.on(
 
 
     // ==================================================
-    // אישור / דחייה
+    // אישור / דחיית בקשה
     // ==================================================
 
     if (
@@ -1204,10 +1089,6 @@ client.on(
             interaction.user.id
           );
 
-
-        // ==============================================
-        // רק אחד מחמשת הרולים / Admin
-        // ==============================================
 
         if (!memberIsStaff(member)) {
 
@@ -1241,36 +1122,101 @@ client.on(
             );
 
 
-        // ==============================================
-        // מעדכן Embed
-        // ==============================================
+        // =================================================
+        // שולח תשובה בפרטי למועמד
+        // =================================================
 
-        const oldEmbed =
-          interaction.message.embeds[0];
+        const applicant =
+          await client.users
+            .fetch(applicantId)
+            .catch(() => null);
 
+
+        if (applicant) {
+
+          try {
+
+            if (approved) {
+
+              const acceptedEmbed =
+                new EmbedBuilder()
+
+                  .setTitle(
+                    "✅ התקבלת לצוות!"
+                  )
+
+                  .setDescription(
+                    "**שמחים לעדכן שהבקשה שלך להצטרפות לצוות אושרה! 🎉**\n\n" +
+
+                    "אחד מאנשי הצוות ייצור איתך קשר בהמשך במידת הצורך.\n\n" +
+
+                    "**בהצלחה בתפקיד! 🛡️**"
+                  );
+
+
+              await applicant.send({
+                embeds: [
+                  acceptedEmbed
+                ]
+              });
+
+            } else {
+
+              const rejectedEmbed =
+                new EmbedBuilder()
+
+                  .setTitle(
+                    "❌ עדכון לגבי הבקשה שלך"
+                  )
+
+                  .setDescription(
+                    "**הבקשה שלך להצטרפות לצוות נבדקה, אך הפעם היא לא אושרה.**\n\n" +
+
+                    "תודה שהקדשת זמן למילוי הטופס ולהגשת הבקשה. 💙"
+                  );
+
+
+              await applicant.send({
+                embeds: [
+                  rejectedEmbed
+                ]
+              });
+
+            }
+
+          } catch {
+
+            console.log(
+              "⚠️ לא ניתן לשלוח DM למועמד"
+            );
+
+          }
+
+        }
+
+
+        // =================================================
+        // משנה את ההודעה בחדר הצוות
+        // =================================================
 
         const updatedEmbed =
           EmbedBuilder.from(
-            oldEmbed
+            interaction.message.embeds[0]
           );
 
 
         updatedEmbed.addFields({
 
           name:
-            "📋 סטטוס הבקשה",
+            "📋 סטטוס",
 
           value:
             approved
-              ? `✅ **הבקשה אושרה**\nטופל על ידי ${interaction.user}`
-              : `❌ **הבקשה לא אושרה**\nטופל על ידי ${interaction.user}`
+              ? `✅ **אושר** על ידי ${interaction.user}`
+              : `❌ **לא אושר** על ידי ${interaction.user}`
 
         });
 
-
-        // ==============================================
-        // כפתור מושבת
-        // ==============================================
 
         const handledButton =
           new ButtonBuilder()
@@ -1295,19 +1241,6 @@ client.on(
             .setDisabled(true);
 
 
-        const handledRow =
-          new ActionRowBuilder()
-
-            .addComponents(
-              handledButton
-            );
-
-
-        // ==============================================
-        // מוחק אשר/לא לאשר
-        // ומחליף בכפתור טופל
-        // ==============================================
-
         await interaction.update({
 
           embeds: [
@@ -1315,7 +1248,12 @@ client.on(
           ],
 
           components: [
-            handledRow
+
+            new ActionRowBuilder()
+              .addComponents(
+                handledButton
+              )
+
           ]
 
         });
@@ -1327,23 +1265,6 @@ client.on(
           "❌ שגיאה בטיפול בבקשה:",
           error
         );
-
-
-        if (
-          !interaction.replied &&
-          !interaction.deferred
-        ) {
-
-          await interaction.reply({
-
-            content:
-              "❌ הייתה בעיה בטיפול בבקשה.",
-
-            ephemeral: true
-
-          });
-
-        }
 
       }
 
