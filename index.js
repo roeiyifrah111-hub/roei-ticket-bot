@@ -22,7 +22,6 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-
 // ======================================================
 // VARIABLES
 // ======================================================
@@ -32,48 +31,39 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 const CATEGORY_ID = process.env.CATEGORY_ID;
 
-
 // ======================================================
 // IDS
 // ======================================================
 
-// רק אתה יכול להשתמש ב-/staffmanage
 const OWNER_USER_ID = "1243097719262941224";
 
-// חדר פאנל הטיקטים
 const PANEL_CHANNEL_ID = "1541390151757078599";
 
-// חדר הבחינות לצוות
-const STAFF_APPLICATION_CHANNEL_ID = "1541391169936687195";
+const STAFF_APPLICATION_CHANNEL_ID =
+  "1541391169936687195";
 
-// חדר לוג קידומים / הורדות
-const STAFF_LOG_CHANNEL_ID = "1555688820916363354";
-
+const STAFF_LOG_CHANNEL_ID =
+  "1555688820916363354";
 
 // ======================================================
-// רולים
+// ROLES
 // ======================================================
 
-// Staff
-const ROLE_STAFF = "1555587941575696444";
+const ROLE_STAFF =
+  "1555587941575696444";
 
-// קידום ראשון
-const ROLE_PROMO_1 = "1555588224636821526";
+const ROLE_PROMO_1 =
+  "1555588224636821526";
 
-// Team
-const ROLE_TEAM = "1555588615520653332";
+const ROLE_TEAM =
+  "1555588615520653332";
 
-// הדרגה הגבוהה
-const ROLE_TOP = "1555588725398839376";
+const ROLE_TOP =
+  "1555588725398839376";
 
-// רול נוסף שיכול לטפל בטיקטים ובבחינות
-const EXTRA_HANDLER_ROLE = "1541371707011629077";
+const EXTRA_HANDLER_ROLE =
+  "1541371707011629077";
 
-
-// כל הרולים שמותר להם:
-// לראות טיקטים
-// לסגור טיקטים
-// לאשר / לדחות בחינות
 const STAFF_ACCESS_ROLE_IDS = [
   ROLE_STAFF,
   EXTRA_HANDLER_ROLE,
@@ -82,9 +72,6 @@ const STAFF_ACCESS_ROLE_IDS = [
   ROLE_TOP
 ];
 
-
-// סולם הקידומים
-// נמוך -> גבוה
 const LADDER_ROLE_IDS = [
   ROLE_STAFF,
   ROLE_PROMO_1,
@@ -92,26 +79,24 @@ const LADDER_ROLE_IDS = [
   ROLE_TOP
 ];
 
-
 // ======================================================
-// חסימה אחרי דחייה
+// STATE
 // ======================================================
 
 const REJECT_COOLDOWN_MS =
   7 * 24 * 60 * 60 * 1000;
 
-const rejectionCooldowns = new Map();
+const rejectionCooldowns =
+  new Map();
 
+const pendingApplications =
+  new Set();
 
-// בקשות שעדיין מחכות לטיפול
-const pendingApplications = new Set();
-
-// מונע משני אנשי צוות לטפל באותה שנייה
-const processingApplications = new Set();
-
+const processingApplications =
+  new Set();
 
 // ======================================================
-// סוגי טיקטים
+// TICKET TYPES
 // ======================================================
 
 const ticketTypes = {
@@ -136,15 +121,31 @@ const ticketTypes = {
 
 };
 
+// ======================================================
+// FRESH MEMBER
+// ======================================================
+
+async function fetchFreshMember(
+  guild,
+  userId
+) {
+
+  return guild.members.fetch({
+    user: userId,
+    force: true
+  });
+
+}
 
 // ======================================================
-// HELPERS
+// STAFF ACCESS
 // ======================================================
 
 function hasStaffAccess(member) {
 
-  // אתה תמיד יכול
-  if (member.id === OWNER_USER_ID) {
+  if (
+    member.id === OWNER_USER_ID
+  ) {
     return true;
   }
 
@@ -152,18 +153,23 @@ function hasStaffAccess(member) {
     roleId =>
       member.roles.cache.has(roleId)
   );
+
 }
 
-
 // ======================================================
-// הדרגה הכי גבוהה שיש למשתמש
+// HIGHEST STAFF ROLE
 // ======================================================
 
-function getHighestLadderRoleId(member) {
+function getHighestLadderRoleId(
+  member
+) {
 
   for (
-    let i = LADDER_ROLE_IDS.length - 1;
+    let i =
+      LADDER_ROLE_IDS.length - 1;
+
     i >= 0;
+
     i--
   ) {
 
@@ -183,18 +189,20 @@ function getHighestLadderRoleId(member) {
   return null;
 }
 
-
 // ======================================================
-// לאיזה רולים אפשר להתקדם
+// PROMOTION TARGETS
 // ======================================================
 
-function getPromotionTargets(currentRoleId) {
+function getPromotionTargets(
+  currentRoleId
+) {
 
-  // Staff
-  // אפשר קידום ראשון
-  // או ישר Team
+  // Staff ->
+  // קידום ראשון או Team
 
-  if (currentRoleId === ROLE_STAFF) {
+  if (
+    currentRoleId === ROLE_STAFF
+  ) {
 
     return [
       ROLE_PROMO_1,
@@ -203,10 +211,11 @@ function getPromotionTargets(currentRoleId) {
 
   }
 
-
   // קידום ראשון -> Team
 
-  if (currentRoleId === ROLE_PROMO_1) {
+  if (
+    currentRoleId === ROLE_PROMO_1
+  ) {
 
     return [
       ROLE_TEAM
@@ -214,10 +223,11 @@ function getPromotionTargets(currentRoleId) {
 
   }
 
+  // Team -> Top
 
-  // Team -> דרגה עליונה
-
-  if (currentRoleId === ROLE_TEAM) {
+  if (
+    currentRoleId === ROLE_TEAM
+  ) {
 
     return [
       ROLE_TOP
@@ -225,15 +235,11 @@ function getPromotionTargets(currentRoleId) {
 
   }
 
-
-  // כבר בדרגה הכי גבוהה
-
   return [];
 }
 
-
 // ======================================================
-// KEY לבקשה
+// APPLICATION KEY
 // ======================================================
 
 function applicationKey(
@@ -245,10 +251,8 @@ function applicationKey(
 
 }
 
-
 // ======================================================
-// מידע שנשמר בתוך Footer
-// כדי שהחסימה תישמר גם אחרי Restart
+// FOOTER DATA
 // ======================================================
 
 function buildApplicationFooter(
@@ -263,7 +267,6 @@ function buildApplicationFooter(
     `|type:${type}` +
     `|status:${status}`;
 
-
   if (rejectedAt) {
 
     text +=
@@ -271,16 +274,12 @@ function buildApplicationFooter(
 
   }
 
-
   return text;
 }
 
-
-// ======================================================
-// קריאת Footer
-// ======================================================
-
-function parseApplicationFooter(text) {
+function parseApplicationFooter(
+  text
+) {
 
   if (
     !text ||
@@ -291,32 +290,28 @@ function parseApplicationFooter(text) {
 
   }
 
-
   const data = {};
 
-
-  for (const part of text.split("|")) {
+  for (
+    const part of
+    text.split("|")
+  ) {
 
     const index =
       part.indexOf(":");
 
-
-    if (index === -1) {
+    if (
+      index === -1
+    ) {
       continue;
     }
 
-
-    const key =
-      part.slice(0, index);
-
-    const value =
+    data[
+      part.slice(0, index)
+    ] =
       part.slice(index + 1);
 
-
-    data[key] = value;
-
   }
-
 
   if (
     !data.applicant ||
@@ -328,13 +323,11 @@ function parseApplicationFooter(text) {
 
   }
 
-
   return data;
 }
 
-
 // ======================================================
-// שם של רול
+// ROLE NAME
 // ======================================================
 
 async function getRoleName(
@@ -343,26 +336,27 @@ async function getRoleName(
 ) {
 
   if (!roleId) {
-
     return "ללא";
-
   }
 
-
   const role =
-    guild.roles.cache.get(roleId) ||
+    guild.roles.cache.get(
+      roleId
+    ) ||
 
     await guild.roles
       .fetch(roleId)
       .catch(() => null);
 
+  return (
+    role?.name ||
+    roleId
+  );
 
-  return role?.name || roleId;
 }
 
-
 // ======================================================
-// פינג כל צוות הטיקטים
+// STAFF MENTIONS
 // ======================================================
 
 function getStaffMentions() {
@@ -376,9 +370,8 @@ function getStaffMentions() {
 
 }
 
-
 // ======================================================
-// תפריט הטיקטים
+// TICKET MENU
 // ======================================================
 
 function createTicketMenu() {
@@ -386,7 +379,9 @@ function createTicketMenu() {
   const menu =
     new StringSelectMenuBuilder()
 
-      .setCustomId("ticket_type")
+      .setCustomId(
+        "ticket_type"
+      )
 
       .setPlaceholder(
         "בחרו את סוג הפנייה שלכם"
@@ -421,7 +416,9 @@ function createTicketMenu() {
 
           .setEmoji("🛠️")
 
-          .setValue("technical"),
+          .setValue(
+            "technical"
+          ),
 
 
         new StringSelectMenuOptionBuilder()
@@ -453,14 +450,12 @@ function createTicketMenu() {
 
       );
 
-
   return new ActionRowBuilder()
     .addComponents(menu);
 }
 
-
 // ======================================================
-// הפאנל הראשי
+// MAIN PANEL
 // ======================================================
 
 function createPanelEmbed() {
@@ -491,38 +486,38 @@ function createPanelEmbed() {
 
 }
 
-
 // ======================================================
-// כפתור סגירת טיקט
+// CLOSE TICKET BUTTON
 // ======================================================
 
 function createCloseTicketRow() {
 
-  const button =
-    new ButtonBuilder()
-
-      .setCustomId(
-        "close_ticket"
-      )
-
-      .setLabel(
-        "סגור טיקט"
-      )
-
-      .setEmoji("🔒")
-
-      .setStyle(
-        ButtonStyle.Danger
-      );
-
-
   return new ActionRowBuilder()
-    .addComponents(button);
+
+    .addComponents(
+
+      new ButtonBuilder()
+
+        .setCustomId(
+          "close_ticket"
+        )
+
+        .setLabel(
+          "סגור טיקט"
+        )
+
+        .setEmoji("🔒")
+
+        .setStyle(
+          ButtonStyle.Danger
+        )
+
+    );
+
 }
 
-
 // ======================================================
-// הודעות בתוך טיקט
+// TICKET MESSAGE
 // ======================================================
 
 function createTicketEmbed(
@@ -530,7 +525,9 @@ function createTicketEmbed(
   user
 ) {
 
-  if (type === "report") {
+  if (
+    type === "report"
+  ) {
 
     return new EmbedBuilder()
 
@@ -561,7 +558,9 @@ function createTicketEmbed(
   }
 
 
-  if (type === "technical") {
+  if (
+    type === "technical"
+  ) {
 
     return new EmbedBuilder()
 
@@ -612,9 +611,8 @@ function createTicketEmbed(
 
 }
 
-
 // ======================================================
-// הרשאות טיקט
+// TICKET PERMISSIONS
 // ======================================================
 
 function createTicketPermissions(
@@ -624,7 +622,6 @@ function createTicketPermissions(
 
   const overwrites = [
 
-    // כולם לא רואים
     {
       id: guild.id,
 
@@ -633,8 +630,6 @@ function createTicketPermissions(
       ]
     },
 
-
-    // מי שפתח
     {
       id: userId,
 
@@ -647,8 +642,6 @@ function createTicketPermissions(
       ]
     },
 
-
-    // הבוט
     {
       id: client.user.id,
 
@@ -664,7 +657,6 @@ function createTicketPermissions(
   ];
 
 
-  // כל רולי הצוות
   for (
     const roleId of
     STAFF_ACCESS_ROLE_IDS
@@ -691,9 +683,8 @@ function createTicketPermissions(
   return overwrites;
 }
 
-
 // ======================================================
-// טופס בחינה / קידום
+// APPLICATION MODAL
 // ======================================================
 
 function createStaffApplicationModal(
@@ -743,7 +734,9 @@ function createStaffApplicationModal(
   const situationInput =
     new TextInputBuilder()
 
-      .setCustomId("situation")
+      .setCustomId(
+        "situation"
+      )
 
       .setLabel(
         "אם שני אנשים רבים ומקללים, מה תעשה?"
@@ -787,7 +780,9 @@ function createStaffApplicationModal(
   const experienceInput =
     new TextInputBuilder()
 
-      .setCustomId("experience")
+      .setCustomId(
+        "experience"
+      )
 
       .setLabel(
         "יש לך ניסיון בניהול?"
@@ -821,7 +816,8 @@ function createStaffApplicationModal(
         TextInputStyle.Paragraph
       )
 
-      // היחיד שלא חובה
+      .setMaxLength(1000)
+
       .setRequired(false);
 
 
@@ -831,13 +827,17 @@ function createStaffApplicationModal(
       .addComponents(ageInput),
 
     new ActionRowBuilder()
-      .addComponents(situationInput),
+      .addComponents(
+        situationInput
+      ),
 
     new ActionRowBuilder()
       .addComponents(nameInput),
 
     new ActionRowBuilder()
-      .addComponents(experienceInput),
+      .addComponents(
+        experienceInput
+      ),
 
     new ActionRowBuilder()
       .addComponents(notesInput)
@@ -848,9 +848,8 @@ function createStaffApplicationModal(
   return modal;
 }
 
-
 // ======================================================
-// כפתור "טופל על ידי"
+// HANDLED BUTTON
 // ======================================================
 
 function createHandledRow(
@@ -886,9 +885,8 @@ function createHandledRow(
 
 }
 
-
 // ======================================================
-// החלפת שדה סטטוס
+// STATUS FIELD
 // ======================================================
 
 function setStatusField(
@@ -903,7 +901,8 @@ function setStatusField(
   const fields =
     oldFields.filter(
       field =>
-        field.name !== "📋 סטטוס"
+        field.name !==
+        "📋 סטטוס"
     );
 
 
@@ -922,21 +921,22 @@ function setStatusField(
   return embed;
 }
 
-
 // ======================================================
-// בדיקת חסימה
+// COOLDOWN
 // ======================================================
 
-function getCooldownExpiry(userId) {
+function getCooldownExpiry(
+  userId
+) {
 
   const expiry =
-    rejectionCooldowns.get(userId);
+    rejectionCooldowns.get(
+      userId
+    );
 
 
   if (!expiry) {
-
     return null;
-
   }
 
 
@@ -956,9 +956,8 @@ function getCooldownExpiry(userId) {
   return expiry;
 }
 
-
 // ======================================================
-// טעינת חסימות ובקשות אחרי Restart
+// LOAD OLD APPLICATIONS
 // ======================================================
 
 async function loadApplicationState() {
@@ -982,10 +981,13 @@ async function loadApplicationState() {
 
 
     let before;
+
     let scanned = 0;
 
 
-    while (scanned < 2000) {
+    while (
+      scanned < 2000
+    ) {
 
       const batch =
         await channel.messages.fetch({
@@ -999,10 +1001,10 @@ async function loadApplicationState() {
         });
 
 
-      if (!batch.size) {
-
+      if (
+        !batch.size
+      ) {
         break;
-
       }
 
 
@@ -1024,15 +1026,16 @@ async function loadApplicationState() {
 
 
         if (!data) {
-
           continue;
-
         }
 
 
         if (
-          data.status === "pending" ||
-          data.status === "awaiting_role"
+          data.status ===
+          "pending" ||
+
+          data.status ===
+          "awaiting_role"
         ) {
 
           pendingApplications.add(
@@ -1048,8 +1051,12 @@ async function loadApplicationState() {
 
 
         if (
-          data.type === "initial" &&
-          data.status === "rejected" &&
+          data.type ===
+          "initial" &&
+
+          data.status ===
+          "rejected" &&
+
           data.rejectedAt
         ) {
 
@@ -1068,7 +1075,9 @@ async function loadApplicationState() {
             Number.isFinite(
               rejectedAt
             ) &&
-            expiry > Date.now()
+
+            expiry >
+            Date.now()
           ) {
 
             const old =
@@ -1077,11 +1086,15 @@ async function loadApplicationState() {
               ) || 0;
 
 
-            if (expiry > old) {
+            if (
+              expiry > old
+            ) {
 
               rejectionCooldowns.set(
+
                 data.applicant,
                 expiry
+
               );
 
             }
@@ -1129,9 +1142,8 @@ async function loadApplicationState() {
 
 }
 
-
 // ======================================================
-// לוג שינוי רול
+// LOG
 // ======================================================
 
 async function sendStaffLog({
@@ -1165,19 +1177,23 @@ async function sendStaffLog({
 
     const fromName =
       fromRoleId
+
         ? await getRoleName(
             guild,
             fromRoleId
           )
+
         : "ללא";
 
 
     const toName =
       toRoleId
+
         ? await getRoleName(
             guild,
             toRoleId
           )
+
         : "ללא";
 
 
@@ -1202,7 +1218,9 @@ async function sendStaffLog({
 
             value:
               fromRoleId
+
                 ? `${fromName}\n<@&${fromRoleId}>`
+
                 : "ללא"
           },
 
@@ -1212,7 +1230,9 @@ async function sendStaffLog({
 
             value:
               toRoleId
+
                 ? `${toName}\n<@&${toRoleId}>`
+
                 : "ללא"
           },
 
@@ -1246,9 +1266,8 @@ async function sendStaffLog({
 
 }
 
-
 // ======================================================
-// הודעה פרטית למועמד
+// DM
 // ======================================================
 
 async function sendApplicantDM(
@@ -1265,17 +1284,16 @@ async function sendApplicantDM(
 
 
   if (!user) {
-
     return false;
-
   }
 
 
   let embed;
 
 
-  // בבדיקה
-  if (status === "pending") {
+  if (
+    status === "pending"
+  ) {
 
     embed =
       new EmbedBuilder()
@@ -1305,7 +1323,6 @@ async function sendApplicantDM(
   }
 
 
-  // התקבל
   else if (
     status === "approved"
   ) {
@@ -1344,7 +1361,6 @@ async function sendApplicantDM(
   }
 
 
-  // נדחה
   else {
 
     embed =
@@ -1396,15 +1412,21 @@ async function sendApplicantDM(
 
 }
 
-
 // ======================================================
-// Embed ניהול צוות
+// MANAGEMENT EMBED
 // ======================================================
 
 async function buildManagementEmbed(
   guild,
   member
 ) {
+
+  member =
+    await fetchFreshMember(
+      guild,
+      member.id
+    );
+
 
   const highest =
     getHighestLadderRoleId(
@@ -1435,80 +1457,190 @@ async function buildManagementEmbed(
 
       `🎖️ **דרגה נוכחית:** ${rankName}\n\n` +
 
-      "**בחר פעולה:**"
+      (
+        highest
+
+          ? "בחר פעולה לניהול המשתמש:"
+
+          : "המשתמש לא נמצא כרגע בסולם הצוות. אפשר להוסיף אותו ידנית:"
+      )
 
     );
 
 }
 
-
 // ======================================================
-// כפתורי ניהול
+// MANAGEMENT BUTTONS
 // ======================================================
 
 function createManagementButtons(
-  userId
+  member
 ) {
 
-  return new ActionRowBuilder()
-
-    .addComponents(
-
-      new ButtonBuilder()
-
-        .setCustomId(
-          `manage_promote:${userId}`
-        )
-
-        .setLabel("קידום")
-
-        .setEmoji("⬆️")
-
-        .setStyle(
-          ButtonStyle.Success
-        ),
-
-
-      new ButtonBuilder()
-
-        .setCustomId(
-          `manage_demote:${userId}`
-        )
-
-        .setLabel(
-          "הורדת דרגה"
-        )
-
-        .setEmoji("⬇️")
-
-        .setStyle(
-          ButtonStyle.Primary
-        ),
-
-
-      new ButtonBuilder()
-
-        .setCustomId(
-          `manage_remove:${userId}`
-        )
-
-        .setLabel(
-          "הורדה מהצוות"
-        )
-
-        .setEmoji("❌")
-
-        .setStyle(
-          ButtonStyle.Danger
-        )
-
+  const currentRoleId =
+    getHighestLadderRoleId(
+      member
     );
+
+
+  // לא בצוות
+
+  if (!currentRoleId) {
+
+    return [
+
+      new ActionRowBuilder()
+
+        .addComponents(
+
+          new ButtonBuilder()
+
+            .setCustomId(
+              `manage_add:${member.id}`
+            )
+
+            .setLabel(
+              "הוסף לצוות"
+            )
+
+            .setEmoji("➕")
+
+            .setStyle(
+              ButtonStyle.Success
+            )
+
+        )
+
+    ];
+
+  }
+
+
+  // בצוות
+
+  return [
+
+    new ActionRowBuilder()
+
+      .addComponents(
+
+        new ButtonBuilder()
+
+          .setCustomId(
+            `manage_promote:${member.id}`
+          )
+
+          .setLabel("קידום")
+
+          .setEmoji("⬆️")
+
+          .setStyle(
+            ButtonStyle.Success
+          )
+
+          .setDisabled(
+            currentRoleId ===
+            ROLE_TOP
+          ),
+
+
+        new ButtonBuilder()
+
+          .setCustomId(
+            `manage_demote:${member.id}`
+          )
+
+          .setLabel(
+            "הורדת דרגה"
+          )
+
+          .setEmoji("⬇️")
+
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+
+        new ButtonBuilder()
+
+          .setCustomId(
+            `manage_remove:${member.id}`
+          )
+
+          .setLabel(
+            "הורדה מהצוות"
+          )
+
+          .setEmoji("❌")
+
+          .setStyle(
+            ButtonStyle.Danger
+          )
+
+      )
+
+  ];
 
 }
 
+// ======================================================
+// REFRESH MANAGEMENT PANEL
+// ======================================================
+
+async function refreshManagementPanel(
+  interaction,
+  userId,
+  message = ""
+) {
+
+  const member =
+    await fetchFreshMember(
+      interaction.guild,
+      userId
+    ).catch(() => null);
+
+
+  if (!member) {
+
+    return interaction.editReply({
+
+      content:
+        "❌ המשתמש לא נמצא בשרת.",
+
+      embeds: [],
+
+      components: []
+
+    });
+
+  }
+
+
+  return interaction.editReply({
+
+    content:
+      message,
+
+    embeds: [
+
+      await buildManagementEmbed(
+        interaction.guild,
+        member
+      )
+
+    ],
+
+    components:
+      createManagementButtons(
+        member
+      )
+
+  });
+
+}
 
 // ======================================================
-// יצירת כפתורי דרגות
+// ROLE CHOICE
 // ======================================================
 
 async function createRoleChoiceRow(
@@ -1524,10 +1656,12 @@ async function createRoleChoiceRow(
 
 
   for (
-    const roleId of roleIds
+    const roleId of
+    roleIds
   ) {
 
     const roleName =
+
       customLabels[roleId] ||
 
       await getRoleName(
@@ -1563,9 +1697,48 @@ async function createRoleChoiceRow(
   return row;
 }
 
+function getPromotionLabels(
+  currentRoleId
+) {
+
+  if (
+    currentRoleId ===
+    ROLE_STAFF
+  ) {
+
+    return {
+
+      [ROLE_PROMO_1]:
+        "קידום ראשון",
+
+      [ROLE_TEAM]:
+        "Team"
+
+    };
+
+  }
+
+
+  if (
+    currentRoleId ===
+    ROLE_PROMO_1
+  ) {
+
+    return {
+
+      [ROLE_TEAM]:
+        "Team"
+
+    };
+
+  }
+
+
+  return {};
+}
 
 // ======================================================
-// /staffmanage
+// COMMAND
 // ======================================================
 
 const staffManageCommand =
@@ -1578,7 +1751,6 @@ const staffManageCommand =
     .setDescription(
       "פתיחת פאנל ניהול הצוות"
     );
-
 
 // ======================================================
 // READY
@@ -1593,9 +1765,7 @@ client.once(
     );
 
 
-    // ==================================================
-    // רישום /staffmanage
-    // ==================================================
+    // /staffmanage
 
     if (
       TOKEN &&
@@ -1608,11 +1778,9 @@ client.once(
         const rest =
           new REST({
             version: "10"
-          }).setToken(TOKEN);
+          })
+            .setToken(TOKEN);
 
-
-        // מוחק פקודות ישנות כמו /ticketpanel
-        // ומשאיר רק /staffmanage
 
         await rest.put(
 
@@ -1647,16 +1815,10 @@ client.once(
     }
 
 
-    // ==================================================
-    // טעינת חסימות
-    // ==================================================
-
     await loadApplicationState();
 
 
-    // ==================================================
-    // פאנל טיקטים
-    // ==================================================
+    // Ticket panel
 
     try {
 
@@ -1767,7 +1929,6 @@ client.once(
   }
 );
 
-
 // ======================================================
 // INTERACTIONS
 // ======================================================
@@ -1787,8 +1948,6 @@ client.on(
       "staffmanage"
     ) {
 
-      // רק אתה
-
       if (
         interaction.user.id !==
         OWNER_USER_ID
@@ -1797,7 +1956,7 @@ client.on(
         return interaction.reply({
 
           content:
-            "❌ הפקודה הזאת זמינה רק לבעל השרת.",
+            "❌ הפקודה הזאת זמינה רק לך.",
 
           ephemeral: true
 
@@ -1843,9 +2002,9 @@ client.on(
     }
 
 
-// ======================================================
-// בחירת משתמש ב-/staffmanage
-// ======================================================
+    // ==================================================
+    // SELECT USER
+    // ==================================================
 
     if (
       interaction.isUserSelectMenu() &&
@@ -1875,9 +2034,10 @@ client.on(
 
 
       const member =
-        await interaction.guild.members
-          .fetch(targetId)
-          .catch(() => null);
+        await fetchFreshMember(
+          interaction.guild,
+          targetId
+        ).catch(() => null);
 
 
       if (!member) {
@@ -1909,22 +2069,19 @@ client.on(
 
         ],
 
-        components: [
-
+        components:
           createManagementButtons(
-            member.id
+            member
           )
-
-        ]
 
       });
 
     }
 
 
-// ======================================================
-// תפריט הטיקטים
-// ======================================================
+    // ==================================================
+    // TICKET MENU
+    // ==================================================
 
     if (
       interaction.isStringSelectMenu() &&
@@ -1936,19 +2093,21 @@ client.on(
         interaction.values[0];
 
 
-      // =================================================
-      // בחינה / קידום
-      // =================================================
+      // ================================================
+      // STAFF / PROMOTION
+      // ================================================
 
-      if (type === "staff") {
+      if (
+        type === "staff"
+      ) {
 
         try {
 
           const member =
-            await interaction.guild.members
-              .fetch(
-                interaction.user.id
-              );
+            await fetchFreshMember(
+              interaction.guild,
+              interaction.user.id
+            );
 
 
           const currentRoleId =
@@ -1956,8 +2115,6 @@ client.on(
               member
             );
 
-
-          // כבר בדרגה האחרונה
 
           if (
             currentRoleId ===
@@ -1990,9 +2147,6 @@ client.on(
           }
 
 
-          // אם כבר בצוות -> קידום
-          // אם לא -> בחינה רגילה
-
           const applicationType =
             currentRoleId
 
@@ -2000,11 +2154,6 @@ client.on(
 
               : "initial";
 
-
-          // ===============================================
-          // חסימת 7 ימים
-          // רק על בחינה ראשונה לצוות
-          // ===============================================
 
           if (
             applicationType ===
@@ -2052,8 +2201,6 @@ client.on(
           }
 
 
-          // כבר קיימת בקשה
-
           if (
 
             pendingApplications.has(
@@ -2099,9 +2246,6 @@ client.on(
           }
 
 
-          // קודם פותחים Modal
-          // כדי שהתגובה תהיה מהירה
-
           await interaction.showModal(
 
             createStaffApplicationModal(
@@ -2137,9 +2281,9 @@ client.on(
       }
 
 
-// ======================================================
-// טיקט רגיל
-// ======================================================
+      // ================================================
+      // NORMAL TICKET
+      // ================================================
 
       await interaction.deferReply({
         ephemeral: true
@@ -2167,10 +2311,6 @@ client.on(
 
         await guild.channels.fetch();
 
-
-        // ===============================================
-        // כבר יש טיקט?
-        // ===============================================
 
         const existingTicket =
           guild.channels.cache.find(
@@ -2205,11 +2345,8 @@ client.on(
         }
 
 
-        // ===============================================
-        // קטגוריה
-        // ===============================================
-
-        let validCategoryId = null;
+        let validCategoryId =
+          null;
 
 
         if (CATEGORY_ID) {
@@ -2233,10 +2370,6 @@ client.on(
 
         }
 
-
-        // ===============================================
-        // יצירת הטיקט
-        // ===============================================
 
         const channelData = {
 
@@ -2279,10 +2412,6 @@ client.on(
           );
 
 
-        // ===============================================
-        // הודעה בטיקט
-        // ===============================================
-
         await channel.send({
 
           content:
@@ -2318,8 +2447,6 @@ client.on(
 
         });
 
-
-        // איפוס התפריט
 
         await interaction.message.edit({
 
@@ -2365,9 +2492,9 @@ client.on(
     }
 
 
-// ======================================================
-// סגור טיקט
-// ======================================================
+    // ==================================================
+    // CLOSE TICKET
+    // ==================================================
 
     if (
       interaction.isButton() &&
@@ -2376,13 +2503,11 @@ client.on(
     ) {
 
       const member =
-        await interaction.guild.members
-          .fetch(
-            interaction.user.id
-          );
+        await fetchFreshMember(
+          interaction.guild,
+          interaction.user.id
+        );
 
-
-      // רק הרולים שהגדרת + אתה
 
       if (
         !hasStaffAccess(member)
@@ -2435,8 +2560,11 @@ client.on(
 
               error =>
                 console.error(
+
                   "❌ לא הצלחתי למחוק טיקט:",
+
                   error
+
                 )
 
             );
@@ -2453,9 +2581,9 @@ client.on(
     }
 
 
-// ======================================================
-// שליחת טופס בחינה / קידום
-// ======================================================
+    // ==================================================
+    // APPLICATION SUBMIT
+    // ==================================================
 
     if (
 
@@ -2480,10 +2608,10 @@ client.on(
 
 
         const member =
-          await interaction.guild.members
-            .fetch(
-              interaction.user.id
-            );
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
 
 
         const currentRoleId =
@@ -2492,10 +2620,9 @@ client.on(
           );
 
 
-        // מצב השתנה בזמן שמילא את הטופס
-
         if (
-          requestedType === "initial" &&
+          requestedType ===
+          "initial" &&
           currentRoleId
         ) {
 
@@ -2509,7 +2636,8 @@ client.on(
 
 
         if (
-          requestedType === "promotion" &&
+          requestedType ===
+          "promotion" &&
           !currentRoleId
         ) {
 
@@ -2523,8 +2651,10 @@ client.on(
 
 
         if (
-          requestedType === "promotion" &&
-          currentRoleId === ROLE_TOP
+          requestedType ===
+          "promotion" &&
+          currentRoleId ===
+          ROLE_TOP
         ) {
 
           return interaction.editReply(
@@ -2534,10 +2664,9 @@ client.on(
         }
 
 
-        // חסימה
-
         if (
-          requestedType === "initial"
+          requestedType ===
+          "initial"
         ) {
 
           const expiry =
@@ -2583,10 +2712,6 @@ client.on(
         }
 
 
-        // ===============================================
-        // תשובות
-        // ===============================================
-
         const age =
           interaction.fields
             .getTextInputValue(
@@ -2625,10 +2750,6 @@ client.on(
           "לא נכתבו הערות";
 
 
-        // ===============================================
-        // חדר הבחינות
-        // ===============================================
-
         const applicationChannel =
           await client.channels.fetch(
 
@@ -2666,10 +2787,6 @@ client.on(
             : null;
 
 
-        // ===============================================
-        // Embed
-        // ===============================================
-
         const embed =
           new EmbedBuilder()
 
@@ -2696,7 +2813,8 @@ client.on(
             .addFields(
 
               {
-                name: "👤 משתמש",
+                name:
+                  "👤 משתמש",
 
                 value:
                   `${interaction.user}\n` +
@@ -2726,7 +2844,8 @@ client.on(
                 name:
                   "🎂 בן כמה את/ה?",
 
-                value: age
+                value:
+                  age
               },
 
 
@@ -2792,10 +2911,6 @@ client.on(
 
             .setTimestamp();
 
-
-        // ===============================================
-        // כפתורים
-        // ===============================================
 
         const approve =
           new ButtonBuilder()
@@ -2873,10 +2988,6 @@ client.on(
         );
 
 
-        // ===============================================
-        // DM - בבדיקה
-        // ===============================================
-
         const dmSent =
           await sendApplicantDM(
 
@@ -2915,9 +3026,9 @@ client.on(
     }
 
 
-// ======================================================
-// לחיצה על "לאשר"
-// ======================================================
+    // ==================================================
+    // APPROVE
+    // ==================================================
 
     if (
 
@@ -2938,11 +3049,30 @@ client.on(
           .split(":");
 
 
+      // אי אפשר לאשר לעצמך
+
+      if (
+        interaction.user.id ===
+        applicantId
+      ) {
+
+        return interaction.reply({
+
+          content:
+            "❌ אי אפשר לטפל בבקשה של עצמך.",
+
+          ephemeral: true
+
+        });
+
+      }
+
+
       const reviewer =
-        await interaction.guild.members
-          .fetch(
-            interaction.user.id
-          );
+        await fetchFreshMember(
+          interaction.guild,
+          interaction.user.id
+        );
 
 
       if (
@@ -2990,11 +3120,10 @@ client.on(
       try {
 
         const applicant =
-          await interaction.guild.members
-
-            .fetch(applicantId)
-
-            .catch(() => null);
+          await fetchFreshMember(
+            interaction.guild,
+            applicantId
+          ).catch(() => null);
 
 
         if (!applicant) {
@@ -3018,15 +3147,13 @@ client.on(
 
 
         let targets;
+
         let labels = {};
 
 
-        // ===============================================
-        // בחינה ראשונה
-        // Staff / Team
-        // ===============================================
-
-        if (type === "initial") {
+        if (
+          type === "initial"
+        ) {
 
           if (currentRoleId) {
 
@@ -3060,11 +3187,6 @@ client.on(
 
         }
 
-
-        // ===============================================
-        // קידום
-        // ===============================================
-
         else {
 
           if (!currentRoleId) {
@@ -3087,7 +3209,9 @@ client.on(
             );
 
 
-          if (!targets.length) {
+          if (
+            !targets.length
+          ) {
 
             return interaction.followUp({
 
@@ -3100,12 +3224,14 @@ client.on(
 
           }
 
+
+          labels =
+            getPromotionLabels(
+              currentRoleId
+            );
+
         }
 
-
-        // ===============================================
-        // שינוי הסטטוס
-        // ===============================================
 
         const updatedEmbed =
           EmbedBuilder.from(
@@ -3194,9 +3320,9 @@ client.on(
     }
 
 
-// ======================================================
-// דחיית בקשה
-// ======================================================
+    // ==================================================
+    // REJECT
+    // ==================================================
 
     if (
 
@@ -3217,11 +3343,30 @@ client.on(
           .split(":");
 
 
+      // אי אפשר לדחות לעצמך
+
+      if (
+        interaction.user.id ===
+        applicantId
+      ) {
+
+        return interaction.reply({
+
+          content:
+            "❌ אי אפשר לטפל בבקשה של עצמך.",
+
+          ephemeral: true
+
+        });
+
+      }
+
+
       const reviewer =
-        await interaction.guild.members
-          .fetch(
-            interaction.user.id
-          );
+        await fetchFreshMember(
+          interaction.guild,
+          interaction.user.id
+        );
 
 
       if (
@@ -3272,8 +3417,6 @@ client.on(
           Date.now();
 
 
-        // חסימת שבוע רק בבחינה הראשונה
-
         if (
           type === "initial"
         ) {
@@ -3299,8 +3442,6 @@ client.on(
 
         );
 
-
-        // DM
 
         await sendApplicantDM(
           applicantId,
@@ -3366,16 +3507,6 @@ client.on(
         );
 
 
-        await interaction.followUp({
-
-          content:
-            "❌ הייתה בעיה בדחיית הבקשה.",
-
-          ephemeral: true
-
-        }).catch(() => {});
-
-
       } finally {
 
         processingApplications.delete(
@@ -3390,9 +3521,9 @@ client.on(
     }
 
 
-// ======================================================
-// אחרי אישור - בחירת Staff / Team / קידום
-// ======================================================
+    // ==================================================
+    // ASSIGN ROLE
+    // ==================================================
 
     if (
 
@@ -3414,11 +3545,30 @@ client.on(
           .split(":");
 
 
+      // אי אפשר לבחור לעצמך רול
+
+      if (
+        interaction.user.id ===
+        applicantId
+      ) {
+
+        return interaction.reply({
+
+          content:
+            "❌ אי אפשר לטפל בבקשה של עצמך.",
+
+          ephemeral: true
+
+        });
+
+      }
+
+
       const reviewer =
-        await interaction.guild.members
-          .fetch(
-            interaction.user.id
-          );
+        await fetchFreshMember(
+          interaction.guild,
+          interaction.user.id
+        );
 
 
       if (
@@ -3466,11 +3616,10 @@ client.on(
       try {
 
         const applicant =
-          await interaction.guild.members
-
-            .fetch(applicantId)
-
-            .catch(() => null);
+          await fetchFreshMember(
+            interaction.guild,
+            applicantId
+          ).catch(() => null);
 
 
         if (!applicant) {
@@ -3496,13 +3645,13 @@ client.on(
         let allowedTargets;
 
 
-        if (type === "initial") {
+        if (
+          type === "initial"
+        ) {
 
           allowedTargets = [
-
             ROLE_STAFF,
             ROLE_TEAM
-
           ];
 
         }
@@ -3535,16 +3684,18 @@ client.on(
         }
 
 
-        // ===============================================
-        // מוסיף את הרול
-        //
-        // לא מוחק את הקודם בכוונה!
-        // כך בהורדת דרגה ניתן לחזור לדרגה הקודמת.
-        // ===============================================
-
         await applicant.roles.add(
           targetRoleId
         );
+
+
+        const freshApplicant =
+          await fetchFreshMember(
+
+            interaction.guild,
+            applicantId
+
+          );
 
 
         const targetRoleName =
@@ -3566,10 +3717,6 @@ client.on(
         );
 
 
-        // ===============================================
-        // DM התקבל
-        // ===============================================
-
         await sendApplicantDM(
 
           applicantId,
@@ -3580,17 +3727,13 @@ client.on(
         );
 
 
-        // ===============================================
-        // לוג
-        // ===============================================
-
         await sendStaffLog({
 
           guild:
             interaction.guild,
 
           targetMember:
-            applicant,
+            freshApplicant,
 
           actorUser:
             interaction.user,
@@ -3611,10 +3754,6 @@ client.on(
 
         });
 
-
-        // ===============================================
-        // עדכון הודעת הבחינה
-        // ===============================================
 
         const updatedEmbed =
           EmbedBuilder.from(
@@ -3675,19 +3814,6 @@ client.on(
         );
 
 
-        await interaction.followUp({
-
-          content:
-
-            "❌ לא הצלחתי לתת את הרול.\n" +
-
-            "ודא שהרול של הבוט נמצא **מעל רולי הצוות** ברשימת הרולים.",
-
-          ephemeral: true
-
-        }).catch(() => {});
-
-
       } finally {
 
         processingApplications.delete(
@@ -3702,9 +3828,324 @@ client.on(
     }
 
 
-// ======================================================
-// /staffmanage -> קידום
-// ======================================================
+    // ==================================================
+    // ADD NON STAFF
+    // ==================================================
+
+    if (
+
+      interaction.isButton() &&
+
+      interaction.customId.startsWith(
+        "manage_add:"
+      )
+
+    ) {
+
+      if (
+        interaction.user.id !==
+        OWNER_USER_ID
+      ) {
+
+        return interaction.reply({
+
+          content:
+            "❌ אין לך הרשאה.",
+
+          ephemeral: true
+
+        });
+
+      }
+
+
+      const targetId =
+        interaction.customId
+          .split(":")[1];
+
+
+      const member =
+        await fetchFreshMember(
+          interaction.guild,
+          targetId
+        ).catch(() => null);
+
+
+      if (!member) {
+
+        await interaction.deferUpdate();
+
+
+        return interaction.editReply({
+
+          content:
+            "❌ המשתמש לא נמצא בשרת.",
+
+          embeds: [],
+
+          components: []
+
+        });
+
+      }
+
+
+      if (
+        getHighestLadderRoleId(
+          member
+        )
+      ) {
+
+        await interaction.deferUpdate();
+
+
+        return refreshManagementPanel(
+
+          interaction,
+          member.id,
+          "ℹ️ המשתמש כבר נמצא בצוות."
+
+        );
+
+      }
+
+
+      const row =
+        await createRoleChoiceRow(
+
+          interaction.guild,
+
+          member.id,
+
+          [
+            ROLE_STAFF,
+            ROLE_TEAM
+          ],
+
+          "manage_add_to",
+
+          {
+            [ROLE_STAFF]:
+              "Staff",
+
+            [ROLE_TEAM]:
+              "Team"
+          }
+
+        );
+
+
+      return interaction.update({
+
+        content:
+          "➕ **באיזו דרגה להוסיף את המשתמש?**",
+
+        embeds: [
+
+          await buildManagementEmbed(
+            interaction.guild,
+            member
+          )
+
+        ],
+
+        components: [
+          row
+        ]
+
+      });
+
+    }
+
+
+    // ==================================================
+    // ADD TO STAFF ROLE
+    // ==================================================
+
+    if (
+
+      interaction.isButton() &&
+
+      interaction.customId.startsWith(
+        "manage_add_to:"
+      )
+
+    ) {
+
+      if (
+        interaction.user.id !==
+        OWNER_USER_ID
+      ) {
+
+        return interaction.reply({
+
+          content:
+            "❌ אין לך הרשאה.",
+
+          ephemeral: true
+
+        });
+
+      }
+
+
+      const [
+        ,
+        targetId,
+        targetRoleId
+      ] =
+        interaction.customId
+          .split(":");
+
+
+      await interaction.deferUpdate();
+
+
+      const member =
+        await fetchFreshMember(
+          interaction.guild,
+          targetId
+        ).catch(() => null);
+
+
+      if (!member) {
+
+        return interaction.editReply({
+
+          content:
+            "❌ המשתמש לא נמצא בשרת.",
+
+          embeds: [],
+
+          components: []
+
+        });
+
+      }
+
+
+      if (
+        getHighestLadderRoleId(
+          member
+        )
+      ) {
+
+        return refreshManagementPanel(
+
+          interaction,
+          member.id,
+          "ℹ️ המשתמש כבר נמצא בצוות."
+
+        );
+
+      }
+
+
+      if (
+
+        ![
+          ROLE_STAFF,
+          ROLE_TEAM
+        ].includes(
+          targetRoleId
+        )
+
+      ) {
+
+        return refreshManagementPanel(
+
+          interaction,
+          member.id,
+          "❌ הדרגה שנבחרה אינה תקינה."
+
+        );
+
+      }
+
+
+      try {
+
+        await member.roles.add(
+          targetRoleId
+        );
+
+
+        const freshMember =
+          await fetchFreshMember(
+
+            interaction.guild,
+            member.id
+
+          );
+
+
+        const newRoleName =
+          await getRoleName(
+
+            interaction.guild,
+            targetRoleId
+
+          );
+
+
+        await sendStaffLog({
+
+          guild:
+            interaction.guild,
+
+          targetMember:
+            freshMember,
+
+          actorUser:
+            interaction.user,
+
+          title:
+            "➕ הוספה ידנית לצוות",
+
+          fromRoleId:
+            null,
+
+          toRoleId:
+            targetRoleId
+
+        });
+
+
+        return refreshManagementPanel(
+
+          interaction,
+          member.id,
+
+          `✅ ${freshMember.user} נוסף/ה לצוות בתור **${newRoleName}**.`
+
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          "❌ שגיאה בהוספה לצוות:",
+          error
+        );
+
+
+        return refreshManagementPanel(
+
+          interaction,
+          member.id,
+
+          "❌ לא הצלחתי לתת את הרול. ודא שרול הבוט נמצא מעל רולי הצוות."
+
+        );
+
+      }
+
+    }
+
+
+    // ==================================================
+    // PROMOTE
+    // ==================================================
 
     if (
 
@@ -3739,16 +4180,20 @@ client.on(
 
 
       const member =
-        await interaction.guild.members
+        await fetchFreshMember(
 
-          .fetch(targetId)
+          interaction.guild,
+          targetId
 
-          .catch(() => null);
+        ).catch(() => null);
 
 
       if (!member) {
 
-        return interaction.update({
+        await interaction.deferUpdate();
+
+
+        return interaction.editReply({
 
           content:
             "❌ המשתמש לא נמצא בשרת.",
@@ -3770,29 +4215,17 @@ client.on(
 
       if (!currentRoleId) {
 
-        return interaction.update({
+        await interaction.deferUpdate();
 
-          content:
-            "❌ המשתמש לא נמצא בסולם הצוות.",
 
-          embeds: [
+        return refreshManagementPanel(
 
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
+          interaction,
+          member.id,
 
-          ],
+          "❌ המשתמש לא נמצא בסולם הצוות."
 
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
@@ -3803,31 +4236,21 @@ client.on(
         );
 
 
-      if (!targets.length) {
+      if (
+        !targets.length
+      ) {
 
-        return interaction.update({
+        await interaction.deferUpdate();
 
-          content:
-            "🏆 המשתמש כבר בדרגה הגבוהה ביותר.",
 
-          embeds: [
+        return refreshManagementPanel(
 
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
+          interaction,
+          member.id,
 
-          ],
+          "🏆 המשתמש כבר בדרגה הגבוהה ביותר."
 
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
@@ -3838,7 +4261,10 @@ client.on(
           interaction.guild,
           member.id,
           targets,
-          "manage_promote_to"
+          "manage_promote_to",
+          getPromotionLabels(
+            currentRoleId
+          )
 
         );
 
@@ -3866,9 +4292,9 @@ client.on(
     }
 
 
-// ======================================================
-// /staffmanage -> בחירת דרגת קידום
-// ======================================================
+    // ==================================================
+    // PROMOTE TO
+    // ==================================================
 
     if (
 
@@ -3910,11 +4336,12 @@ client.on(
 
 
       const member =
-        await interaction.guild.members
+        await fetchFreshMember(
 
-          .fetch(targetId)
+          interaction.guild,
+          targetId
 
-          .catch(() => null);
+        ).catch(() => null);
 
 
       if (!member) {
@@ -3946,34 +4373,21 @@ client.on(
 
 
       if (
+
         !allowedTargets.includes(
           targetRoleId
         )
+
       ) {
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
-            "❌ הקידום הזה כבר לא מתאים לדרגה הנוכחית.",
+          interaction,
+          member.id,
 
-          embeds: [
+          "❌ הקידום הזה כבר לא מתאים לדרגה הנוכחית."
 
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
@@ -3985,13 +4399,31 @@ client.on(
         );
 
 
+        const freshMember =
+          await fetchFreshMember(
+
+            interaction.guild,
+            member.id
+
+          );
+
+
+        const newRoleName =
+          await getRoleName(
+
+            interaction.guild,
+            targetRoleId
+
+          );
+
+
         await sendStaffLog({
 
           guild:
             interaction.guild,
 
           targetMember:
-            member,
+            freshMember,
 
           actorUser:
             interaction.user,
@@ -4008,39 +4440,14 @@ client.on(
         });
 
 
-        const newRoleName =
-          await getRoleName(
+        return refreshManagementPanel(
 
-            interaction.guild,
-            targetRoleId
+          interaction,
+          member.id,
 
-          );
+          `✅ ${freshMember.user} קודם/ה ל־**${newRoleName}**.`
 
-
-        return interaction.editReply({
-
-          content:
-
-            `✅ ${member.user} קודם/ה ל־**${newRoleName}**.`,
-
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
 
       } catch (error) {
@@ -4051,39 +4458,23 @@ client.on(
         );
 
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
+          interaction,
+          member.id,
 
-            "❌ לא הצלחתי לתת את הרול. ודא שרול הבוט נמצא מעל רולי הצוות.",
+          "❌ לא הצלחתי לתת את הרול. ודא שרול הבוט נמצא מעל רולי הצוות."
 
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
     }
 
 
-// ======================================================
-// /staffmanage -> הורדת דרגה
-// ======================================================
+    // ==================================================
+    // DEMOTE
+    // ==================================================
 
     if (
 
@@ -4121,11 +4512,12 @@ client.on(
 
 
       const member =
-        await interaction.guild.members
+        await fetchFreshMember(
 
-          .fetch(targetId)
+          interaction.guild,
+          targetId
 
-          .catch(() => null);
+        ).catch(() => null);
 
 
       if (!member) {
@@ -4152,29 +4544,14 @@ client.on(
 
       if (!currentRoleId) {
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
-            "❌ המשתמש לא נמצא בצוות.",
+          interaction,
+          member.id,
 
-          embeds: [
+          "❌ המשתמש לא נמצא בצוות."
 
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
@@ -4185,11 +4562,9 @@ client.on(
         );
 
 
-      let previousRoleId = null;
+      let previousRoleId =
+        null;
 
-
-      // מחפש את הדרגה הקודמת
-      // שהמשתמש עדיין מחזיק
 
       for (
         let i =
@@ -4218,49 +4593,43 @@ client.on(
       }
 
 
-      // אם למשל הוא נכנס ישר כ-Team
-      // אין לנו דרגה קודמת
-
       if (!previousRoleId) {
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
+          interaction,
+          member.id,
 
-            "ℹ️ אין למשתמש דרגה קודמת שמורה.\n" +
+          "ℹ️ אין למשתמש דרגה קודמת שמורה. אם אתה רוצה להוציא אותו מהצוות, השתמש ב־**הורדה מהצוות**."
 
-            "אם אתה רוצה להוציא אותו מהצוות, השתמש ב־**הורדה מהצוות**.",
-
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
 
       try {
 
-        // מוריד רק את הדרגה הכי גבוהה
-        // הדרגה הקודמת נשארת
-
         await member.roles.remove(
           currentRoleId
         );
+
+
+        const freshMember =
+          await fetchFreshMember(
+
+            interaction.guild,
+            member.id
+
+          );
+
+
+        const previousName =
+          await getRoleName(
+
+            interaction.guild,
+            previousRoleId
+
+          );
 
 
         await sendStaffLog({
@@ -4269,7 +4638,7 @@ client.on(
             interaction.guild,
 
           targetMember:
-            member,
+            freshMember,
 
           actorUser:
             interaction.user,
@@ -4286,39 +4655,14 @@ client.on(
         });
 
 
-        const previousName =
-          await getRoleName(
+        return refreshManagementPanel(
 
-            interaction.guild,
-            previousRoleId
+          interaction,
+          member.id,
 
-          );
+          `✅ ${freshMember.user} הורד/ה ל־**${previousName}**.`
 
-
-        return interaction.editReply({
-
-          content:
-
-            `✅ ${member.user} הורד/ה ל־**${previousName}**.`,
-
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
 
       } catch (error) {
@@ -4329,39 +4673,23 @@ client.on(
         );
 
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
+          interaction,
+          member.id,
 
-            "❌ לא הצלחתי להסיר את הרול. ודא שרול הבוט נמצא מעל רולי הצוות.",
+          "❌ לא הצלחתי להסיר את הרול. ודא שרול הבוט נמצא מעל רולי הצוות."
 
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
     }
 
 
-// ======================================================
-// /staffmanage -> הורדה מהצוות
-// ======================================================
+    // ==================================================
+    // REMOVE FROM STAFF
+    // ==================================================
 
     if (
 
@@ -4399,11 +4727,12 @@ client.on(
 
 
       const member =
-        await interaction.guild.members
+        await fetchFreshMember(
 
-          .fetch(targetId)
+          interaction.guild,
+          targetId
 
-          .catch(() => null);
+        ).catch(() => null);
 
 
       if (!member) {
@@ -4439,38 +4768,23 @@ client.on(
         );
 
 
-      if (!rolesToRemove.length) {
+      if (
+        !rolesToRemove.length
+      ) {
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
-            "ℹ️ למשתמש אין אף אחד מרולי הצוות.",
+          interaction,
+          member.id,
 
-          embeds: [
+          "ℹ️ למשתמש אין אף אחד מרולי הצוות."
 
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
 
       try {
-
-        // מוריד את כל רולי הצוות
 
         for (
           const roleId of
@@ -4484,13 +4798,22 @@ client.on(
         }
 
 
+        const freshMember =
+          await fetchFreshMember(
+
+            interaction.guild,
+            member.id
+
+          );
+
+
         await sendStaffLog({
 
           guild:
             interaction.guild,
 
           targetMember:
-            member,
+            freshMember,
 
           actorUser:
             interaction.user,
@@ -4507,30 +4830,14 @@ client.on(
         });
 
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
+          interaction,
+          member.id,
 
-            `✅ ${member.user} הוסר/ה מהצוות.`,
+          `✅ ${freshMember.user} הוסר/ה מהצוות.`
 
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
 
       } catch (error) {
@@ -4541,30 +4848,14 @@ client.on(
         );
 
 
-        return interaction.editReply({
+        return refreshManagementPanel(
 
-          content:
+          interaction,
+          member.id,
 
-            "❌ לא הצלחתי להסיר את הרולים. ודא שרול הבוט נמצא מעל רולי הצוות.",
+          "❌ לא הצלחתי להסיר את הרולים. ודא שרול הבוט נמצא מעל רולי הצוות."
 
-          embeds: [
-
-            await buildManagementEmbed(
-              interaction.guild,
-              member
-            )
-
-          ],
-
-          components: [
-
-            createManagementButtons(
-              member.id
-            )
-
-          ]
-
-        });
+        );
 
       }
 
@@ -4572,7 +4863,6 @@ client.on(
 
   }
 );
-
 
 // ======================================================
 // LOGIN
