@@ -1,12 +1,18 @@
 {
   "name": "roei-ticket-bot",
   "version": "1.0.0",
-  "description": "Discord ticket bot",
+  "description": "Roei Discord main bot + music bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
-    "discord.js": "^14.22.1"
+    "discord.js": "14.27.0",
+    "discord-player": "7.2.0",
+    "discord-player-youtubedlp": "1.2.2",
+    "ffmpeg-static": "5.3.0"
   }
 }
