@@ -4,8 +4,12 @@ const {
   UserSelectMenuBuilder, EmbedBuilder, ModalBuilder, TextInputBuilder,
   TextInputStyle, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes
 } = require("discord.js");
-
 const crypto = require("crypto");
+const { Player, QueueRepeatMode } = require("discord-player");
+const { YouTubeDlpExtractor } = require("discord-player-youtubedlp");
+const ffmpegPath = require("ffmpeg-static");
+
+if (ffmpegPath) process.env.FFMPEG_PATH = ffmpegPath;
 
 const client = new Client({
   intents: [
@@ -15,8 +19,18 @@ const client = new Client({
   ]
 });
 
+const musicClient = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates
+  ]
+});
+
 const TOKEN = process.env.BOT_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+const MUSIC_BOT_TOKEN = process.env.MUSIC_BOT_TOKEN;
+const MUSIC_CLIENT_ID = process.env.MUSIC_CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 const CATEGORY_ID = process.env.CATEGORY_ID;
 const YOUTUBE_CHANNEL_ID_FROM_ENV = process.env.YOUTUBE_CHANNEL_ID || null;
@@ -41,8 +55,7 @@ const YOUTUBE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const SOCIALS_CHANNEL_ID = "1555843770518609941";
 const SOCIAL_YOUTUBE_URL = "https://www.youtube.com/@RoeiKing1";
 const SOCIAL_KICK_URL = "https://kick.com/roeiking1";
-const SOCIAL_WHATSAPP_URL =
-  "https://whatsapp.com/channel/0029Vb7TecZK0IBbMbjFcr1T";
+const SOCIAL_WHATSAPP_URL = "https://whatsapp.com/channel/0029Vb7TecZK0IBbMbjFcr1T";
 const DISCORD_USERNAME = "roro_king1234";
 
 const PARTNER_PANEL_CHANNEL_ID = "1542045433323589714";
@@ -52,11 +65,18 @@ const OUR_SERVER_INVITE = "https://discord.gg/kP7f9rB33";
 const PARTNER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ===================== TEMP VOICE =====================
-
 const TEMP_VOICE_PANEL_CHANNEL_ID = "1556011499234009191";
 const TEMP_VOICE_CREATE_CHANNEL_ID = "1556011651013025812";
 const TEMP_VOICE_CATEGORY_ID = "1556011045460508763";
 
+// ===================== ARCADE =====================
+const ARCADE_PANEL_CHANNEL_ID = "1556154437742104618";
+const ARCADE_GAMES_CHANNEL_ID = "1556154531417554964";
+
+// ===================== MUSIC BOT =====================
+const MUSIC_VOICE_CHANNEL_ID = "1555567802121715832";
+
+const ROLE_HELPER = "1556250971150094346";
 const ROLE_STAFF = "1555587941575696444";
 const ROLE_PROMO_1 = "1555588224636821526";
 const ROLE_TEAM = "1555588615520653332";
@@ -66,25 +86,16 @@ const ROLE_TOP = "1555588725398839376";
 const EXTRA_HANDLER_ROLE = "1541371707011629077";
 
 const STAFF_ACCESS_ROLE_IDS = [
-  ROLE_STAFF,
-  EXTRA_HANDLER_ROLE,
-  ROLE_PROMO_1,
-  ROLE_TEAM,
-  ROLE_ADMIN,
-  ROLE_HEAD_ADMIN,
-  ROLE_TOP
+  ROLE_STAFF, EXTRA_HANDLER_ROLE, ROLE_PROMO_1, ROLE_TEAM,
+  ROLE_ADMIN, ROLE_HEAD_ADMIN, ROLE_TOP
 ];
 
 const LADDER_ROLE_IDS = [
-  ROLE_STAFF,
-  ROLE_PROMO_1,
-  ROLE_TEAM,
-  ROLE_ADMIN,
-  ROLE_HEAD_ADMIN,
-  ROLE_TOP
+  ROLE_HELPER, ROLE_STAFF, ROLE_PROMO_1, ROLE_TEAM, ROLE_ADMIN, ROLE_HEAD_ADMIN, ROLE_TOP
 ];
 
 const NICKNAME_PREFIX_BY_ROLE = {
+  [ROLE_HELPER]: "He",
   [ROLE_STAFF]: "ST",
   [ROLE_PROMO_1]: "BST",
   [ROLE_TEAM]: "TM",
@@ -93,26 +104,16 @@ const NICKNAME_PREFIX_BY_ROLE = {
   [ROLE_TOP]: "CO"
 };
 
-const PREFIX_RANKS = {
-  ST: 0,
-  BST: 1,
-  TM: 2,
-  AD: 3,
-  HA: 4,
-  CO: 5
-};
+const PREFIX_RANKS = { HE: 0, ST: 1, BST: 2, TM: 3, AD: 4, HA: 5, CO: 6 };
+const STAFF_PREFIX_REGEX = /^\s*(HE|ST|BST|TM|AD|HA|CO)\s*(?:\||｜|│|:|-|–|—)\s*/i;
 
-const STAFF_PREFIX_REGEX =
-  /^\s*(ST|BST|TM|AD|HA|CO)\s*(?:\||｜|│|:|-|–|—)\s*/i;
+// כל קידומת בסגנון "משהו | שם" נחשבת קידומת.
+// לצוות/Partner מותרת רק הקידומת שהבוט נותן לפי הרול שלהם.
+const ANY_PREFIX_REGEX = /^\s*([^|｜│]+?)\s*(?:\||｜|│)\s*/;
 
-const ANY_PREFIX_REGEX =
-  /^\s*([^|｜│]+?)\s*(?:\||｜|│)\s*/;
+const FAKE_PROMOTION_TIMEOUT_MS = 15 * 60 * 1000;
 
-const FAKE_PROMOTION_TIMEOUT_MS =
-  15 * 60 * 1000;
-
-const REJECT_COOLDOWN_MS =
-  7 * 24 * 60 * 60 * 1000;
+const REJECT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 const rejectionCooldowns = new Map();
 const pendingApplications = new Set();
@@ -133,99 +134,125 @@ const youtubeSeen = new Map();
 const tempVoiceOwners = new Map();
 const tempVoiceCreating = new Set();
 
+const arcadeTttGames = new Map();
+const arcadeRpsGames = new Map();
+const arcadeImpostorGames = new Map();
+const arcadeBombaGames = new Map();
+
+const musicPlaylists = new Map();
+
 let youtubeInitialized = false;
-
-let resolvedYouTubeChannelId =
-  YOUTUBE_CHANNEL_ID_FROM_ENV;
-
+let resolvedYouTubeChannelId = YOUTUBE_CHANNEL_ID_FROM_ENV;
 let youtubePollRunning = false;
-
 let botDataChannelId = null;
 
-const BOT_DATA_CHANNEL_NAME =
-  "bot-data";
-
-const BOT_DATA_CHANNEL_TOPIC =
-  "roei-bot-private-data-v2";
+const BOT_DATA_CHANNEL_NAME = "bot-data";
+const BOT_DATA_CHANNEL_TOPIC = "roei-bot-private-data-v2";
 
 const ticketTypes = {
   report: {
-    channelName:
-      "דיווח"
+    channelName: "דיווח"
   },
 
   technical: {
-    channelName:
-      "תמיכה"
+    channelName: "תמיכה"
   },
 
   general: {
-    channelName:
-      "כללי"
+    channelName: "כללי"
   }
 };
 
 // ===================== BASIC HELPERS =====================
 
 async function getMainGuild() {
-  if (!GUILD_ID) {
-    return null;
-  }
+  if (!GUILD_ID) return null;
 
   return client.guilds
-    .fetch(
-      GUILD_ID
-    )
-    .catch(
-      () => null
-    );
+    .fetch(GUILD_ID)
+    .catch(() => null);
 }
 
-async function fetchFreshMember(
-  guild,
-  userId
-) {
+async function fetchFreshMember(guild, userId) {
   return guild.members.fetch({
-    user:
-      userId,
-
-    force:
-      true
+    user: userId,
+    force: true
   });
 }
 
-function hasStaffAccess(
-  member
-) {
-  if (!member) {
-    return false;
-  }
+function hasStaffAccess(member) {
+  if (!member) return false;
 
-  if (
-    member.id ===
-    OWNER_USER_ID
-  ) {
+  if (member.id === OWNER_USER_ID) {
     return true;
   }
 
   return STAFF_ACCESS_ROLE_IDS.some(
-    id =>
-      member.roles.cache.has(
-        id
-      )
+    id => member.roles.cache.has(id)
   );
 }
 
-function getHighestLadderRoleId(
-  member
-) {
-  if (!member) {
-    return null;
+function hasClearAccess(member) {
+  if (!member) return false;
+
+  if (member.id === OWNER_USER_ID) {
+    return true;
   }
 
+  return [
+    ROLE_TEAM,
+    ROLE_ADMIN,
+    ROLE_HEAD_ADMIN,
+    ROLE_TOP
+  ].some(
+    id => member.roles.cache.has(id)
+  );
+}
+
+function hasMusicBasicAccess(member) {
+  if (!member) return false;
+
+  if (member.id === OWNER_USER_ID) {
+    return true;
+  }
+
+  return [
+    ROLE_HELPER,
+    ROLE_STAFF,
+    ROLE_PROMO_1,
+    ROLE_TEAM,
+    ROLE_ADMIN,
+    ROLE_HEAD_ADMIN,
+    ROLE_TOP
+  ].some(
+    id => member.roles.cache.has(id)
+  );
+}
+
+function hasMusicDJAccess(member) {
+  if (!member) return false;
+
+  if (member.id === OWNER_USER_ID) {
+    return true;
+  }
+
+  return [
+    ROLE_STAFF,
+    ROLE_PROMO_1,
+    ROLE_TEAM,
+    ROLE_ADMIN,
+    ROLE_HEAD_ADMIN,
+    ROLE_TOP
+  ].some(
+    id => member.roles.cache.has(id)
+  );
+}
+
+function getHighestLadderRoleId(member) {
+  if (!member) return null;
+
   for (
-    let i =
-      LADDER_ROLE_IDS.length - 1;
+    let i = LADDER_ROLE_IDS.length - 1;
     i >= 0;
     i--
   ) {
@@ -241,167 +268,110 @@ function getHighestLadderRoleId(
   return null;
 }
 
-function getPromotionTargets(
-  roleId
-) {
-  if (
-    roleId ===
-    ROLE_STAFF
-  ) {
+function getPromotionTargets(roleId) {
+  if (roleId === ROLE_HELPER) {
+    return [ROLE_STAFF];
+  }
+
+  if (roleId === ROLE_STAFF) {
     return [
       ROLE_PROMO_1,
       ROLE_TEAM
     ];
   }
 
-  if (
-    roleId ===
-    ROLE_PROMO_1
-  ) {
-    return [
-      ROLE_TEAM
-    ];
+  if (roleId === ROLE_PROMO_1) {
+    return [ROLE_TEAM];
   }
 
-  if (
-    roleId ===
-    ROLE_TEAM
-  ) {
-    return [
-      ROLE_ADMIN
-    ];
+  if (roleId === ROLE_TEAM) {
+    return [ROLE_ADMIN];
   }
 
-  if (
-    roleId ===
-    ROLE_ADMIN
-  ) {
-    return [
-      ROLE_HEAD_ADMIN
-    ];
+  if (roleId === ROLE_ADMIN) {
+    return [ROLE_HEAD_ADMIN];
   }
 
-  if (
-    roleId ===
-    ROLE_HEAD_ADMIN
-  ) {
-    return [
-      ROLE_TOP
-    ];
+  if (roleId === ROLE_HEAD_ADMIN) {
+    return [ROLE_TOP];
   }
 
   return [];
 }
 
-function getPromotionLabels(
-  roleId
-) {
-  if (
-    roleId ===
-    ROLE_STAFF
-  ) {
+function getPromotionLabels(roleId) {
+  if (roleId === ROLE_HELPER) {
     return {
-      [ROLE_PROMO_1]:
-        "Big Stuff",
-
-      [ROLE_TEAM]:
-        "Team"
+      [ROLE_STAFF]: "Stuff"
     };
   }
 
-  if (
-    roleId ===
-    ROLE_PROMO_1
-  ) {
+  if (roleId === ROLE_STAFF) {
     return {
-      [ROLE_TEAM]:
-        "Team"
+      [ROLE_PROMO_1]: "Big Stuff",
+      [ROLE_TEAM]: "Team"
     };
   }
 
-  if (
-    roleId ===
-    ROLE_TEAM
-  ) {
+  if (roleId === ROLE_PROMO_1) {
     return {
-      [ROLE_ADMIN]:
-        "Admin"
+      [ROLE_TEAM]: "Team"
     };
   }
 
-  if (
-    roleId ===
-    ROLE_ADMIN
-  ) {
+  if (roleId === ROLE_TEAM) {
     return {
-      [ROLE_HEAD_ADMIN]:
-        "Head Admin"
+      [ROLE_ADMIN]: "Admin"
     };
   }
 
-  if (
-    roleId ===
-    ROLE_HEAD_ADMIN
-  ) {
+  if (roleId === ROLE_ADMIN) {
     return {
-      [ROLE_TOP]:
-        "Co-owner"
+      [ROLE_HEAD_ADMIN]: "Head Admin"
+    };
+  }
+
+  if (roleId === ROLE_HEAD_ADMIN) {
+    return {
+      [ROLE_TOP]: "Co-owner"
     };
   }
 
   return {};
 }
 
-async function getRoleName(
-  guild,
-  roleId
-) {
+async function getRoleName(guild, roleId) {
   if (!roleId) {
     return "ללא";
   }
 
   const role =
-    guild.roles.cache.get(
-      roleId
-    ) ||
+    guild.roles.cache.get(roleId) ||
     await guild.roles
-      .fetch(
-        roleId
-      )
-      .catch(
-        () => null
-      );
+      .fetch(roleId)
+      .catch(() => null);
 
-  return role?.name ||
-    roleId;
+  return role?.name || roleId;
 }
 
 function getStaffMentions() {
   return STAFF_ACCESS_ROLE_IDS
     .map(
-      id =>
-        `<@&${id}>`
+      id => `<@&${id}>`
     )
     .join(" ");
 }
 
-function safeText(
-  value,
-  max = 1000
-) {
+function safeText(value, max = 1000) {
   const text =
-    String(
-      value ?? ""
-    ).trim();
+    String(value ?? "")
+      .trim();
 
   if (!text) {
     return "לא נכתב";
   }
 
-  if (
-    text.length <=
-    max
-  ) {
+  if (text.length <= max) {
     return text;
   }
 
@@ -414,22 +384,16 @@ function safeText(
   );
 }
 
-function encodeSmall(
-  value
-) {
+function encodeSmall(value) {
   return Buffer.from(
-    String(
-      value ?? ""
-    ),
+    String(value ?? ""),
     "utf8"
   ).toString(
     "base64url"
   );
 }
 
-function decodeSmall(
-  value
-) {
+function decodeSmall(value) {
   try {
     return Buffer.from(
       value,
@@ -442,59 +406,134 @@ function decodeSmall(
   }
 }
 
+function normalizePlaylistName(name) {
+  return String(
+    name || ""
+  )
+    .trim()
+    .toLocaleLowerCase("he");
+}
+
+function getUserPlaylistMap(
+  userId,
+  create = false
+) {
+  if (
+    !musicPlaylists.has(userId) &&
+    create
+  ) {
+    musicPlaylists.set(
+      userId,
+      new Map()
+    );
+  }
+
+  return (
+    musicPlaylists.get(userId) ||
+    null
+  );
+}
+
+function getUserPlaylist(
+  userId,
+  name
+) {
+  const map =
+    getUserPlaylistMap(
+      userId,
+      false
+    );
+
+  if (!map) {
+    return null;
+  }
+
+  return (
+    map.get(
+      normalizePlaylistName(name)
+    ) ||
+    null
+  );
+}
+
+function createUserPlaylistLocal(
+  userId,
+  name
+) {
+  const clean =
+    String(name || "")
+      .trim()
+      .slice(
+        0,
+        60
+      );
+
+  if (!clean) {
+    return null;
+  }
+
+  const key =
+    normalizePlaylistName(
+      clean
+    );
+
+  const map =
+    getUserPlaylistMap(
+      userId,
+      true
+    );
+
+  if (!map.has(key)) {
+    map.set(
+      key,
+      {
+        name: clean,
+        songs: []
+      }
+    );
+  }
+
+  return map.get(key);
+}
+
 // ===================== PERSISTENCE =====================
 
-async function ensureBotDataChannel(
-  guild
-) {
+async function ensureBotDataChannel(guild) {
   await guild.channels.fetch();
 
   let channel =
     guild.channels.cache.find(
       ch =>
-        ch.type ===
-          ChannelType.GuildText &&
-        ch.topic ===
-          BOT_DATA_CHANNEL_TOPIC
+        ch.type === ChannelType.GuildText &&
+        ch.topic === BOT_DATA_CHANNEL_TOPIC
     );
 
   if (!channel) {
     channel =
       guild.channels.cache.find(
         ch =>
-          ch.type ===
-            ChannelType.GuildText &&
-          ch.name ===
-            BOT_DATA_CHANNEL_NAME
+          ch.type === ChannelType.GuildText &&
+          ch.name === BOT_DATA_CHANNEL_NAME
       );
   }
 
   if (!channel) {
     channel =
       await guild.channels.create({
-        name:
-          BOT_DATA_CHANNEL_NAME,
-
-        type:
-          ChannelType.GuildText,
-
-        topic:
-          BOT_DATA_CHANNEL_TOPIC,
+        name: BOT_DATA_CHANNEL_NAME,
+        type: ChannelType.GuildText,
+        topic: BOT_DATA_CHANNEL_TOPIC,
 
         permissionOverwrites: [
           {
-            id:
-              guild.id,
-
+            id: guild.id,
             deny: [
               PermissionFlagsBits.ViewChannel
             ]
           },
 
           {
-            id:
-              client.user.id,
-
+            id: client.user.id,
             allow: [
               PermissionFlagsBits.ViewChannel,
               PermissionFlagsBits.SendMessages,
@@ -504,9 +543,7 @@ async function ensureBotDataChannel(
           },
 
           {
-            id:
-              OWNER_USER_ID,
-
+            id: OWNER_USER_ID,
             allow: [
               PermissionFlagsBits.ViewChannel,
               PermissionFlagsBits.ReadMessageHistory
@@ -514,28 +551,24 @@ async function ensureBotDataChannel(
           }
         ],
 
-        reason:
-          "Private persistent storage for bot state"
+        reason: "Private persistent storage for bot state"
       });
 
     await channel.send({
       content:
         "🤖 **חדר נתונים של הבוט**\n" +
-        "החדר הזה שומר נתונים גם אחרי Restart / Deploy.\n" +
+        "החדר הזה שומר הצעות, Partner ו-YouTube אחרי Restart/Deploy.\n" +
         "**לא למחוק הודעות מכאן.**"
     });
   }
 
-  botDataChannelId =
-    channel.id;
+  botDataChannelId = channel.id;
 
   return channel;
 }
 
 async function getBotDataChannel() {
-  if (
-    botDataChannelId
-  ) {
+  if (botDataChannelId) {
     const cached =
       client.channels.cache.get(
         botDataChannelId
@@ -562,9 +595,7 @@ async function getBotDataChannel() {
   );
 }
 
-async function logBotData(
-  line
-) {
+async function logBotData(line) {
   const channel =
     await getBotDataChannel();
 
@@ -574,8 +605,7 @@ async function logBotData(
 
   try {
     await channel.send({
-      content:
-        line,
+      content: line,
 
       allowedMentions: {
         parse: []
@@ -583,6 +613,7 @@ async function logBotData(
     });
 
     return true;
+
   } catch (error) {
     console.error(
       "❌ שמירת נתונים נכשלה:",
@@ -599,12 +630,9 @@ async function savePartnerField(
   value
 ) {
   const encoded =
-    encodeSmall(
-      value
-    );
+    encodeSmall(value);
 
-  const maxChunk =
-    1500;
+  const maxChunk = 1500;
 
   const total =
     Math.max(
@@ -629,9 +657,7 @@ async function savePartnerField(
   }
 }
 
-async function savePartnerOwnerMessage(
-  state
-) {
+async function savePartnerOwnerMessage(state) {
   await logBotData(
     `PARTNER_OWNERMSG|${state.requestId}|${state.ownerDmChannelId || "-"}|${state.ownerDmMessageId || "-"}`
   );
@@ -651,13 +677,11 @@ async function loadPersistentBotData() {
   let scanned = 0;
 
   while (
-    scanned <
-    30000
+    scanned < 30000
   ) {
     const batch =
       await channel.messages.fetch({
-        limit:
-          100,
+        limit: 100,
 
         ...(before
           ? {
@@ -684,8 +708,7 @@ async function loadPersistentBotData() {
 
     if (
       !before ||
-      batch.size <
-        100
+      batch.size < 100
     ) {
       break;
     }
@@ -701,20 +724,16 @@ async function loadPersistentBotData() {
     new Map();
 
   for (
-    const message of
-    all
+    const message of all
   ) {
     const line =
       message.content ||
       "";
 
     if (
-      line ===
-      "YT_INIT"
+      line === "YT_INIT"
     ) {
-      youtubeInitialized =
-        true;
-
+      youtubeInitialized = true;
       continue;
     }
 
@@ -758,8 +777,7 @@ async function loadPersistentBotData() {
               : null,
 
           ended:
-            type !==
-            "live"
+            type !== "live"
         }
       );
 
@@ -783,8 +801,7 @@ async function loadPersistentBotData() {
         );
 
       if (state) {
-        state.ended =
-          true;
+        state.ended = true;
       }
 
       continue;
@@ -864,8 +881,7 @@ async function loadPersistentBotData() {
       }
 
       if (
-        choice ===
-        "none"
+        choice === "none"
       ) {
         state.votes.delete(
           userId
@@ -1000,18 +1016,10 @@ async function loadPersistentBotData() {
           inviteUrl: "",
           promoText: "",
           notes: "",
-
-          status:
-            "pending",
-
-          handledAt:
-            null,
-
-          ownerDmChannelId:
-            null,
-
-          ownerDmMessageId:
-            null
+          status: "pending",
+          handledAt: null,
+          ownerDmChannelId: null,
+          ownerDmMessageId: null
         }
       );
 
@@ -1076,16 +1084,14 @@ async function loadPersistentBotData() {
         );
 
       } else {
-        partnerFieldParts.get(
-          key
-        ).total =
-          totalParts;
+        partnerFieldParts
+          .get(key)
+          .total =
+            totalParts;
       }
 
       partnerFieldParts
-        .get(
-          key
-        )
+        .get(key)
         .parts
         .set(
           partNumber,
@@ -1162,10 +1168,8 @@ async function loadPersistentBotData() {
         null;
 
       if (
-        status ===
-          "approved" ||
-        status ===
-          "rejected"
+        status === "approved" ||
+        status === "rejected"
       ) {
         partnerPendingByUser.delete(
           state.applicantId
@@ -1252,11 +1256,149 @@ async function loadPersistentBotData() {
       ] =
         line.split("|");
 
-      if (
-        channelId
-      ) {
+      if (channelId) {
         tempVoiceOwners.delete(
           channelId
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "MUSIC_PL_CREATE|"
+      )
+    ) {
+      const [
+        ,
+        userId,
+        encodedName
+      ] =
+        line.split("|");
+
+      if (
+        userId &&
+        encodedName
+      ) {
+        createUserPlaylistLocal(
+          userId,
+          decodeSmall(
+            encodedName
+          )
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "MUSIC_PL_ADD|"
+      )
+    ) {
+      const [
+        ,
+        userId,
+        encodedName,
+        encodedSong
+      ] =
+        line.split("|");
+
+      if (
+        userId &&
+        encodedName &&
+        encodedSong
+      ) {
+        const playlist =
+          createUserPlaylistLocal(
+            userId,
+            decodeSmall(
+              encodedName
+            )
+          );
+
+        if (playlist) {
+          playlist.songs.push(
+            decodeSmall(
+              encodedSong
+            )
+          );
+        }
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "MUSIC_PL_REMOVE|"
+      )
+    ) {
+      const [
+        ,
+        userId,
+        encodedName,
+        indexRaw
+      ] =
+        line.split("|");
+
+      const playlist =
+        getUserPlaylist(
+          userId,
+          decodeSmall(
+            encodedName
+          )
+        );
+
+      const index =
+        Number(
+          indexRaw
+        );
+
+      if (
+        playlist &&
+        Number.isInteger(
+          index
+        ) &&
+        index >= 0 &&
+        index <
+          playlist.songs.length
+      ) {
+        playlist.songs.splice(
+          index,
+          1
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      line.startsWith(
+        "MUSIC_PL_DELETE|"
+      )
+    ) {
+      const [
+        ,
+        userId,
+        encodedName
+      ] =
+        line.split("|");
+
+      const map =
+        getUserPlaylistMap(
+          userId,
+          false
+        );
+
+      if (map) {
+        map.delete(
+          normalizePlaylistName(
+            decodeSmall(
+              encodedName
+            )
+          )
         );
       }
 
@@ -1315,8 +1457,7 @@ async function loadPersistentBotData() {
       continue;
     }
 
-    let merged =
-      "";
+    let merged = "";
 
     for (
       let i = 1;
@@ -1324,9 +1465,7 @@ async function loadPersistentBotData() {
       i++
     ) {
       merged +=
-        data.parts.get(
-          i
-        ) ||
+        data.parts.get(i) ||
         "";
     }
 
@@ -1344,10 +1483,8 @@ async function loadPersistentBotData() {
     partnerStates.entries()
   ) {
     if (
-      state.status ===
-        "pending" ||
-      state.status ===
-        "waiting_publication"
+      state.status === "pending" ||
+      state.status === "waiting_publication"
     ) {
       partnerPendingByUser.set(
         state.applicantId,
@@ -1357,10 +1494,8 @@ async function loadPersistentBotData() {
 
     if (
       (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
+        state.status === "approved" ||
+        state.status === "rejected"
       ) &&
       state.handledAt
     ) {
@@ -1387,9 +1522,7 @@ async function loadPersistentBotData() {
 
 // ===================== NICKNAMES =====================
 
-function getStaffNicknamePrefix(
-  member
-) {
+function getStaffNicknamePrefix(member) {
   const roleId =
     getHighestLadderRoleId(
       member
@@ -1402,9 +1535,7 @@ function getStaffNicknamePrefix(
     : null;
 }
 
-function getAttemptedStaffPrefix(
-  name
-) {
+function getAttemptedStaffPrefix(name) {
   const match =
     String(
       name ||
@@ -1420,9 +1551,7 @@ function getAttemptedStaffPrefix(
     : null;
 }
 
-function hasAnyPrefix(
-  name
-) {
+function hasAnyPrefix(name) {
   return ANY_PREFIX_REGEX.test(
     String(
       name ||
@@ -1431,9 +1560,7 @@ function hasAnyPrefix(
   );
 }
 
-function stripAnyPrefix(
-  name
-) {
+function stripAnyPrefix(name) {
   let value =
     String(
       name ||
@@ -1457,9 +1584,7 @@ function stripAnyPrefix(
   return value;
 }
 
-function getBaseName(
-  member
-) {
+function getBaseName(member) {
   let base =
     stripAnyPrefix(
       member.nickname ||
@@ -1469,8 +1594,7 @@ function getBaseName(
 
   if (
     !base ||
-    base ===
-      "אין שם"
+    base === "אין שם"
   ) {
     base =
       stripAnyPrefix(
@@ -1486,9 +1610,7 @@ function getBaseName(
   ).trim();
 }
 
-function getDesiredPrefix(
-  member
-) {
+function getDesiredPrefix(member) {
   const staff =
     getStaffNicknamePrefix(
       member
@@ -1509,12 +1631,8 @@ function getDesiredPrefix(
   return null;
 }
 
-async function applyPreferredNickname(
-  member
-) {
-  if (
-    !member?.manageable
-  ) {
+async function applyPreferredNickname(member) {
+  if (!member) {
     return;
   }
 
@@ -1529,36 +1647,23 @@ async function applyPreferredNickname(
       member.user.globalName ||
       member.user.username;
 
-    const clean =
-      (
-        stripAnyPrefix(
-          current
-        ) ||
-        stripAnyPrefix(
-          member.user.globalName
-        ) ||
-        member.user.username ||
-        "אין שם"
-      )
-        .slice(
-          0,
-          32
-        );
-
     if (
-      member.nickname !==
-      clean
+      hasAnyPrefix(
+        current
+      )
     ) {
-      await member
-        .setNickname(
-          clean,
-          "הסרת קידומת אוטומטית"
-        )
-        .catch(
-          () => {}
-        );
+      await handleUnauthorizedPrefix(
+        member,
+        current
+      );
     }
 
+    return;
+  }
+
+  if (
+    !member.manageable
+  ) {
     return;
   }
 
@@ -1916,9 +2021,7 @@ async function sendStaffChangeDM(
 
 // ===================== WELCOME =====================
 
-async function sendWelcomeMessage(
-  member
-) {
+async function sendWelcomeMessage(member) {
   const channel =
     await client.channels
       .fetch(
@@ -2019,9 +2122,7 @@ function buildApplicationFooter(
   return text;
 }
 
-function parseApplicationFooter(
-  text
-) {
+function parseApplicationFooter(text) {
   if (
     !text ||
     !text.includes(
@@ -2066,9 +2167,7 @@ function parseApplicationFooter(
   return data;
 }
 
-function getCooldownExpiry(
-  userId
-) {
+function getCooldownExpiry(userId) {
   const expiry =
     rejectionCooldowns.get(
       userId
@@ -2112,8 +2211,7 @@ async function loadApplicationState() {
   let scanned = 0;
 
   while (
-    scanned <
-    2000
+    scanned < 2000
   ) {
     const batch =
       await channel.messages.fetch({
@@ -2149,10 +2247,8 @@ async function loadApplicationState() {
       }
 
       if (
-        data.status ===
-          "pending" ||
-        data.status ===
-          "awaiting_role"
+        data.status === "pending" ||
+        data.status === "awaiting_role"
       ) {
         pendingApplications.add(
           applicationKey(
@@ -2163,10 +2259,8 @@ async function loadApplicationState() {
       }
 
       if (
-        data.type ===
-          "initial" &&
-        data.status ===
-          "rejected" &&
+        data.type === "initial" &&
+        data.status === "rejected" &&
         data.rejectedAt
       ) {
         const expiry =
@@ -2201,25 +2295,21 @@ async function loadApplicationState() {
 
     if (
       !before ||
-      batch.size <
-        100
+      batch.size < 100
     ) {
       break;
     }
   }
 }
 
-function createStaffApplicationModal(
-  type
-) {
+function createStaffApplicationModal(type) {
   const modal =
     new ModalBuilder()
       .setCustomId(
         `staff_application_modal:${type}`
       )
       .setTitle(
-        type ===
-          "promotion"
+        type === "promotion"
           ? "בחינת קידום בצוות 🛡️"
           : "בחינה לצוות 🛡️"
       );
@@ -2340,9 +2430,7 @@ function setStatusField(
   return embed;
 }
 
-function createHandledRow(
-  displayName
-) {
+function createHandledRow(displayName) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -2386,12 +2474,10 @@ async function sendApplicantDM(
   }
 
   const embed =
-    status ===
-      "pending"
+    status === "pending"
       ? new EmbedBuilder()
           .setTitle(
-            type ===
-              "promotion"
+            type === "promotion"
               ? "⬆️ בקשת הקידום שלך בבדיקה"
               : "🛡️ הבקשה שלך בבדיקה"
           )
@@ -2403,14 +2489,12 @@ async function sendApplicantDM(
 
       : new EmbedBuilder()
           .setTitle(
-            type ===
-              "promotion"
+            type === "promotion"
               ? "❌ בקשת הקידום לא אושרה"
               : "❌ עדכון לגבי הבקשה שלך"
           )
           .setDescription(
-            type ===
-              "promotion"
+            type === "promotion"
               ? "בקשת הקידום נבדקה, אך הפעם לא אושרה."
               : "הבקשה נבדקה, אך הפעם לא אושרה.\n\n⏳ ניתן להגיש בקשה חדשה בעוד **7 ימים**."
           );
@@ -2558,9 +2642,7 @@ async function buildManagementEmbed(
     );
 }
 
-function createManagementButtons(
-  member
-) {
+function createManagementButtons(member) {
   const roleId =
     getHighestLadderRoleId(
       member
@@ -2604,8 +2686,7 @@ function createManagementButtons(
             ButtonStyle.Success
           )
           .setDisabled(
-            roleId ===
-              ROLE_TOP
+            roleId === ROLE_TOP
           ),
 
         new ButtonBuilder()
@@ -2835,8 +2916,7 @@ function createTicketEmbed(
   user
 ) {
   if (
-    type ===
-    "report"
+    type === "report"
   ) {
     return new EmbedBuilder()
       .setTitle(
@@ -2852,8 +2932,7 @@ function createTicketEmbed(
   }
 
   if (
-    type ===
-    "technical"
+    type === "technical"
   ) {
     return new EmbedBuilder()
       .setTitle(
@@ -2966,14 +3045,12 @@ async function setupTicketPanel() {
   const old =
     messages.find(
       message =>
-        message.author.id ===
-          client.user.id &&
+        message.author.id === client.user.id &&
         message.components.some(
           row =>
             row.components.some(
               component =>
-                component.customId ===
-                "ticket_type"
+                component.customId === "ticket_type"
             )
         )
     );
@@ -3001,9 +3078,7 @@ async function setupTicketPanel() {
 
 // ===================== GIVEAWAYS =====================
 
-function parseGiveawayDuration(
-  input
-) {
+function parseGiveawayDuration(input) {
   const match =
     String(
       input ||
@@ -3055,15 +3130,8 @@ function parseGiveawayDuration(
       amount
     ) ||
     amount <= 0 ||
-    ms <
-      10 *
-      1000 ||
-    ms >
-      30 *
-      24 *
-      60 *
-      60 *
-      1000
+    ms < 10 * 1000 ||
+    ms > 30 * 24 * 60 * 60 * 1000
   ) {
     return null;
   }
@@ -3386,9 +3454,7 @@ async function endGiveaway(
   );
 }
 
-function scheduleGiveaway(
-  giveaway
-) {
+function scheduleGiveaway(giveaway) {
   const run = () => {
     if (
       giveaway.ended
@@ -3548,9 +3614,7 @@ function createSuggestionsPanelMenu() {
     );
 }
 
-function createSuggestionModal(
-  type
-) {
+function createSuggestionModal(type) {
   const config =
     suggestionTypes[
       type
@@ -3593,9 +3657,7 @@ function createSuggestionModal(
     );
 }
 
-function countSuggestionVotes(
-  state
-) {
+function countSuggestionVotes(state) {
   let up = 0;
   let down = 0;
 
@@ -3622,9 +3684,7 @@ function countSuggestionVotes(
   };
 }
 
-function suggestionStatusText(
-  state
-) {
+function suggestionStatusText(state) {
   if (
     state.status ===
     "approved"
@@ -3753,9 +3813,7 @@ function createSuggestionEmbed(
     .setTimestamp();
 }
 
-function createSuggestionButtons(
-  state
-) {
+function createSuggestionButtons(state) {
   const {
     up,
     down
@@ -3876,9 +3934,7 @@ function createSuggestionStaffRow(
     );
 }
 
-function getSuggestionIdea(
-  message
-) {
+function getSuggestionIdea(message) {
   return (
     message.embeds[0]
       ?.description ||
@@ -3891,9 +3947,7 @@ function getSuggestionIdea(
     .trim();
 }
 
-function hydrateSuggestion(
-  message
-) {
+function hydrateSuggestion(message) {
   const existing =
     suggestionStates.get(
       message.id
@@ -4284,14 +4338,12 @@ async function setupSuggestionsPanel() {
   const old =
     messages.find(
       message =>
-        message.author.id ===
-          client.user.id &&
+        message.author.id === client.user.id &&
         message.components.some(
           row =>
             row.components.some(
               component =>
-                component.customId ===
-                "suggestion_type"
+                component.customId === "suggestion_type"
             )
         )
     );
@@ -4316,17 +4368,12 @@ async function setupSuggestionsPanel() {
     );
   }
 }
-
 // ===================== SOCIALS =====================
 
 function createSocialsEmbed() {
   return new EmbedBuilder()
-    .setColor(
-      0x00BFFF
-    )
-    .setTitle(
-      "🌐 הרשתות החברתיות של Roei"
-    )
+    .setColor(0x00BFFF)
+    .setTitle("🌐 הרשתות החברתיות של Roei")
     .setDescription(
       "**כל המקומות שבהם אפשר למצוא אותי במקום אחד!**\n\n" +
       "🎬 **YouTube** — סרטונים, Shorts ולייבים\n" +
@@ -4336,8 +4383,7 @@ function createSocialsEmbed() {
       "👇 לחצו על הכפתור של הרשת שאתם רוצים לפתוח."
     )
     .setFooter({
-      text:
-        "socials-panel-v1"
+      text: "socials-panel-v1"
     });
 }
 
@@ -4345,46 +4391,22 @@ function createSocialsButtons() {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
-        .setLabel(
-          "YouTube"
-        )
-        .setEmoji(
-          "▶️"
-        )
-        .setStyle(
-          ButtonStyle.Link
-        )
-        .setURL(
-          SOCIAL_YOUTUBE_URL
-        ),
+        .setLabel("YouTube")
+        .setEmoji("▶️")
+        .setStyle(ButtonStyle.Link)
+        .setURL(SOCIAL_YOUTUBE_URL),
 
       new ButtonBuilder()
-        .setLabel(
-          "Kick"
-        )
-        .setEmoji(
-          "🟢"
-        )
-        .setStyle(
-          ButtonStyle.Link
-        )
-        .setURL(
-          SOCIAL_KICK_URL
-        ),
+        .setLabel("Kick")
+        .setEmoji("🟢")
+        .setStyle(ButtonStyle.Link)
+        .setURL(SOCIAL_KICK_URL),
 
       new ButtonBuilder()
-        .setLabel(
-          "WhatsApp"
-        )
-        .setEmoji(
-          "💚"
-        )
-        .setStyle(
-          ButtonStyle.Link
-        )
-        .setURL(
-          SOCIAL_WHATSAPP_URL
-        )
+        .setLabel("WhatsApp")
+        .setEmoji("💚")
+        .setStyle(ButtonStyle.Link)
+        .setURL(SOCIAL_WHATSAPP_URL)
     );
 }
 
@@ -4406,19 +4428,14 @@ async function setupSocialsPanel() {
 
   const messages =
     await channel.messages.fetch({
-      limit:
-        100
+      limit: 100
     });
 
   const old =
     messages.find(
       message =>
-        message.author.id ===
-          client.user.id &&
-        message.embeds[0]
-          ?.footer
-          ?.text ===
-          "socials-panel-v1"
+        message.author.id === client.user.id &&
+        message.embeds[0]?.footer?.text === "socials-panel-v1"
     );
 
   const payload = {
@@ -4446,12 +4463,8 @@ async function setupSocialsPanel() {
 
 function createPartnerPanelEmbed() {
   return new EmbedBuilder()
-    .setColor(
-      0x5865F2
-    )
-    .setTitle(
-      "🤝 מערכת Partner / שיתוף פעולה"
-    )
+    .setColor(0x5865F2)
+    .setTitle("🤝 מערכת Partner / שיתוף פעולה")
     .setDescription(
       "**רוצים לעשות Partner עם השרת שלנו?**\n\n" +
       "Partner אומר שאנחנו מפרסמים את השרת שלכם — ואתם מפרסמים את השרת שלנו.\n\n" +
@@ -4460,8 +4473,7 @@ function createPartnerPanelEmbed() {
       "⏳ אחרי שבקשה מטופלת, ניתן להגיש בקשה חדשה אחרי **7 ימים**."
     )
     .setFooter({
-      text:
-        "partner-panel-v1"
+      text: "partner-panel-v1"
     });
 }
 
@@ -4502,19 +4514,14 @@ async function setupPartnerPanel() {
 
   const messages =
     await channel.messages.fetch({
-      limit:
-        100
+      limit: 100
     });
 
   const old =
     messages.find(
       message =>
-        message.author.id ===
-          client.user.id &&
-        message.embeds[0]
-          ?.footer
-          ?.text ===
-          "partner-panel-v1"
+        message.author.id === client.user.id &&
+        message.embeds[0]?.footer?.text === "partner-panel-v1"
     );
 
   const payload = {
@@ -4618,9 +4625,7 @@ function createPartnerModal() {
     );
 }
 
-function partnerStatusText(
-  state
-) {
+function partnerStatusText(state) {
   if (
     state.status ===
     "approved"
@@ -4645,19 +4650,14 @@ function partnerStatusText(
   return "🕒 **ממתין לבדיקה**";
 }
 
-function createPartnerOwnerEmbed(
-  state
-) {
+function createPartnerOwnerEmbed(state) {
   return new EmbedBuilder()
     .setColor(
-      state.status ===
-        "approved"
+      state.status === "approved"
         ? 0x57F287
-        : state.status ===
-          "rejected"
+        : state.status === "rejected"
           ? 0xED4245
-          : state.status ===
-            "waiting_publication"
+          : state.status === "waiting_publication"
             ? 0xFEE75C
             : 0x5865F2
     )
@@ -4709,14 +4709,10 @@ function createPartnerOwnerEmbed(
     );
 }
 
-function createPartnerOwnerButtons(
-  state
-) {
+function createPartnerOwnerButtons(state) {
   const handled =
-    state.status ===
-      "approved" ||
-    state.status ===
-      "rejected";
+    state.status === "approved" ||
+    state.status === "rejected";
 
   return [
     new ActionRowBuilder()
@@ -4789,9 +4785,7 @@ function createPartnerOwnerButtons(
   ];
 }
 
-function createPartnerApprovalConfirmRow(
-  requestId
-) {
+function createPartnerApprovalConfirmRow(requestId) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -4824,9 +4818,7 @@ function createPartnerApprovalConfirmRow(
     );
 }
 
-function createPartnerRejectModal(
-  requestId
-) {
+function createPartnerRejectModal(requestId) {
   return new ModalBuilder()
     .setCustomId(
       `partner_reject_modal:${requestId}`
@@ -4860,9 +4852,7 @@ function createPartnerRejectModal(
     );
 }
 
-function createPartnerEditModal(
-  state
-) {
+function createPartnerEditModal(state) {
   const input =
     new TextInputBuilder()
       .setCustomId(
@@ -4907,9 +4897,7 @@ function createPartnerEditModal(
     );
 }
 
-function getPartnerCooldownExpiry(
-  userId
-) {
+function getPartnerCooldownExpiry(userId) {
   const expiry =
     partnerCooldowns.get(
       userId
@@ -4933,9 +4921,7 @@ function getPartnerCooldownExpiry(
   return expiry;
 }
 
-async function savePartnerFields(
-  state
-) {
+async function savePartnerFields(state) {
   await savePartnerField(
     state.requestId,
     "inviteUrl",
@@ -4955,9 +4941,7 @@ async function savePartnerFields(
   );
 }
 
-async function sendPartnerRequestToOwner(
-  state
-) {
+async function sendPartnerRequestToOwner(state) {
   const owner =
     await client.users
       .fetch(
@@ -5016,9 +5000,7 @@ async function sendPartnerRequestToOwner(
   return message;
 }
 
-async function updatePartnerOwnerMessage(
-  state
-) {
+async function updatePartnerOwnerMessage(state) {
   if (
     !state.ownerDmChannelId ||
     !state.ownerDmMessageId
@@ -5147,9 +5129,7 @@ async function rejectPartnerRequest(
   }
 }
 
-async function finalizePartnerApproval(
-  state
-) {
+async function finalizePartnerApproval(state) {
   const guild =
     await getMainGuild();
 
@@ -5544,8 +5524,7 @@ async function setupTempVoicePanel() {
   const messages =
     await channel.messages
       .fetch({
-        limit:
-          100
+        limit: 100
       })
       .catch(
         () => null
@@ -5558,12 +5537,8 @@ async function setupTempVoicePanel() {
   const old =
     messages.find(
       message =>
-        message.author.id ===
-          client.user.id &&
-        message.embeds[0]
-          ?.footer
-          ?.text ===
-          "temp-voice-panel-v1"
+        message.author.id === client.user.id &&
+        message.embeds[0]?.footer?.text === "temp-voice-panel-v1"
     );
 
   const payload = {
@@ -5590,9 +5565,7 @@ async function setupTempVoicePanel() {
   }
 }
 
-function buildTempRoomName(
-  member
-) {
+function buildTempRoomName(member) {
   const raw =
     stripAnyPrefix(
       member.displayName ||
@@ -5621,13 +5594,13 @@ function buildTempRoomName(
   );
 }
 
-function getTempRoomOwnerId(
-  channelId
-) {
-  return tempVoiceOwners.get(
-    channelId
-  ) ||
-  null;
+function getTempRoomOwnerId(channelId) {
+  return (
+    tempVoiceOwners.get(
+      channelId
+    ) ||
+    null
+  );
 }
 
 async function getTempRoomOwnedBy(
@@ -5642,8 +5615,7 @@ async function getTempRoomOwnedBy(
     tempVoiceOwners.entries()
   ) {
     if (
-      mappedOwnerId !==
-      ownerId
+      mappedOwnerId !== ownerId
     ) {
       continue;
     }
@@ -5661,10 +5633,8 @@ async function getTempRoomOwnedBy(
         );
 
     if (
-      channel?.type ===
-        ChannelType.GuildVoice &&
-      channel.parentId ===
-        TEMP_VOICE_CATEGORY_ID
+      channel?.type === ChannelType.GuildVoice &&
+      channel.parentId === TEMP_VOICE_CATEGORY_ID
     ) {
       return channel;
     }
@@ -5714,8 +5684,7 @@ async function getControlledTempRoom(
     );
 
   if (
-    ownerId !==
-    interaction.user.id
+    ownerId !== interaction.user.id
   ) {
     return null;
   }
@@ -5738,17 +5707,14 @@ async function getControlledTempRoom(
 
   if (
     !channel ||
-    channel.type !==
-      ChannelType.GuildVoice ||
-    channel.parentId !==
-      TEMP_VOICE_CATEGORY_ID
+    channel.type !== ChannelType.GuildVoice ||
+    channel.parentId !== TEMP_VOICE_CATEGORY_ID
   ) {
     return null;
   }
 
   if (
-    member.voice.channelId !==
-    channel.id
+    member.voice.channelId !== channel.id
   ) {
     return null;
   }
@@ -5756,9 +5722,7 @@ async function getControlledTempRoom(
   return channel;
 }
 
-async function createTempVoiceRoom(
-  member
-) {
+async function createTempVoiceRoom(member) {
   if (
     !member ||
     member.user.bot
@@ -5812,8 +5776,7 @@ async function createTempVoiceRoom(
 
     if (
       !category ||
-      category.type !==
-        ChannelType.GuildCategory
+      category.type !== ChannelType.GuildCategory
     ) {
       throw new Error(
         "Temp voice category not found"
@@ -5930,8 +5893,7 @@ async function createTempVoiceRoom(
 
 async function deleteTempVoiceRoom(
   channel,
-  reason =
-    "החדר האישי התרוקן"
+  reason = "החדר האישי התרוקן"
 ) {
   if (!channel) {
     return;
@@ -5957,9 +5919,7 @@ async function deleteTempVoiceRoom(
     );
 }
 
-async function restoreTempVoiceRooms(
-  guild
-) {
+async function restoreTempVoiceRooms(guild) {
   for (
     const [
       channelId
@@ -5982,10 +5942,8 @@ async function restoreTempVoiceRooms(
 
     if (
       !channel ||
-      channel.type !==
-        ChannelType.GuildVoice ||
-      channel.parentId !==
-        TEMP_VOICE_CATEGORY_ID
+      channel.type !== ChannelType.GuildVoice ||
+      channel.parentId !== TEMP_VOICE_CATEGORY_ID
     ) {
       tempVoiceOwners.delete(
         channelId
@@ -5999,8 +5957,7 @@ async function restoreTempVoiceRooms(
     }
 
     if (
-      channel.members.size ===
-      0
+      channel.members.size === 0
     ) {
       await deleteTempVoiceRoom(
         channel,
@@ -6033,9 +5990,7 @@ function tempUserSelectRow(
     );
 }
 
-function createTempRenameModal(
-  channel
-) {
+function createTempRenameModal(channel) {
   return new ModalBuilder()
     .setCustomId(
       `temp_rename_modal:${channel.id}`
@@ -6075,9 +6030,7 @@ function createTempRenameModal(
     );
 }
 
-function createTempLimitModal(
-  channel
-) {
+function createTempLimitModal(channel) {
   return new ModalBuilder()
     .setCustomId(
       `temp_limit_modal:${channel.id}`
@@ -6117,9 +6070,7 @@ function createTempLimitModal(
     );
 }
 
-async function handleTempVoiceButton(
-  interaction
-) {
+async function handleTempVoiceButton(interaction) {
   const room =
     await getControlledTempRoom(
       interaction
@@ -6137,8 +6088,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_lock"
+    interaction.customId === "temp_lock"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6158,8 +6108,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_unlock"
+    interaction.customId === "temp_unlock"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6179,8 +6128,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_hide"
+    interaction.customId === "temp_hide"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6200,8 +6148,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_show"
+    interaction.customId === "temp_show"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6221,8 +6168,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_rename"
+    interaction.customId === "temp_rename"
   ) {
     return interaction.showModal(
       createTempRenameModal(
@@ -6232,8 +6178,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_limit"
+    interaction.customId === "temp_limit"
   ) {
     return interaction.showModal(
       createTempLimitModal(
@@ -6243,8 +6188,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_invite"
+    interaction.customId === "temp_invite"
   ) {
     return interaction.reply({
       content:
@@ -6264,8 +6208,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_permit"
+    interaction.customId === "temp_permit"
   ) {
     return interaction.reply({
       content:
@@ -6285,8 +6228,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_reject"
+    interaction.customId === "temp_reject"
   ) {
     return interaction.reply({
       content:
@@ -6306,8 +6248,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_kick"
+    interaction.customId === "temp_kick"
   ) {
     return interaction.reply({
       content:
@@ -6327,8 +6268,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_transfer"
+    interaction.customId === "temp_transfer"
   ) {
     return interaction.reply({
       content:
@@ -6348,8 +6288,7 @@ async function handleTempVoiceButton(
   }
 
   if (
-    interaction.customId ===
-    "temp_delete"
+    interaction.customId === "temp_delete"
   ) {
     await interaction.reply({
       content:
@@ -6368,9 +6307,7 @@ async function handleTempVoiceButton(
   }
 }
 
-async function handleTempVoiceUserSelect(
-  interaction
-) {
+async function handleTempVoiceUserSelect(interaction) {
   const [
     prefix,
     channelId
@@ -6408,8 +6345,7 @@ async function handleTempVoiceUserSelect(
     interaction.values[0];
 
   if (
-    targetId ===
-    interaction.user.id
+    targetId === interaction.user.id
   ) {
     return interaction.update({
       content:
@@ -6441,8 +6377,7 @@ async function handleTempVoiceUserSelect(
   }
 
   if (
-    action ===
-    "invite"
+    action === "invite"
   ) {
     await room.permissionOverwrites.edit(
       target.id,
@@ -6506,8 +6441,7 @@ async function handleTempVoiceUserSelect(
   }
 
   if (
-    action ===
-    "permit"
+    action === "permit"
   ) {
     await room.permissionOverwrites.edit(
       target.id,
@@ -6532,8 +6466,7 @@ async function handleTempVoiceUserSelect(
   }
 
   if (
-    action ===
-    "reject"
+    action === "reject"
   ) {
     await room.permissionOverwrites.edit(
       target.id,
@@ -6550,8 +6483,7 @@ async function handleTempVoiceUserSelect(
     );
 
     if (
-      target.voice.channelId ===
-      room.id
+      target.voice.channelId === room.id
     ) {
       await target.voice
         .disconnect(
@@ -6571,12 +6503,10 @@ async function handleTempVoiceUserSelect(
   }
 
   if (
-    action ===
-    "kick"
+    action === "kick"
   ) {
     if (
-      target.voice.channelId !==
-      room.id
+      target.voice.channelId !== room.id
     ) {
       return interaction.update({
         content:
@@ -6603,12 +6533,10 @@ async function handleTempVoiceUserSelect(
   }
 
   if (
-    action ===
-    "transfer"
+    action === "transfer"
   ) {
     if (
-      target.voice.channelId !==
-      room.id
+      target.voice.channelId !== room.id
     ) {
       return interaction.update({
         content:
@@ -6685,11 +6613,758 @@ async function handleTempVoiceUserSelect(
   });
 }
 
+// ===================== ARCADE =====================
+
+const ARCADE_GAMES = {
+  ttt: {
+    name:
+      "איקס עיגול",
+
+    emoji:
+      "❌",
+
+    description:
+      "משחק 1 נגד 1. מזמינים יריב ומנסים ליצור שלישייה."
+  },
+
+  bomba: {
+    name:
+      "בומבה",
+
+    emoji:
+      "💣",
+
+    description:
+      "משחק קבוצתי מהיר עם נושא אקראי."
+  },
+
+  impostor: {
+    name:
+      "נחש את המתחזה",
+
+    emoji:
+      "🕵️",
+
+    description:
+      "כולם מקבלים מילה בפרטי חוץ מהמתחזה."
+  },
+
+  rps: {
+    name:
+      "אבן נייר ומספריים",
+
+    emoji:
+      "✊",
+
+    description:
+      "משחק מהיר 1 נגד 1."
+  }
+};
+
+function createArcadePanelEmbed() {
+  return new EmbedBuilder()
+    .setColor(
+      0x9B59B6
+    )
+    .setTitle(
+      "🕹️・Roei Arcade"
+    )
+    .setDescription(
+      "ברוכים הבאים לארקייד! 🎮\n" +
+      `המשחקים עצמם ייפתחו ב-<#${ARCADE_GAMES_CHANNEL_ID}>.\n\n` +
+
+      "❌⭕ **איקס עיגול**\n" +
+      "משחק לשני שחקנים. מזמינים יריב ומתחילים לשחק על הלוח.\n\n" +
+
+      "💣 **בומבה**\n" +
+      "מצטרפים למשחק קבוצתי, מקבלים נושא וצריך לענות מהר.\n\n" +
+
+      "🕵️ **נחש את המתחזה**\n" +
+      "כולם מקבלים את אותה מילה בפרטי — חוץ משחקן אחד שהוא המתחזה.\n\n" +
+
+      "✊✋✌️ **אבן נייר ומספריים**\n" +
+      "משחק מהיר לשני שחקנים.\n\n" +
+
+      "👇 **בחרו משחק מהתפריט למטה.**"
+    )
+    .setFooter({
+      text:
+        "arcade-panel-v1"
+    });
+}
+
+function createArcadeMenu() {
+  return new ActionRowBuilder()
+    .addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(
+          "arcade_game_select"
+        )
+        .setPlaceholder(
+          "בחרו משחק..."
+        )
+        .addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel(
+              "איקס עיגול"
+            )
+            .setDescription(
+              "משחק 1 נגד 1"
+            )
+            .setEmoji(
+              "❌"
+            )
+            .setValue(
+              "ttt"
+            ),
+
+          new StringSelectMenuOptionBuilder()
+            .setLabel(
+              "בומבה"
+            )
+            .setDescription(
+              "משחק קבוצתי"
+            )
+            .setEmoji(
+              "💣"
+            )
+            .setValue(
+              "bomba"
+            ),
+
+          new StringSelectMenuOptionBuilder()
+            .setLabel(
+              "נחש את המתחזה"
+            )
+            .setDescription(
+              "מי לא קיבל את המילה?"
+            )
+            .setEmoji(
+              "🕵️"
+            )
+            .setValue(
+              "impostor"
+            ),
+
+          new StringSelectMenuOptionBuilder()
+            .setLabel(
+              "אבן נייר ומספריים"
+            )
+            .setDescription(
+              "משחק 1 נגד 1"
+            )
+            .setEmoji(
+              "✊"
+            )
+            .setValue(
+              "rps"
+            )
+        )
+    );
+}
+
+async function setupArcadePanel() {
+  const channel =
+    await client.channels
+      .fetch(
+        ARCADE_PANEL_CHANNEL_ID
+      )
+      .catch(
+        () => null
+      );
+
+  if (
+    !channel?.isTextBased()
+  ) {
+    console.log(
+      "⚠️ חדר פאנל ה-Arcade לא נמצא."
+    );
+
+    return;
+  }
+
+  const messages =
+    await channel.messages
+      .fetch({
+        limit: 100
+      })
+      .catch(
+        () => null
+      );
+
+  if (!messages) {
+    return;
+  }
+
+  const old =
+    messages.find(
+      message =>
+        message.author.id === client.user.id &&
+        message.embeds[0]?.footer?.text === "arcade-panel-v1"
+    );
+
+  const payload = {
+    embeds: [
+      createArcadePanelEmbed()
+    ],
+
+    components: [
+      createArcadeMenu()
+    ]
+  };
+
+  if (old) {
+    await old.edit(
+      payload
+    ).catch(
+      () => {}
+    );
+  } else {
+    await channel.send(
+      payload
+    ).catch(
+      () => {}
+    );
+  }
+}
+
+function randomItem(array) {
+  return array[
+    crypto.randomInt(
+      array.length
+    )
+  ];
+}
+
+// ===================== TIC TAC TOE =====================
+
+function createTttChallengeRow(gameId) {
+  return new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(
+          `ttt_accept:${gameId}`
+        )
+        .setLabel(
+          "קבל משחק"
+        )
+        .setEmoji(
+          "✅"
+        )
+        .setStyle(
+          ButtonStyle.Success
+        ),
+
+      new ButtonBuilder()
+        .setCustomId(
+          `ttt_cancel:${gameId}`
+        )
+        .setLabel(
+          "ביטול"
+        )
+        .setEmoji(
+          "❌"
+        )
+        .setStyle(
+          ButtonStyle.Danger
+        )
+    );
+}
+
+function getTttWinner(board) {
+  const wins = [
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6]
+  ];
+
+  for (
+    const [
+      a,
+      b,
+      c
+    ] of wins
+  ) {
+    if (
+      board[a] &&
+      board[a] === board[b] &&
+      board[a] === board[c]
+    ) {
+      return board[a];
+    }
+  }
+
+  return null;
+}
+
+function createTttBoardRows(game) {
+  const rows = [];
+
+  for (
+    let rowIndex = 0;
+    rowIndex < 3;
+    rowIndex++
+  ) {
+    const row =
+      new ActionRowBuilder();
+
+    for (
+      let columnIndex = 0;
+      columnIndex < 3;
+      columnIndex++
+    ) {
+      const index =
+        rowIndex * 3 +
+        columnIndex;
+
+      const value =
+        game.board[index];
+
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            `ttt_cell:${game.id}:${index}`
+          )
+          .setLabel(
+            value ||
+            "➖"
+          )
+          .setStyle(
+            value === "❌"
+              ? ButtonStyle.Danger
+              : value === "⭕"
+                ? ButtonStyle.Primary
+                : ButtonStyle.Secondary
+          )
+          .setDisabled(
+            Boolean(value) ||
+            game.finished
+          )
+      );
+    }
+
+    rows.push(
+      row
+    );
+  }
+
+  return rows;
+}
+
+function createTttEmbed(game) {
+  let status;
+
+  if (
+    game.winner
+  ) {
+    const winnerId =
+      game.winner === "❌"
+        ? game.playerX
+        : game.playerO;
+
+    status =
+      `🏆 **המנצח:** <@${winnerId}> ${game.winner}`;
+
+  } else if (
+    game.draw
+  ) {
+    status =
+      "🤝 **תיקו!**";
+
+  } else {
+    status =
+      `🎯 **התור של:** <@${game.turn}>`;
+  }
+
+  return new EmbedBuilder()
+    .setColor(
+      0x5865F2
+    )
+    .setTitle(
+      "❌⭕ איקס עיגול"
+    )
+    .setDescription(
+      `❌ <@${game.playerX}>\n` +
+      `⭕ <@${game.playerO}>\n\n` +
+      status
+    )
+    .setFooter({
+      text:
+        `ttt:${game.id}`
+    });
+}
+
+// ===================== RPS =====================
+
+function createRpsChallengeRow(gameId) {
+  return new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(
+          `rps_accept:${gameId}`
+        )
+        .setLabel(
+          "קבל משחק"
+        )
+        .setEmoji(
+          "✅"
+        )
+        .setStyle(
+          ButtonStyle.Success
+        ),
+
+      new ButtonBuilder()
+        .setCustomId(
+          `rps_cancel:${gameId}`
+        )
+        .setLabel(
+          "ביטול"
+        )
+        .setEmoji(
+          "❌"
+        )
+        .setStyle(
+          ButtonStyle.Danger
+        )
+    );
+}
+
+function createRpsChoiceRow(gameId) {
+  return new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(
+          `rps_choice:${gameId}:rock`
+        )
+        .setLabel(
+          "אבן"
+        )
+        .setEmoji(
+          "🪨"
+        )
+        .setStyle(
+          ButtonStyle.Secondary
+        ),
+
+      new ButtonBuilder()
+        .setCustomId(
+          `rps_choice:${gameId}:paper`
+        )
+        .setLabel(
+          "נייר"
+        )
+        .setEmoji(
+          "📄"
+        )
+        .setStyle(
+          ButtonStyle.Primary
+        ),
+
+      new ButtonBuilder()
+        .setCustomId(
+          `rps_choice:${gameId}:scissors`
+        )
+        .setLabel(
+          "מספריים"
+        )
+        .setEmoji(
+          "✂️"
+        )
+        .setStyle(
+          ButtonStyle.Danger
+        )
+    );
+}
+
+function rpsEmoji(choice) {
+  if (
+    choice === "rock"
+  ) {
+    return "🪨";
+  }
+
+  if (
+    choice === "paper"
+  ) {
+    return "📄";
+  }
+
+  return "✂️";
+}
+
+function getRpsWinner(
+  first,
+  second
+) {
+  if (
+    first === second
+  ) {
+    return "draw";
+  }
+
+  if (
+    (
+      first === "rock" &&
+      second === "scissors"
+    ) ||
+    (
+      first === "paper" &&
+      second === "rock"
+    ) ||
+    (
+      first === "scissors" &&
+      second === "paper"
+    )
+  ) {
+    return "first";
+  }
+
+  return "second";
+}
+
+// ===================== IMPOSTOR =====================
+
+const IMPOSTOR_WORDS = [
+  "פיצה",
+  "פורטנייט",
+  "כדורגל",
+  "ים",
+  "בית ספר",
+  "גלידה",
+  "מטוס",
+  "מחשב",
+  "יוטיוב",
+  "כלב",
+  "חתול",
+  "המבורגר",
+  "קניון",
+  "בריכה",
+  "מיינקראפט",
+  "רובלוקס",
+  "סושי",
+  "טלפון",
+  "אייפון",
+  "פארק"
+];
+
+function createImpostorLobbyRows(gameId) {
+  return [
+    new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            `impostor_join:${gameId}`
+          )
+          .setLabel(
+            "הצטרף"
+          )
+          .setEmoji(
+            "➕"
+          )
+          .setStyle(
+            ButtonStyle.Success
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `impostor_leave:${gameId}`
+          )
+          .setLabel(
+            "צא"
+          )
+          .setEmoji(
+            "➖"
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `impostor_start:${gameId}`
+          )
+          .setLabel(
+            "התחל"
+          )
+          .setEmoji(
+            "▶️"
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `impostor_cancel:${gameId}`
+          )
+          .setLabel(
+            "ביטול"
+          )
+          .setEmoji(
+            "🗑️"
+          )
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
+  ];
+}
+
+function createImpostorLobbyEmbed(game) {
+  const players =
+    [...game.players]
+      .map(
+        id =>
+          `<@${id}>`
+      )
+      .join(
+        "\n"
+      ) ||
+    "אין שחקנים";
+
+  return new EmbedBuilder()
+    .setColor(
+      0x9B59B6
+    )
+    .setTitle(
+      "🕵️ נחש את המתחזה"
+    )
+    .setDescription(
+      `👑 **מארח:** <@${game.hostId}>\n\n` +
+      `👥 **שחקנים (${game.players.size}):**\n${players}\n\n` +
+      "צריך לפחות **3 שחקנים**.\n" +
+      "כשהמארח לוחץ **התחל**, כולם יקבלו הודעה פרטית.\n" +
+      "כולם יקבלו אותה מילה — חוץ מהמתחזה."
+    )
+    .setFooter({
+      text:
+        `impostor:${game.id}`
+    });
+}
+
+// ===================== BOMBA =====================
+
+const BOMBA_TOPICS = [
+  "מדינות",
+  "ערים בישראל",
+  "מאכלים",
+  "חיות",
+  "משחקי מחשב",
+  "יוטיוברים",
+  "כדורגלנים",
+  "מותגים",
+  "סרטים",
+  "סדרות",
+  "דברים שיש בבית",
+  "דברים שלוקחים לבית ספר",
+  "דברים שיש במטבח",
+  "מקצועות",
+  "צבעים"
+];
+
+function createBombaLobbyRows(gameId) {
+  return [
+    new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            `bomba_join:${gameId}`
+          )
+          .setLabel(
+            "הצטרף"
+          )
+          .setEmoji(
+            "➕"
+          )
+          .setStyle(
+            ButtonStyle.Success
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `bomba_leave:${gameId}`
+          )
+          .setLabel(
+            "צא"
+          )
+          .setEmoji(
+            "➖"
+          )
+          .setStyle(
+            ButtonStyle.Secondary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `bomba_start:${gameId}`
+          )
+          .setLabel(
+            "התחל"
+          )
+          .setEmoji(
+            "💣"
+          )
+          .setStyle(
+            ButtonStyle.Primary
+          ),
+
+        new ButtonBuilder()
+          .setCustomId(
+            `bomba_cancel:${gameId}`
+          )
+          .setLabel(
+            "ביטול"
+          )
+          .setEmoji(
+            "🗑️"
+          )
+          .setStyle(
+            ButtonStyle.Danger
+          )
+      )
+  ];
+}
+
+function createBombaLobbyEmbed(game) {
+  const players =
+    [...game.players]
+      .map(
+        id =>
+          `<@${id}>`
+      )
+      .join(
+        "\n"
+      ) ||
+    "אין שחקנים";
+
+  return new EmbedBuilder()
+    .setColor(
+      0xED4245
+    )
+    .setTitle(
+      "💣 בומבה"
+    )
+    .setDescription(
+      `👑 **מארח:** <@${game.hostId}>\n\n` +
+      `👥 **שחקנים (${game.players.size}):**\n${players}\n\n` +
+      "צריך לפחות **2 שחקנים**.\n" +
+      "אחרי שמתחילים, הבוט נותן **נושא אקראי**.\n" +
+      "עונים מהר בצ'אט לפי הנושא."
+    )
+    .setFooter({
+      text:
+        `bomba:${game.id}`
+    });
+}
+
 // ===================== YOUTUBE =====================
 
-function decodeXml(
-  text
-) {
+function decodeXml(text) {
   return String(
     text ||
     ""
@@ -6716,11 +7391,8 @@ function decodeXml(
     );
 }
 
-function parseYouTubeFeed(
-  xml
-) {
-  const entries =
-    [];
+function parseYouTubeFeed(xml) {
+  const entries = [];
 
   const regex =
     /<entry>([\s\S]*?)<\/entry>/g;
@@ -6733,8 +7405,7 @@ function parseYouTubeFeed(
         regex.exec(
           xml
         )
-    ) !==
-    null
+    ) !== null
   ) {
     const block =
       match[1];
@@ -6786,8 +7457,7 @@ function extractJsonObjectAfter(
     );
 
   if (
-    markerIndex ===
-    -1
+    markerIndex === -1
   ) {
     return null;
   }
@@ -6800,8 +7470,7 @@ function extractJsonObjectAfter(
     );
 
   if (
-    start ===
-    -1
+    start === -1
   ) {
     return null;
   }
@@ -6824,54 +7493,43 @@ function extractJsonObjectAfter(
       if (
         escaped
       ) {
-        escaped =
-          false;
+        escaped = false;
 
       } else if (
-        char ===
-        "\\"
+        char === "\\"
       ) {
-        escaped =
-          true;
+        escaped = true;
 
       } else if (
-        char ===
-        '"'
+        char === '"'
       ) {
-        inString =
-          false;
+        inString = false;
       }
 
       continue;
     }
 
     if (
-      char ===
-      '"'
+      char === '"'
     ) {
-      inString =
-        true;
-
+      inString = true;
       continue;
     }
 
     if (
-      char ===
-      "{"
+      char === "{"
     ) {
       depth++;
     }
 
     if (
-      char ===
-      "}"
+      char === "}"
     ) {
       depth--;
     }
 
     if (
-      depth ===
-      0
+      depth === 0
     ) {
       try {
         return JSON.parse(
@@ -6982,9 +7640,7 @@ async function getYouTubeFeedEntries() {
   );
 }
 
-async function getYouTubeVideoMeta(
-  videoId
-) {
+async function getYouTubeVideoMeta(videoId) {
   const fallback = {
     title:
       null,
@@ -7023,10 +7679,6 @@ async function getYouTubeVideoMeta(
     if (
       !response.ok
     ) {
-      console.log(
-        `⚠️ YouTube metadata ${videoId}: ${response.status} - משתמש ב-Fallback`
-      );
-
       return fallback;
     }
 
@@ -7050,7 +7702,9 @@ async function getYouTubeVideoMeta(
           marker
         );
 
-      if (player) {
+      if (
+        player
+      ) {
         break;
       }
     }
@@ -7091,15 +7745,13 @@ async function getYouTubeVideoMeta(
       null;
 
     const isLiveNow =
-      live.isLiveNow ===
-        true ||
+      live.isLiveNow === true ||
       /"isLiveNow":true/.test(
         html
       );
 
     const isLiveContent =
-      details.isLiveContent ===
-        true ||
+      details.isLiveContent === true ||
       /"isLiveContent":true/.test(
         html
       ) ||
@@ -7112,10 +7764,8 @@ async function getYouTubeVideoMeta(
       "";
 
     const isShortsEligible =
-      details.isShortsEligible ===
-        true ||
-      micro.isShortsEligible ===
-        true ||
+      details.isShortsEligible === true ||
+      micro.isShortsEligible === true ||
       /"isShortsEligible":true/.test(
         html
       ) ||
@@ -7133,7 +7783,8 @@ async function getYouTubeVideoMeta(
     const thumbnail =
       thumbnails.length
         ? thumbnails[
-            thumbnails.length - 1
+            thumbnails.length -
+            1
           ].url
         : fallback.thumbnail;
 
@@ -7153,9 +7804,11 @@ async function getYouTubeVideoMeta(
       thumbnail
     };
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.log(
-      `⚠️ לא הצלחתי לקרוא Metadata של ${videoId}, שולח בכל זאת:`,
+      `⚠️ YouTube metadata fallback ${videoId}:`,
       error.message
     );
 
@@ -7163,18 +7816,14 @@ async function getYouTubeVideoMeta(
   }
 }
 
-function youtubeWatchUrl(
-  videoId
-) {
+function youtubeWatchUrl(videoId) {
   return (
     "https://www.youtube.com/watch?v=" +
     videoId
   );
 }
 
-function youtubeShortUrl(
-  videoId
-) {
+function youtubeShortUrl(videoId) {
   return (
     "https://www.youtube.com/shorts/" +
     videoId
@@ -7216,8 +7865,7 @@ async function sendYouTubeAnnouncement(
   let button;
 
   if (
-    type ===
-    "live"
+    type === "live"
   ) {
     content =
       "@everyone 🔴 **אנחנו בלייב עכשיו!**";
@@ -7259,8 +7907,7 @@ async function sendYouTubeAnnouncement(
         );
 
   } else if (
-    type ===
-    "short"
+    type === "short"
   ) {
     embed =
       new EmbedBuilder()
@@ -7348,8 +7995,7 @@ async function sendYouTubeAnnouncement(
     ],
 
     allowedMentions:
-      type ===
-        "live"
+      type === "live"
         ? {
             parse: [
               "everyone"
@@ -7495,10 +8141,6 @@ async function pollYouTube() {
     const entries =
       await getYouTubeFeedEntries();
 
-    console.log(
-      `📺 YouTube check: ${entries.length} פריטים | החדש ביותר: ${entries[0]?.videoId || "אין"} | ${entries[0]?.title || ""}`
-    );
-
     if (
       !entries.length
     ) {
@@ -7617,10 +8259,6 @@ async function pollYouTube() {
           entry.videoId
         );
 
-      if (!meta) {
-        continue;
-      }
-
       if (
         meta.isLiveContent &&
         !meta.isLiveNow &&
@@ -7694,8 +8332,7 @@ async function pollYouTube() {
             sent.channel.id,
 
           ended:
-            type !==
-            "live"
+            type !== "live"
         }
       );
 
@@ -7712,8 +8349,7 @@ async function pollYouTube() {
       youtubeSeen.entries()
     ) {
       if (
-        state.type !==
-          "live" ||
+        state.type !== "live" ||
         state.ended
       ) {
         continue;
@@ -7723,10 +8359,6 @@ async function pollYouTube() {
         await getYouTubeVideoMeta(
           videoId
         );
-
-      if (!meta) {
-        continue;
-      }
 
       if (
         !meta.isLiveNow &&
@@ -7740,7 +8372,9 @@ async function pollYouTube() {
       }
     }
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "❌ בדיקת YouTube נכשלה:",
       error.message
@@ -7752,95 +8386,227 @@ async function pollYouTube() {
   }
 }
 
-// ===================== COMMANDS =====================
+// ===================== CLEAR =====================
+
+async function deleteChannelMessages(
+  channel,
+  requestedAmount,
+  protectedMessageIds = new Set()
+) {
+  let deleted = 0;
+
+  let remaining =
+    requestedAmount === 0
+      ? Infinity
+      : requestedAmount;
+
+  let before =
+    null;
+
+  while (
+    remaining > 0
+  ) {
+    const fetchLimit =
+      remaining === Infinity
+        ? 100
+        : Math.min(
+            100,
+            remaining
+          );
+
+    const fetched =
+      await channel.messages.fetch({
+        limit:
+          fetchLimit,
+
+        ...(before
+          ? {
+              before
+            }
+          : {})
+      });
+
+    if (
+      fetched.size === 0
+    ) {
+      break;
+    }
+
+    const now =
+      Date.now();
+
+    const fourteenDays =
+      14 *
+      24 *
+      60 *
+      60 *
+      1000;
+
+    const candidates =
+      fetched.filter(
+        message =>
+          !protectedMessageIds.has(
+            message.id
+          )
+      );
+
+    const recent =
+      candidates.filter(
+        message =>
+          now -
+            message.createdTimestamp <
+            fourteenDays -
+              60_000
+      );
+
+    const old =
+      candidates.filter(
+        message =>
+          !recent.has(
+            message.id
+          )
+      );
+
+    if (
+      recent.size > 0
+    ) {
+      const removed =
+        await channel
+          .bulkDelete(
+            recent,
+            true
+          )
+          .catch(
+            () => null
+          );
+
+      if (
+        removed
+      ) {
+        deleted +=
+          removed.size;
+
+        if (
+          remaining !== Infinity
+        ) {
+          remaining -=
+            removed.size;
+        }
+      }
+    }
+
+    for (
+      const message of
+      old.values()
+    ) {
+      if (
+        remaining <= 0
+      ) {
+        break;
+      }
+
+      try {
+        await message.delete();
+
+        deleted++;
+
+        if (
+          remaining !== Infinity
+        ) {
+          remaining--;
+        }
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              400
+            )
+        );
+
+      } catch {}
+    }
+
+    before =
+      fetched.last()?.id;
+
+    if (
+      !before ||
+      fetched.size <
+        fetchLimit
+    ) {
+      break;
+    }
+  }
+
+  return deleted;
+}
+// ===================== MAIN BOT COMMANDS =====================
 
 const staffManageCommand =
   new SlashCommandBuilder()
-    .setName(
-      "staffmanage"
-    )
-    .setDescription(
-      "פתיחת פאנל ניהול הצוות"
-    );
+    .setName("staffmanage")
+    .setDescription("פתיחת פאנל ניהול הצוות");
 
 const giveawayCommand =
   new SlashCommandBuilder()
-    .setName(
-      "giveaway"
-    )
-    .setDescription(
-      "פתיחת הגרלה חדשה"
+    .setName("giveaway")
+    .setDescription("פתיחת הגרלה חדשה")
+    .addStringOption(
+      option =>
+        option
+          .setName("prize")
+          .setDescription("מה הפרס בהגרלה?")
+          .setRequired(true)
+          .setMaxLength(200)
     )
     .addStringOption(
       option =>
         option
-          .setName(
-            "prize"
-          )
-          .setDescription(
-            "מה הפרס בהגרלה?"
-          )
-          .setRequired(
-            true
-          )
-          .setMaxLength(
-            200
-          )
-    )
-    .addStringOption(
-      option =>
-        option
-          .setName(
-            "duration"
-          )
-          .setDescription(
-            "זמן: למשל 30s, 10m, 2h, 1d"
-          )
-          .setRequired(
-            true
-          )
-          .setMaxLength(
-            20
-          )
+          .setName("duration")
+          .setDescription("זמן: למשל 30s, 10m, 2h, 1d")
+          .setRequired(true)
+          .setMaxLength(20)
     )
     .addIntegerOption(
       option =>
         option
-          .setName(
-            "winners"
-          )
-          .setDescription(
-            "כמה זוכים? ברירת מחדל: 1"
-          )
-          .setRequired(
-            false
-          )
-          .setMinValue(
-            1
-          )
-          .setMaxValue(
-            10
-          )
+          .setName("winners")
+          .setDescription("כמה זוכים? ברירת מחדל: 1")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(10)
     );
 
-// ===================== READY =====================
+const clearCommand =
+  new SlashCommandBuilder()
+    .setName("clear")
+    .setDescription("מחיקת הודעות מהחדר")
+    .addIntegerOption(
+      option =>
+        option
+          .setName("amount")
+          .setDescription("כמה הודעות למחוק? 0 = כל ההודעות בחדר")
+          .setRequired(true)
+          .setMinValue(0)
+    );
+
+// ===================== MAIN READY =====================
 
 client.once(
   "ready",
   async () => {
     console.log(
-      `✅ הבוט מחובר בתור ${client.user.tag}`
+      `✅ הבוט הראשי מחובר בתור ${client.user.tag}`
     );
 
     try {
       const rest =
         new REST({
-          version:
-            "10"
-        })
-          .setToken(
-            TOKEN
-          );
+          version: "10"
+        }).setToken(
+          TOKEN
+        );
 
       await rest.put(
         Routes.applicationGuildCommands(
@@ -7850,14 +8616,19 @@ client.once(
         {
           body: [
             staffManageCommand.toJSON(),
-            giveawayCommand.toJSON()
+            giveawayCommand.toJSON(),
+            clearCommand.toJSON()
           ]
         }
       );
 
+      console.log(
+        "✅ פקודות הבוט הראשי נרשמו"
+      );
+
     } catch (error) {
       console.error(
-        "❌ שגיאה בפקודות:",
+        "❌ שגיאה ברישום פקודות הבוט הראשי:",
         error
       );
     }
@@ -7881,7 +8652,14 @@ client.once(
       );
     }
 
-    await loadApplicationState();
+    await loadApplicationState()
+      .catch(
+        error =>
+          console.error(
+            "❌ טעינת בקשות צוות:",
+            error
+          )
+      );
 
     try {
       const guild =
@@ -7960,6 +8738,11 @@ client.once(
         console.error
       );
 
+    await setupArcadePanel()
+      .catch(
+        console.error
+      );
+
     try {
       const guild =
         await client.guilds.fetch(
@@ -7990,7 +8773,7 @@ client.once(
   }
 );
 
-// ===================== TEMP VOICE EVENTS =====================
+// ===================== VOICE EVENTS =====================
 
 client.on(
   "voiceStateUpdate",
@@ -8049,7 +8832,7 @@ client.on(
 
     } catch (error) {
       console.error(
-        "❌ voiceStateUpdate temp voice:",
+        "❌ voiceStateUpdate:",
         error
       );
     }
@@ -8248,1699 +9031,2273 @@ client.on(
   }
 );
 
-client.on(
-  "userUpdate",
-  async (
-    oldUser,
-    newUser
-  ) => {
-    if (
-      newUser.bot ||
-      oldUser.globalName ===
-        newUser.globalName
-    ) {
-      return;
-    }
-
-    try {
-      const guild =
-        await getMainGuild();
-
-      if (!guild) {
-        return;
-      }
-
-      const member =
-        await fetchFreshMember(
-          guild,
-          newUser.id
-        )
-          .catch(
-            () => null
-          );
-
-      if (!member) {
-        return;
-      }
-
-      if (
-        getDesiredPrefix(
-          member
-        )
-      ) {
-        await applyPreferredNickname(
-          member
-        );
-
-        return;
-      }
-
-      const currentName =
-        member.nickname ||
-        newUser.globalName ||
-        newUser.username;
-
-      if (
-        hasAnyPrefix(
-          currentName
-        )
-      ) {
-        await handleUnauthorizedPrefix(
-          member,
-          currentName
-        );
-      }
-
-    } catch (error) {
-      console.error(
-        "❌ userUpdate:",
-        error
-      );
-    }
-  }
-);
-
 // ===================== INTERACTIONS =====================
 
 client.on(
   "interactionCreate",
   async interaction => {
+    try {
 
-    // ===================== TEMP VOICE BUTTONS =====================
-
-    if (
-      interaction.isButton() &&
-      [
-        "temp_lock",
-        "temp_unlock",
-        "temp_hide",
-        "temp_show",
-        "temp_limit",
-        "temp_rename",
-        "temp_invite",
-        "temp_permit",
-        "temp_reject",
-        "temp_kick",
-        "temp_transfer",
-        "temp_delete"
-      ].includes(
-        interaction.customId
-      )
-    ) {
-      return handleTempVoiceButton(
-        interaction
-      );
-    }
-
-    if (
-      interaction.isUserSelectMenu() &&
-      interaction.customId.startsWith(
-        "temp_"
-      ) &&
-      interaction.customId.includes(
-        "_select:"
-      )
-    ) {
-      return handleTempVoiceUserSelect(
-        interaction
-      );
-    }
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "temp_rename_modal:"
-      )
-    ) {
-      const channelId =
-        interaction.customId
-          .split(":")[1];
-
-      const room =
-        await getControlledTempRoom(
-          interaction,
-          channelId
-        );
-
-      if (!room) {
-        return interaction.reply({
-          content:
-            "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const name =
-        interaction.fields
-          .getTextInputValue(
-            "room_name"
-          )
-          .replace(
-            /[\r\n]/g,
-            " "
-          )
-          .trim()
-          .slice(
-            0,
-            100
-          );
-
-      if (!name) {
-        return interaction.reply({
-          content:
-            "❌ צריך לכתוב שם לחדר.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await room.setName(
-        name,
-        `שינוי שם על ידי ${interaction.user.tag}`
-      );
-
-      return interaction.reply({
-        content:
-          `✏️ שם החדר שונה ל-**${name}**.`,
-
-        ephemeral:
-          true
-      });
-    }
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "temp_limit_modal:"
-      )
-    ) {
-      const channelId =
-        interaction.customId
-          .split(":")[1];
-
-      const room =
-        await getControlledTempRoom(
-          interaction,
-          channelId
-        );
-
-      if (!room) {
-        return interaction.reply({
-          content:
-            "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const raw =
-        interaction.fields
-          .getTextInputValue(
-            "room_limit"
-          )
-          .trim();
-
-      const limit =
-        Number(
-          raw
-        );
+      // ===================== /CLEAR =====================
 
       if (
-        !/^\d{1,2}$/.test(
-          raw
-        ) ||
-        !Number.isInteger(
-          limit
-        ) ||
-        limit < 0 ||
-        limit > 99
+        interaction.isChatInputCommand() &&
+        interaction.commandName === "clear"
       ) {
-        return interaction.reply({
-          content:
-            "❌ צריך לכתוב מספר בין **0 ל-99**. 0 = בלי הגבלה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await room.setUserLimit(
-        limit,
-        `שינוי הגבלה על ידי ${interaction.user.tag}`
-      );
-
-      return interaction.reply({
-        content:
-          limit ===
-            0
-            ? "👥 הוסרה הגבלת המשתמשים מהחדר."
-            : `👥 החדר הוגבל ל-**${limit}** משתמשים.`,
-
-        ephemeral:
-          true
-      });
-    }
-
-    // ===================== OWNER NICKNAME =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "nickname_edit:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך הרשאה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const [
-        ,
-        guildId,
-        memberId
-      ] =
-        interaction.customId
-          .split(":");
-
-      return interaction.showModal(
-        new ModalBuilder()
-          .setCustomId(
-            `nickname_modal:${guildId}:${memberId}`
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
           )
-          .setTitle(
-            "שינוי ניקניים"
+            .catch(
+              () => null
+            );
+
+        if (
+          !member ||
+          !hasClearAccess(
+            member
           )
-          .addComponents(
-            new ActionRowBuilder()
-              .addComponents(
-                new TextInputBuilder()
-                  .setCustomId(
-                    "new_nickname"
-                  )
-                  .setLabel(
-                    "איזה ניקניים לשים?"
-                  )
-                  .setPlaceholder(
-                    "לדוגמה: Roei"
-                  )
-                  .setStyle(
-                    TextInputStyle.Short
-                  )
-                  .setMaxLength(
-                    32
-                  )
-                  .setRequired(
-                    true
-                  )
-              )
-          )
-      );
-    }
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק **Team ומעלה** יכולים להשתמש בפקודה הזאת.",
 
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "nickname_modal:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך הרשאה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const [
-        ,
-        guildId,
-        memberId
-      ] =
-        interaction.customId
-          .split(":");
-
-      const nickname =
-        interaction.fields
-          .getTextInputValue(
-            "new_nickname"
-          )
-          .trim()
-          .slice(
-            0,
-            32
-          );
-
-      const guild =
-        await client.guilds
-          .fetch(
-            guildId
-          )
-          .catch(
-            () => null
-          );
-
-      const member =
-        guild
-          ? await fetchFreshMember(
-              guild,
-              memberId
-            )
-              .catch(
-                () => null
-              )
-          : null;
-
-      if (
-        !member?.manageable
-      ) {
-        return interaction.reply({
-          content:
-            "❌ לא הצלחתי לשנות את הניקניים.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await member
-        .setNickname(
-          nickname,
-          "שינוי ידני על ידי הבעלים"
-        )
-        .catch(
-          () => {}
-        );
-
-      return interaction.reply({
-        content:
-          `✅ הניקניים שונה ל-\`${nickname}\`.`,
-
-        ephemeral:
-          true
-      });
-    }
-
-    // ===================== GIVEAWAY =====================
-
-    if (
-      interaction.isChatInputCommand() &&
-      interaction.commandName ===
-        "giveaway"
-    ) {
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        )
-          .catch(
-            () => null
-          );
-
-      if (
-        !member ||
-        !hasStaffAccess(
-          member
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפתוח הגרלה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const prize =
-        interaction.options
-          .getString(
-            "prize",
-            true
-          )
-          .trim();
-
-      const durationMs =
-        parseGiveawayDuration(
-          interaction.options
-            .getString(
-              "duration",
+            ephemeral:
               true
-            )
-        );
+          });
+        }
 
-      const winnerCount =
-        interaction.options
-          .getInteger(
-            "winners"
-          ) ||
-        1;
+        if (
+          !interaction.channel?.isTextBased()
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אי אפשר למחוק הודעות בחדר הזה.",
 
-      if (
-        !durationMs
-      ) {
-        return interaction.reply({
-          content:
-            "❌ זמן לא תקין.\n" +
-            "דוגמאות: `30s`, `10m`, `2h`, `1d`.\n" +
-            "מינימום 10 שניות, מקסימום 30 יום.",
+            ephemeral:
+              true
+          });
+        }
 
-          ephemeral:
-            true
-        });
-      }
+        const amount =
+          interaction.options
+            .getInteger(
+              "amount",
+              true
+            );
 
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
+        await interaction.deferReply();
 
-      const giveaway = {
-        messageId:
-          null,
+        const replyMessage =
+          await interaction
+            .fetchReply()
+            .catch(
+              () => null
+            );
 
-        channelId:
-          interaction.channel.id,
+        const protectedIds =
+          new Set();
 
-        guildId:
-          interaction.guild.id,
+        if (
+          replyMessage?.id
+        ) {
+          protectedIds.add(
+            replyMessage.id
+          );
+        }
 
-        hostId:
-          interaction.user.id,
+        try {
+          const deleted =
+            await deleteChannelMessages(
+              interaction.channel,
+              amount,
+              protectedIds
+            );
 
-        prize,
+          await interaction.editReply({
+            content:
+              null,
 
-        winnerCount,
-
-        endsAt:
-          Date.now() +
-          durationMs,
-
-        participants:
-          new Set(),
-
-        guildIcon:
-          interaction.guild.iconURL({
-            size:
-              256
-          }),
-
-        ended:
-          false,
-
-        timer:
-          null
-      };
-
-      try {
-        const message =
-          await interaction.channel.send({
             embeds: [
-              createGiveawayEmbed(
-                giveaway
-              )
-            ],
-
-            components: [
-              createGiveawayButtons()
+              new EmbedBuilder()
+                .setColor(
+                  0x800020
+                )
+                .setTitle(
+                  "🧹 ניקוי הודעות"
+                )
+                .setDescription(
+                  amount === 0
+                    ? `✅ נמחקו **${deleted} הודעות** מהחדר.`
+                    : `✅ נמחקו **${deleted} מתוך ${amount} הודעות**.`
+                )
+                .setFooter({
+                  text:
+                    "ההודעה הזאת תימחק בעוד 10 שניות"
+                })
+                .setTimestamp()
             ]
           });
 
-        giveaway.messageId =
-          message.id;
-
-        activeGiveaways.set(
-          message.id,
-          giveaway
-        );
-
-        scheduleGiveaway(
-          giveaway
-        );
-
-        return interaction.editReply(
-          `✅ ההגרלה נפתחה: ${message.url}`
-        );
-
-      } catch {
-        return interaction.editReply(
-          "❌ הייתה בעיה בפתיחת ההגרלה."
-        );
-      }
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId ===
-        "giveaway_join"
-    ) {
-      const giveaway =
-        activeGiveaways.get(
-          interaction.message.id
-        );
-
-      if (!giveaway) {
-        return interaction.reply({
-          content:
-            "❌ ההגרלה הזאת כבר לא פעילה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      if (
-        giveaway.ended ||
-        Date.now() >=
-          giveaway.endsAt
-      ) {
-        await endGiveaway(
-          giveaway
-        );
-
-        return interaction.reply({
-          content:
-            "❌ ההגרלה כבר הסתיימה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      let joined;
-
-      if (
-        giveaway.participants.has(
-          interaction.user.id
-        )
-      ) {
-        giveaway.participants.delete(
-          interaction.user.id
-        );
-
-        joined =
-          false;
-
-      } else {
-        giveaway.participants.add(
-          interaction.user.id
-        );
-
-        joined =
-          true;
-      }
-
-      await interaction.message.edit({
-        embeds: [
-          createGiveawayEmbed(
-            giveaway
-          )
-        ],
-
-        components: [
-          createGiveawayButtons()
-        ]
-      }).catch(
-        () => {}
-      );
-
-      return interaction.editReply(
-        joined
-          ? "✅ נכנסת להגרלה! בהצלחה 🎉"
-          : "↩️ יצאת מההגרלה."
-      );
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId ===
-        "giveaway_end"
-    ) {
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        )
-          .catch(
-            () => null
+          setTimeout(
+            () => {
+              interaction
+                .deleteReply()
+                .catch(
+                  () => {}
+                );
+            },
+            10_000
           );
 
+        } catch (error) {
+          console.error(
+            "❌ /clear:",
+            error
+          );
+
+          await interaction.editReply({
+            content:
+              null,
+
+            embeds: [
+              new EmbedBuilder()
+                .setColor(
+                  0x800020
+                )
+                .setTitle(
+                  "❌ מחיקת ההודעות נכשלה"
+                )
+                .setDescription(
+                  "בדוק שלבוט יש הרשאת **Manage Messages** בחדר."
+                )
+            ]
+          });
+
+          setTimeout(
+            () => {
+              interaction
+                .deleteReply()
+                .catch(
+                  () => {}
+                );
+            },
+            10_000
+          );
+        }
+
+        return;
+      }
+
+      // ===================== TEMP VOICE BUTTONS =====================
+
       if (
-        !member ||
-        !hasStaffAccess(
-          member
+        interaction.isButton() &&
+        [
+          "temp_lock",
+          "temp_unlock",
+          "temp_hide",
+          "temp_show",
+          "temp_limit",
+          "temp_rename",
+          "temp_invite",
+          "temp_permit",
+          "temp_reject",
+          "temp_kick",
+          "temp_transfer",
+          "temp_delete"
+        ].includes(
+          interaction.customId
         )
       ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לסגור הגרלה.",
-
-          ephemeral:
-            true
-        });
+        return handleTempVoiceButton(
+          interaction
+        );
       }
 
-      const giveaway =
-        activeGiveaways.get(
-          interaction.message.id
+      if (
+        interaction.isUserSelectMenu() &&
+        interaction.customId.startsWith(
+          "temp_"
+        ) &&
+        interaction.customId.includes(
+          "_select:"
+        )
+      ) {
+        return handleTempVoiceUserSelect(
+          interaction
+        );
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "temp_rename_modal:"
+        )
+      ) {
+        const channelId =
+          interaction.customId
+            .split(":")[1];
+
+        const room =
+          await getControlledTempRoom(
+            interaction,
+            channelId
+          );
+
+        if (!room) {
+          return interaction.reply({
+            content:
+              "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const name =
+          interaction.fields
+            .getTextInputValue(
+              "room_name"
+            )
+            .replace(
+              /[\r\n]/g,
+              " "
+            )
+            .trim()
+            .slice(
+              0,
+              100
+            );
+
+        if (!name) {
+          return interaction.reply({
+            content:
+              "❌ צריך לכתוב שם לחדר.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await room.setName(
+          name,
+          `שינוי שם על ידי ${interaction.user.tag}`
         );
 
-      if (
-        !giveaway ||
-        giveaway.ended
-      ) {
         return interaction.reply({
           content:
-            "ℹ️ ההגרלה כבר לא פעילה.",
+            `✏️ שם החדר שונה ל-**${name}**.`,
 
           ephemeral:
             true
         });
       }
 
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      await endGiveaway(
-        giveaway,
-        interaction.user
-      );
-
-      return interaction.editReply(
-        "✅ ההגרלה נסגרה והזוכה נבחר."
-      );
-    }
-
-    // ===================== STAFF MANAGE =====================
-
-    if (
-      interaction.isChatInputCommand() &&
-      interaction.commandName ===
-        "staffmanage"
-    ) {
       if (
-        interaction.user.id !==
-        OWNER_USER_ID
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "temp_limit_modal:"
+        )
       ) {
+        const channelId =
+          interaction.customId
+            .split(":")[1];
+
+        const room =
+          await getControlledTempRoom(
+            interaction,
+            channelId
+          );
+
+        if (!room) {
+          return interaction.reply({
+            content:
+              "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const raw =
+          interaction.fields
+            .getTextInputValue(
+              "room_limit"
+            )
+            .trim();
+
+        const limit =
+          Number(
+            raw
+          );
+
+        if (
+          !/^\d{1,2}$/.test(
+            raw
+          ) ||
+          !Number.isInteger(
+            limit
+          ) ||
+          limit < 0 ||
+          limit > 99
+        ) {
+          return interaction.reply({
+            content:
+              "❌ צריך לכתוב מספר בין **0 ל-99**. 0 = בלי הגבלה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await room.setUserLimit(
+          limit,
+          `שינוי הגבלה על ידי ${interaction.user.tag}`
+        );
+
         return interaction.reply({
           content:
-            "❌ אין לך גישה לפאנל הזה.",
+            limit === 0
+              ? "👥 הוסרה הגבלת המשתמשים מהחדר."
+              : `👥 החדר הוגבל ל-**${limit}** משתמשים.`,
 
           ephemeral:
             true
         });
       }
 
-      return interaction.reply({
-        content:
-          "🛡️ **ניהול צוות**\nבחר משתמש:",
+      // ===================== OWNER NICKNAME EDIT =====================
 
-        components: [
-          new ActionRowBuilder()
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "nickname_edit:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך הרשאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const [
+          ,
+          guildId,
+          memberId
+        ] =
+          interaction.customId
+            .split(":");
+
+        return interaction.showModal(
+          new ModalBuilder()
+            .setCustomId(
+              `nickname_modal:${guildId}:${memberId}`
+            )
+            .setTitle(
+              "שינוי ניקניים"
+            )
             .addComponents(
-              new UserSelectMenuBuilder()
-                .setCustomId(
-                  "manage_select_user"
-                )
-                .setPlaceholder(
-                  "בחר משתמש לניהול"
-                )
-                .setMinValues(
-                  1
-                )
-                .setMaxValues(
-                  1
+              new ActionRowBuilder()
+                .addComponents(
+                  new TextInputBuilder()
+                    .setCustomId(
+                      "new_nickname"
+                    )
+                    .setLabel(
+                      "איזה ניקניים לשים?"
+                    )
+                    .setPlaceholder(
+                      "לדוגמה: Roei"
+                    )
+                    .setStyle(
+                      TextInputStyle.Short
+                    )
+                    .setMaxLength(
+                      32
+                    )
+                    .setRequired(
+                      true
+                    )
                 )
             )
-        ],
+        );
+      }
 
-        ephemeral:
-          true
-      });
-    }
-
-    if (
-      interaction.isUserSelectMenu() &&
-      interaction.customId ===
-        "manage_select_user"
-    ) {
       if (
-        interaction.user.id !==
-        OWNER_USER_ID
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "nickname_modal:"
+        )
       ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך הרשאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const [
+          ,
+          guildId,
+          memberId
+        ] =
+          interaction.customId
+            .split(":");
+
+        const nickname =
+          interaction.fields
+            .getTextInputValue(
+              "new_nickname"
+            )
+            .trim()
+            .slice(
+              0,
+              32
+            );
+
+        const guild =
+          await client.guilds
+            .fetch(
+              guildId
+            )
+            .catch(
+              () => null
+            );
+
+        const member =
+          guild
+            ? await fetchFreshMember(
+                guild,
+                memberId
+              )
+                .catch(
+                  () => null
+                )
+            : null;
+
+        if (
+          !member?.manageable
+        ) {
+          return interaction.reply({
+            content:
+              "❌ לא הצלחתי לשנות את הניקניים.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await member
+          .setNickname(
+            nickname,
+            "שינוי ידני על ידי הבעלים"
+          )
+          .catch(
+            () => {}
+          );
+
         return interaction.reply({
           content:
-            "❌ אין לך גישה לפאנל הזה.",
+            `✅ הניקניים שונה ל-\`${nickname}\`.`,
 
           ephemeral:
             true
         });
       }
 
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.values[0]
-        )
-          .catch(
-            () => null
-          );
+      // ===================== GIVEAWAY =====================
 
-      if (!member) {
-        return interaction.update({
-          content:
-            "❌ לא מצאתי את המשתמש.",
-
-          embeds: [],
-
-          components: []
-        });
-      }
-
-      return interaction.update({
-        content:
-          "",
-
-        embeds: [
-          await buildManagementEmbed(
+      if (
+        interaction.isChatInputCommand() &&
+        interaction.commandName ===
+          "giveaway"
+      ) {
+        const member =
+          await fetchFreshMember(
             interaction.guild,
+            interaction.user.id
+          )
+            .catch(
+              () => null
+            );
+
+        if (
+          !member ||
+          !hasStaffAccess(
             member
           )
-        ],
-
-        components:
-          createManagementButtons(
-            member
-          )
-      });
-    }
-
-    // ===================== PARTNER =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId ===
-        "partner_apply"
-    ) {
-      if (
-        partnerPendingByUser.has(
-          interaction.user.id
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "⏳ כבר יש לך בקשת Partner שממתינה לטיפול.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const expiry =
-        getPartnerCooldownExpiry(
-          interaction.user.id
-        );
-
-      if (expiry) {
-        return interaction.reply({
-          content:
-            `⏳ אפשר להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`,
-
-          ephemeral:
-            true
-        });
-      }
-
-      return interaction.showModal(
-        createPartnerModal()
-      );
-    }
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId ===
-        "partner_modal"
-    ) {
-      if (
-        partnerPendingByUser.has(
-          interaction.user.id
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "⏳ כבר יש לך בקשת Partner שממתינה לטיפול.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const expiry =
-        getPartnerCooldownExpiry(
-          interaction.user.id
-        );
-
-      if (expiry) {
-        return interaction.reply({
-          content:
-            `⏳ אפשר להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`,
-
-          ephemeral:
-            true
-        });
-      }
-
-      const inviteUrl =
-        interaction.fields
-          .getTextInputValue(
-            "invite"
-          )
-          .trim();
-
-      const promoText =
-        interaction.fields
-          .getTextInputValue(
-            "promo_text"
-          )
-          .trim();
-
-      const notes =
-        interaction.fields
-          .getTextInputValue(
-            "notes"
-          )
-          .trim();
-
-      if (
-        !/^https?:\/\/(?:www\.)?(?:discord\.gg|discord\.com\/invite)\//i
-          .test(
-            inviteUrl
-          )
-      ) {
-        return interaction.reply({
-          content:
-            "❌ צריך לשלוח קישור הזמנה של Discord, לדוגמה `https://discord.gg/...`",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      const requestId =
-        `${interaction.user.id}-${Date.now()}`;
-
-      const state = {
-        requestId,
-
-        applicantId:
-          interaction.user.id,
-
-        createdAt:
-          Date.now(),
-
-        inviteUrl,
-
-        promoText,
-
-        notes,
-
-        status:
-          "pending",
-
-        handledAt:
-          null,
-
-        ownerDmChannelId:
-          null,
-
-        ownerDmMessageId:
-          null
-      };
-
-      partnerStates.set(
-        requestId,
-        state
-      );
-
-      partnerPendingByUser.set(
-        interaction.user.id,
-        requestId
-      );
-
-      await logBotData(
-        `PARTNER_CREATE|${requestId}|${interaction.user.id}|${state.createdAt}`
-      );
-
-      await savePartnerFields(
-        state
-      );
-
-      const sent =
-        await sendPartnerRequestToOwner(
-          state
-        );
-
-      if (!sent) {
-        partnerStates.delete(
-          requestId
-        );
-
-        partnerPendingByUser.delete(
-          interaction.user.id
-        );
-
-        return interaction.editReply(
-          "❌ לא הצלחתי לשלוח את הבקשה לבעלים. נסה שוב מאוחר יותר."
-        );
-      }
-
-      return interaction.editReply(
-        "✅ בקשת ה-Partner נשלחה לבדיקה!"
-      );
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "partner_approve:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ רק הבעלים יכול לטפל בבקשה הזאת."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      if (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ הבקשה כבר טופלה."
-        });
-      }
-
-      return interaction.reply({
-        content:
-          "✅ **האם הוא כבר פרסם את השרת שלך?**",
-
-        components: [
-          createPartnerApprovalConfirmRow(
-            requestId
-          )
-        ]
-      });
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "partner_confirm_no:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      state.status =
-        "waiting_publication";
-
-      await logBotData(
-        `PARTNER_STATUS|${requestId}|waiting_publication|0`
-      );
-
-      await updatePartnerOwnerMessage(
-        state
-      );
-
-      return interaction.update({
-        content:
-          "⏳ הבקשה נשארה ממתינה. אחרי שהוא מפרסם את השרת שלך, לחץ שוב **אישור** בבקשה.",
-
-        components: []
-      });
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "partner_confirm_yes:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      if (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
-      ) {
-        return interaction.update({
-          content:
-            "ℹ️ הבקשה כבר טופלה.",
-
-          components: []
-        });
-      }
-
-      if (
-        processingPartners.has(
-          requestId
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "⏳ הבקשה כבר בטיפול כרגע."
-        });
-      }
-
-      processingPartners.add(
-        requestId
-      );
-
-      await interaction.deferUpdate();
-
-      try {
-        await finalizePartnerApproval(
-          state
-        );
-
-        return interaction.editReply({
-          content:
-            "✅ ה-Partner אושר, פורסם, נשלח DM וניתן הרול.",
-
-          components: []
-        });
-
-      } catch (error) {
-        console.error(
-          "❌ Partner approval:",
-          error
-        );
-
-        return interaction.editReply({
-          content:
-            error.message ===
-              "Applicant is not in the server"
-              ? "❌ המשתמש כבר לא נמצא בשרת, לכן אי אפשר לתת לו רול Partner."
-              : "❌ הייתה בעיה באישור. הבקשה נשארה פתוחה.",
-
-          components: []
-        });
-
-      } finally {
-        processingPartners.delete(
-          requestId
-        );
-      }
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "partner_reject:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ רק הבעלים יכול לטפל בבקשה הזאת."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      if (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ הבקשה כבר טופלה."
-        });
-      }
-
-      return interaction.showModal(
-        createPartnerRejectModal(
-          requestId
-        )
-      );
-    }
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "partner_reject_modal:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      if (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ הבקשה כבר טופלה."
-        });
-      }
-
-      const reason =
-        interaction.fields
-          .getTextInputValue(
-            "reason"
-          )
-          .trim();
-
-      await interaction.deferReply();
-
-      await rejectPartnerRequest(
-        state,
-        reason
-      );
-
-      return interaction.editReply(
-        "❌ הבקשה נדחתה והמשתמש קיבל הודעה פרטית."
-      );
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "partner_edit:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ רק הבעלים יכול לשנות כיתוב."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      if (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ הבקשה כבר טופלה."
-        });
-      }
-
-      return interaction.showModal(
-        createPartnerEditModal(
-          state
-        )
-      );
-    }
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "partner_edit_modal:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה."
-        });
-      }
-
-      const requestId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        partnerStates.get(
-          requestId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את הבקשה."
-        });
-      }
-
-      if (
-        state.status ===
-          "approved" ||
-        state.status ===
-          "rejected"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ הבקשה כבר טופלה."
-        });
-      }
-
-      state.promoText =
-        interaction.fields
-          .getTextInputValue(
-            "promo_text"
-          )
-          .trim();
-
-      await savePartnerField(
-        requestId,
-        "promoText",
-        state.promoText
-      );
-
-      await updatePartnerOwnerMessage(
-        state
-      );
-
-      return interaction.reply({
-        content:
-          "✅ הכיתוב עודכן."
-      });
-    }
-
-    // ===================== SUGGESTIONS =====================
-
-    if (
-      interaction.isStringSelectMenu() &&
-      interaction.customId ===
-        "suggestion_type"
-    ) {
-      const type =
-        interaction.values[0];
-
-      if (
-        !suggestionTypes[
-          type
-        ]
-      ) {
-        return interaction.reply({
-          content:
-            "❌ האפשרות הזאת לא קיימת.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.showModal(
-        createSuggestionModal(
-          type
-        )
-      );
-
-      await interaction.message.edit({
-        embeds: [
-          createSuggestionsPanelEmbed()
-        ],
-
-        components: [
-          createSuggestionsPanelMenu()
-        ]
-      }).catch(
-        () => {}
-      );
-
-      return;
-    }
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "suggestion_modal:"
-      )
-    ) {
-      const type =
-        interaction.customId
-          .split(":")[1];
-
-      const config =
-        suggestionTypes[
-          type
-        ];
-
-      if (!config) {
-        return interaction.reply({
-          content:
-            "❌ סוג ההצעה לא נמצא.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const idea =
-        interaction.fields
-          .getTextInputValue(
-            "idea"
-          )
-          .trim();
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      const destination =
-        await client.channels
-          .fetch(
-            config.channelId
-          )
-          .catch(
-            () => null
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה לפתוח הגרלה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const prize =
+          interaction.options
+            .getString(
+              "prize",
+              true
+            )
+            .trim();
+
+        const durationMs =
+          parseGiveawayDuration(
+            interaction.options
+              .getString(
+                "duration",
+                true
+              )
           );
 
-      if (
-        !destination?.isTextBased()
-      ) {
-        return interaction.editReply(
-          "❌ חדר ההצעות לא נמצא."
-        );
+        const winnerCount =
+          interaction.options
+            .getInteger(
+              "winners"
+            ) ||
+          1;
+
+        if (
+          !durationMs
+        ) {
+          return interaction.reply({
+            content:
+              "❌ זמן לא תקין.\n" +
+              "דוגמאות: `30s`, `10m`, `2h`, `1d`.\n" +
+              "מינימום 10 שניות, מקסימום 30 יום.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
+
+        const giveaway = {
+          messageId:
+            null,
+
+          channelId:
+            interaction.channel.id,
+
+          guildId:
+            interaction.guild.id,
+
+          hostId:
+            interaction.user.id,
+
+          prize,
+
+          winnerCount,
+
+          endsAt:
+            Date.now() +
+            durationMs,
+
+          participants:
+            new Set(),
+
+          guildIcon:
+            interaction.guild.iconURL({
+              size:
+                256
+            }),
+
+          ended:
+            false,
+
+          timer:
+            null
+        };
+
+        try {
+          const message =
+            await interaction.channel.send({
+              embeds: [
+                createGiveawayEmbed(
+                  giveaway
+                )
+              ],
+
+              components: [
+                createGiveawayButtons()
+              ]
+            });
+
+          giveaway.messageId =
+            message.id;
+
+          activeGiveaways.set(
+            message.id,
+            giveaway
+          );
+
+          scheduleGiveaway(
+            giveaway
+          );
+
+          return interaction.editReply(
+            `✅ ההגרלה נפתחה: ${message.url}`
+          );
+
+        } catch (
+          error
+        ) {
+          console.error(
+            "❌ Giveaway create:",
+            error
+          );
+
+          return interaction.editReply(
+            "❌ הייתה בעיה בפתיחת ההגרלה."
+          );
+        }
       }
 
-      const state = {
-        messageId:
-          null,
+      if (
+        interaction.isButton() &&
+        interaction.customId ===
+          "giveaway_join"
+      ) {
+        const giveaway =
+          activeGiveaways.get(
+            interaction.message.id
+          );
 
-        creatorId:
-          interaction.user.id,
+        if (!giveaway) {
+          return interaction.reply({
+            content:
+              "❌ ההגרלה הזאת כבר לא פעילה.",
 
-        type,
+            ephemeral:
+              true
+          });
+        }
 
-        channelId:
-          config.channelId,
+        if (
+          giveaway.ended ||
+          Date.now() >=
+            giveaway.endsAt
+        ) {
+          await endGiveaway(
+            giveaway
+          );
 
-        votes:
-          new Map(),
+          return interaction.reply({
+            content:
+              "❌ ההגרלה כבר הסתיימה.",
 
-        thresholdNotified:
-          false,
+            ephemeral:
+              true
+          });
+        }
 
-        forwardedBy:
-          null,
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
 
-        status:
-          "open",
+        let joined;
 
-        statusBy:
-          null
-      };
+        if (
+          giveaway.participants.has(
+            interaction.user.id
+          )
+        ) {
+          giveaway.participants.delete(
+            interaction.user.id
+          );
 
-      const message =
-        await destination.send({
+          joined =
+            false;
+
+        } else {
+          giveaway.participants.add(
+            interaction.user.id
+          );
+
+          joined =
+            true;
+        }
+
+        await interaction.message.edit({
           embeds: [
-            createSuggestionEmbed(
-              type,
-              interaction.user.id,
-              idea,
-              state
+            createGiveawayEmbed(
+              giveaway
             )
           ],
 
           components: [
-            createSuggestionButtons(
-              state
+            createGiveawayButtons()
+          ]
+        }).catch(
+          () => {}
+        );
+
+        return interaction.editReply(
+          joined
+            ? "✅ נכנסת להגרלה! בהצלחה 🎉"
+            : "↩️ יצאת מההגרלה."
+        );
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId ===
+          "giveaway_end"
+      ) {
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          )
+            .catch(
+              () => null
+            );
+
+        if (
+          !member ||
+          !hasStaffAccess(
+            member
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה לסגור הגרלה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const giveaway =
+          activeGiveaways.get(
+            interaction.message.id
+          );
+
+        if (
+          !giveaway ||
+          giveaway.ended
+        ) {
+          return interaction.reply({
+            content:
+              "ℹ️ ההגרלה כבר לא פעילה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
+
+        await endGiveaway(
+          giveaway,
+          interaction.user
+        );
+
+        return interaction.editReply(
+          "✅ ההגרלה נסגרה והזוכה נבחר."
+        );
+      }
+
+      // ===================== STAFF MANAGE =====================
+
+      if (
+        interaction.isChatInputCommand() &&
+        interaction.commandName ===
+          "staffmanage"
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה לפאנל הזה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        return interaction.reply({
+          content:
+            "🛡️ **ניהול צוות**\nבחר משתמש:",
+
+          components: [
+            new ActionRowBuilder()
+              .addComponents(
+                new UserSelectMenuBuilder()
+                  .setCustomId(
+                    "manage_select_user"
+                  )
+                  .setPlaceholder(
+                    "בחר משתמש לניהול"
+                  )
+                  .setMinValues(
+                    1
+                  )
+                  .setMaxValues(
+                    1
+                  )
+              )
+          ],
+
+          ephemeral:
+            true
+        });
+      }
+
+      if (
+        interaction.isUserSelectMenu() &&
+        interaction.customId ===
+          "manage_select_user"
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה לפאנל הזה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.values[0]
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.update({
+            content:
+              "❌ לא מצאתי את המשתמש.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        return interaction.update({
+          content:
+            "",
+
+          embeds: [
+            await buildManagementEmbed(
+              interaction.guild,
+              member
             )
           ],
 
-          allowedMentions: {
-            parse: []
-          }
-        });
-
-      state.messageId =
-        message.id;
-
-      suggestionStates.set(
-        message.id,
-        state
-      );
-
-      await logBotData(
-        `SUGG_CREATE|${message.id}|${interaction.user.id}|${type}|${config.channelId}`
-      );
-
-      return interaction.editReply(
-        `✅ הרעיון נשלח בהצלחה! ${message.url}`
-      );
-    }
-
-    if (
-      interaction.isButton() &&
-      (
-        interaction.customId ===
-          "suggestion_vote_up" ||
-        interaction.customId ===
-          "suggestion_vote_down"
-      )
-    ) {
-      const state =
-        hydrateSuggestion(
-          interaction.message
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא הצלחתי לקרוא את ההצעה.",
-
-          ephemeral:
-            true
+          components:
+            createManagementButtons(
+              member
+            )
         });
       }
 
-      if (
-        state.status !==
-        "open"
-      ) {
-        return interaction.reply({
-          content:
-            "🔒 ההצעה כבר לא פתוחה להצבעה.",
-
-          ephemeral:
-            true
-        });
-      }
+      // ===================== MANAGE ADD =====================
 
       if (
-        interaction.user.id ===
-        state.creatorId
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אי אפשר להצביע על ההצעה של עצמך.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      if (
-        processingSuggestions.has(
-          interaction.message.id
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "manage_add:"
         )
       ) {
-        return interaction.reply({
-          content:
-            "⏳ רגע, מתבצעת הצבעה אחרת.",
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה.",
 
-          ephemeral:
-            true
+            ephemeral:
+              true
+          });
+        }
+
+        const targetId =
+          interaction.customId
+            .split(":")[1];
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.update({
+            content:
+              "❌ המשתמש לא נמצא.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        if (
+          getHighestLadderRoleId(
+            member
+          )
+        ) {
+          await interaction.deferUpdate();
+
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "ℹ️ המשתמש כבר בצוות."
+          );
+        }
+
+        return interaction.update({
+          content:
+            "➕ **באיזו דרגה להוסיף?**",
+
+          embeds: [
+            await buildManagementEmbed(
+              interaction.guild,
+              member
+            )
+          ],
+
+          components: [
+            await createRoleChoiceRow(
+              interaction.guild,
+              targetId,
+              [
+                ROLE_HELPER,
+                ROLE_STAFF,
+                ROLE_TEAM
+              ],
+              "manage_add_to",
+              {
+                [ROLE_HELPER]:
+                  "Helper",
+
+                [ROLE_STAFF]:
+                  "Stuff",
+
+                [ROLE_TEAM]:
+                  "Team"
+              }
+            )
+          ]
         });
       }
 
-      processingSuggestions.add(
-        interaction.message.id
-      );
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "manage_add_to:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה.",
 
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
+            ephemeral:
+              true
+          });
+        }
 
-      try {
+        const [
+          ,
+          targetId,
+          targetRoleId
+        ] =
+          interaction.customId
+            .split(":");
+
+        await interaction.deferUpdate();
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.editReply({
+            content:
+              "❌ המשתמש לא נמצא.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        if (
+          getHighestLadderRoleId(
+            member
+          )
+        ) {
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "ℹ️ המשתמש כבר בצוות."
+          );
+        }
+
+        if (
+          ![
+            ROLE_HELPER,
+            ROLE_STAFF,
+            ROLE_TEAM
+          ].includes(
+            targetRoleId
+          )
+        ) {
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "❌ דרגה לא תקינה."
+          );
+        }
+
+        await member.roles.add(
+          targetRoleId
+        );
+
+        const fresh =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          );
+
+        await applyPreferredNickname(
+          fresh
+        );
+
+        await sendStaffLog({
+          guild:
+            interaction.guild,
+
+          targetMember:
+            fresh,
+
+          actorUser:
+            interaction.user,
+
+          title:
+            "➕ הוספה ידנית לצוות",
+
+          fromRoleId:
+            null,
+
+          toRoleId:
+            targetRoleId
+        });
+
+        return refreshManagementPanel(
+          interaction,
+          targetId,
+          `✅ נוסף לצוות בתור **${await getRoleName(
+            interaction.guild,
+            targetRoleId
+          )}**.`
+        );
+      }
+
+      // ===================== MANAGE PROMOTE =====================
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "manage_promote:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const targetId =
+          interaction.customId
+            .split(":")[1];
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.update({
+            content:
+              "❌ המשתמש לא נמצא.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        const roleId =
+          getHighestLadderRoleId(
+            member
+          );
+
+        const targets =
+          getPromotionTargets(
+            roleId
+          );
+
+        if (
+          !targets.length
+        ) {
+          await interaction.deferUpdate();
+
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "🏆 אין קידום נוסף."
+          );
+        }
+
+        return interaction.update({
+          content:
+            "⬆️ **לאיזו דרגה לקדם?**",
+
+          embeds: [
+            await buildManagementEmbed(
+              interaction.guild,
+              member
+            )
+          ],
+
+          components: [
+            await createRoleChoiceRow(
+              interaction.guild,
+              targetId,
+              targets,
+              "manage_promote_to",
+              getPromotionLabels(
+                roleId
+              )
+            )
+          ]
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "manage_promote_to:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const [
+          ,
+          targetId,
+          targetRoleId
+        ] =
+          interaction.customId
+            .split(":");
+
+        await interaction.deferUpdate();
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.editReply({
+            content:
+              "❌ המשתמש לא נמצא.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        const beforeRoleId =
+          getHighestLadderRoleId(
+            member
+          );
+
+        if (
+          !getPromotionTargets(
+            beforeRoleId
+          ).includes(
+            targetRoleId
+          )
+        ) {
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "❌ הקידום כבר לא מתאים."
+          );
+        }
+
+        await member.roles.add(
+          targetRoleId
+        );
+
+        const fresh =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          );
+
+        await applyPreferredNickname(
+          fresh
+        );
+
+        await sendStaffLog({
+          guild:
+            interaction.guild,
+
+          targetMember:
+            fresh,
+
+          actorUser:
+            interaction.user,
+
+          title:
+            "⬆️ קידום צוות ידני",
+
+          fromRoleId:
+            beforeRoleId,
+
+          toRoleId:
+            targetRoleId
+        });
+
+        return refreshManagementPanel(
+          interaction,
+          targetId,
+          `✅ קודם/ה ל-**${await getRoleName(
+            interaction.guild,
+            targetRoleId
+          )}**.`
+        );
+      }
+
+      // ===================== MANAGE DEMOTE =====================
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "manage_demote:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const targetId =
+          interaction.customId
+            .split(":")[1];
+
+        await interaction.deferUpdate();
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.editReply({
+            content:
+              "❌ המשתמש לא נמצא.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        const currentRoleId =
+          getHighestLadderRoleId(
+            member
+          );
+
+        if (!currentRoleId) {
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "❌ המשתמש לא בצוות."
+          );
+        }
+
+        const currentIndex =
+          LADDER_ROLE_IDS.indexOf(
+            currentRoleId
+          );
+
+        if (
+          currentIndex <= 0
+        ) {
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "ℹ️ Helper היא הדרגה הנמוכה ביותר. כדי להוציא מהצוות השתמש ב-**הורדה מהצוות**."
+          );
+        }
+
+        const previousRoleId =
+          LADDER_ROLE_IDS[
+            currentIndex - 1
+          ];
+
+        await member.roles.add(
+          previousRoleId
+        );
+
+        await member.roles.remove(
+          currentRoleId
+        );
+
+        const fresh =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          );
+
+        await applyPreferredNickname(
+          fresh
+        );
+
+        await sendStaffLog({
+          guild:
+            interaction.guild,
+
+          targetMember:
+            fresh,
+
+          actorUser:
+            interaction.user,
+
+          title:
+            "⬇️ הורדת דרגה",
+
+          fromRoleId:
+            currentRoleId,
+
+          toRoleId:
+            previousRoleId
+        });
+
+        return refreshManagementPanel(
+          interaction,
+          targetId,
+          `✅ הורד/ה ל-**${await getRoleName(
+            interaction.guild,
+            previousRoleId
+          )}**.`
+        );
+      }
+
+      // ===================== MANAGE REMOVE =====================
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "manage_remove:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const targetId =
+          interaction.customId
+            .split(":")[1];
+
+        await interaction.deferUpdate();
+
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          )
+            .catch(
+              () => null
+            );
+
+        if (!member) {
+          return interaction.editReply({
+            content:
+              "❌ המשתמש לא נמצא.",
+
+            embeds: [],
+
+            components: []
+          });
+        }
+
+        const beforeRoleId =
+          getHighestLadderRoleId(
+            member
+          );
+
+        const rolesToRemove =
+          LADDER_ROLE_IDS.filter(
+            roleId =>
+              member.roles.cache.has(
+                roleId
+              )
+          );
+
+        if (
+          !rolesToRemove.length
+        ) {
+          return refreshManagementPanel(
+            interaction,
+            targetId,
+            "ℹ️ למשתמש אין רולי צוות."
+          );
+        }
+
+        await member.roles.remove(
+          rolesToRemove
+        );
+
+        const fresh =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          );
+
+        await applyPreferredNickname(
+          fresh
+        );
+
+        await sendStaffLog({
+          guild:
+            interaction.guild,
+
+          targetMember:
+            fresh,
+
+          actorUser:
+            interaction.user,
+
+          title:
+            "❌ הורדה מהצוות",
+
+          fromRoleId:
+            beforeRoleId,
+
+          toRoleId:
+            null
+        });
+
+        return refreshManagementPanel(
+          interaction,
+          targetId,
+          "✅ המשתמש הוסר מהצוות."
+        );
+      }
+
+      // ===================== PARTNER APPLY =====================
+
+      if (
+        interaction.isButton() &&
+        interaction.customId ===
+          "partner_apply"
+      ) {
+        if (
+          partnerPendingByUser.has(
+            interaction.user.id
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "⏳ כבר יש לך בקשת Partner שממתינה לטיפול.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const expiry =
+          getPartnerCooldownExpiry(
+            interaction.user.id
+          );
+
+        if (
+          expiry
+        ) {
+          return interaction.reply({
+            content:
+              `⏳ אפשר להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`,
+
+            ephemeral:
+              true
+          });
+        }
+
+        return interaction.showModal(
+          createPartnerModal()
+        );
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId ===
+          "partner_modal"
+      ) {
+        if (
+          partnerPendingByUser.has(
+            interaction.user.id
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "⏳ כבר יש לך בקשת Partner שממתינה לטיפול.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const inviteUrl =
+          interaction.fields
+            .getTextInputValue(
+              "invite"
+            )
+            .trim();
+
+        const promoText =
+          interaction.fields
+            .getTextInputValue(
+              "promo_text"
+            )
+            .trim();
+
+        const notes =
+          interaction.fields
+            .getTextInputValue(
+              "notes"
+            )
+            .trim();
+
+        if (
+          !/^https?:\/\/(?:www\.)?(?:discord\.gg|discord\.com\/invite)\//i
+            .test(
+              inviteUrl
+            )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ צריך קישור הזמנה תקין של Discord.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
+
+        const requestId =
+          `${interaction.user.id}-${Date.now()}`;
+
+        const state = {
+          requestId,
+
+          applicantId:
+            interaction.user.id,
+
+          createdAt:
+            Date.now(),
+
+          inviteUrl,
+
+          promoText,
+
+          notes,
+
+          status:
+            "pending",
+
+          handledAt:
+            null,
+
+          ownerDmChannelId:
+            null,
+
+          ownerDmMessageId:
+            null
+        };
+
+        partnerStates.set(
+          requestId,
+          state
+        );
+
+        partnerPendingByUser.set(
+          interaction.user.id,
+          requestId
+        );
+
+        await logBotData(
+          `PARTNER_CREATE|${requestId}|${interaction.user.id}|${state.createdAt}`
+        );
+
+        await savePartnerFields(
+          state
+        );
+
+        const sent =
+          await sendPartnerRequestToOwner(
+            state
+          );
+
+        if (!sent) {
+          partnerStates.delete(
+            requestId
+          );
+
+          partnerPendingByUser.delete(
+            interaction.user.id
+          );
+
+          return interaction.editReply(
+            "❌ לא הצלחתי לשלוח את הבקשה לבעלים."
+          );
+        }
+
+        return interaction.editReply(
+          "✅ בקשת ה-Partner נשלחה לבדיקה!"
+        );
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "partner_approve:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק הבעלים יכול לטפל בבקשה הזאת."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          partnerStates.get(
+            requestId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ לא מצאתי את הבקשה."
+          });
+        }
+
+        return interaction.reply({
+          content:
+            "✅ **האם הוא כבר פרסם את השרת שלך?**",
+
+          components: [
+            createPartnerApprovalConfirmRow(
+              requestId
+            )
+          ]
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "partner_confirm_no:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          partnerStates.get(
+            requestId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ לא מצאתי את הבקשה."
+          });
+        }
+
+        state.status =
+          "waiting_publication";
+
+        await logBotData(
+          `PARTNER_STATUS|${requestId}|waiting_publication|0`
+        );
+
+        await updatePartnerOwnerMessage(
+          state
+        );
+
+        return interaction.update({
+          content:
+            "⏳ הבקשה נשארה ממתינה. אחרי שהוא מפרסם, לחץ שוב על אישור.",
+
+          components: []
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "partner_confirm_yes:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          partnerStates.get(
+            requestId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ לא מצאתי את הבקשה."
+          });
+        }
+
+        if (
+          processingPartners.has(
+            requestId
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "⏳ הבקשה כבר בטיפול."
+          });
+        }
+
+        processingPartners.add(
+          requestId
+        );
+
+        await interaction.deferUpdate();
+
+        try {
+          await finalizePartnerApproval(
+            state
+          );
+
+          return interaction.editReply({
+            content:
+              "✅ ה-Partner אושר ופורסם.",
+
+            components: []
+          });
+
+        } finally {
+          processingPartners.delete(
+            requestId
+          );
+        }
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "partner_reject:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק הבעלים יכול לדחות."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        return interaction.showModal(
+          createPartnerRejectModal(
+            requestId
+          )
+        );
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "partner_reject_modal:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          partnerStates.get(
+            requestId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ הבקשה לא נמצאה."
+          });
+        }
+
+        const reason =
+          interaction.fields
+            .getTextInputValue(
+              "reason"
+            )
+            .trim();
+
+        await interaction.deferReply();
+
+        await rejectPartnerRequest(
+          state,
+          reason
+        );
+
+        return interaction.editReply(
+          "❌ הבקשה נדחתה."
+        );
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "partner_edit:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          partnerStates.get(
+            requestId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ הבקשה לא נמצאה."
+          });
+        }
+
+        return interaction.showModal(
+          createPartnerEditModal(
+            state
+          )
+        );
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "partner_edit_modal:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך גישה."
+          });
+        }
+
+        const requestId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          partnerStates.get(
+            requestId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ הבקשה לא נמצאה."
+          });
+        }
+
+        state.promoText =
+          interaction.fields
+            .getTextInputValue(
+              "promo_text"
+            )
+            .trim();
+
+        await savePartnerField(
+          requestId,
+          "promoText",
+          state.promoText
+        );
+
+        await updatePartnerOwnerMessage(
+          state
+        );
+
+        return interaction.reply({
+          content:
+            "✅ הכיתוב עודכן."
+        });
+      }
+
+      // ===================== SUGGESTIONS =====================
+
+      if (
+        interaction.isStringSelectMenu() &&
+        interaction.customId ===
+          "suggestion_type"
+      ) {
+        const type =
+          interaction.values[0];
+
+        await interaction.showModal(
+          createSuggestionModal(
+            type
+          )
+        );
+
+        await interaction.message
+          .edit({
+            embeds: [
+              createSuggestionsPanelEmbed()
+            ],
+
+            components: [
+              createSuggestionsPanelMenu()
+            ]
+          })
+          .catch(
+            () => {}
+          );
+
+        return;
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "suggestion_modal:"
+        )
+      ) {
+        const type =
+          interaction.customId
+            .split(":")[1];
+
+        const config =
+          suggestionTypes[
+            type
+          ];
+
+        if (!config) {
+          return interaction.reply({
+            content:
+              "❌ סוג ההצעה לא נמצא.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const idea =
+          interaction.fields
+            .getTextInputValue(
+              "idea"
+            )
+            .trim();
+
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
+
+        const destination =
+          await client.channels
+            .fetch(
+              config.channelId
+            )
+            .catch(
+              () => null
+            );
+
+        if (
+          !destination?.isTextBased()
+        ) {
+          return interaction.editReply(
+            "❌ חדר ההצעות לא נמצא."
+          );
+        }
+
+        const state = {
+          messageId:
+            null,
+
+          creatorId:
+            interaction.user.id,
+
+          type,
+
+          channelId:
+            config.channelId,
+
+          votes:
+            new Map(),
+
+          thresholdNotified:
+            false,
+
+          forwardedBy:
+            null,
+
+          status:
+            "open",
+
+          statusBy:
+            null
+        };
+
+        const message =
+          await destination.send({
+            embeds: [
+              createSuggestionEmbed(
+                type,
+                interaction.user.id,
+                idea,
+                state
+              )
+            ],
+
+            components: [
+              createSuggestionButtons(
+                state
+              )
+            ]
+          });
+
+        state.messageId =
+          message.id;
+
+        suggestionStates.set(
+          message.id,
+          state
+        );
+
+        await logBotData(
+          `SUGG_CREATE|${message.id}|${interaction.user.id}|${type}|${config.channelId}`
+        );
+
+        return interaction.editReply(
+          `✅ הרעיון נשלח! ${message.url}`
+        );
+      }
+
+      if (
+        interaction.isButton() &&
+        (
+          interaction.customId === "suggestion_vote_up" ||
+          interaction.customId === "suggestion_vote_down"
+        )
+      ) {
+        const state =
+          hydrateSuggestion(
+            interaction.message
+          );
+
+        if (
+          !state ||
+          state.status !== "open"
+        ) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא פתוחה להצבעה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          interaction.user.id ===
+          state.creatorId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אי אפשר להצביע להצעה של עצמך.",
+
+            ephemeral:
+              true
+          });
+        }
+
         const choice =
-          interaction.customId ===
-            "suggestion_vote_up"
+          interaction.customId === "suggestion_vote_up"
             ? "up"
             : "down";
 
         const previous =
           state.votes.get(
             interaction.user.id
-          ) ||
-          null;
-
-        let responseText;
+          );
 
         if (
-          previous ===
-          choice
+          previous === choice
         ) {
           state.votes.delete(
             interaction.user.id
@@ -9949,9 +11306,6 @@ client.on(
           await logBotData(
             `SUGG_VOTE|${interaction.message.id}|${interaction.user.id}|none`
           );
-
-          responseText =
-            "↩️ ההצבעה שלך בוטלה.";
 
         } else {
           state.votes.set(
@@ -9962,13 +11316,12 @@ client.on(
           await logBotData(
             `SUGG_VOTE|${interaction.message.id}|${interaction.user.id}|${choice}`
           );
-
-          responseText =
-            choice ===
-              "up"
-              ? "👍 הצבעת **בעד**."
-              : "👎 הצבעת **נגד**.";
         }
+
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
 
         await updateSuggestionMessage(
           interaction.message,
@@ -10000,434 +11353,18 @@ client.on(
         }
 
         return interaction.editReply(
-          responseText
+          previous === choice
+            ? "↩️ ההצבעה בוטלה."
+            : choice === "up"
+              ? "👍 הצבעת בעד."
+              : "👎 הצבעת נגד."
         );
-
-      } finally {
-        processingSuggestions.delete(
-          interaction.message.id
-        );
-      }
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId ===
-        "suggestion_staff_options"
-    ) {
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        )
-          .catch(
-            () => null
-          );
-
-      if (
-        !member ||
-        !hasStaffAccess(
-          member
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לאפשרויות צוות.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const state =
-        hydrateSuggestion(
-          interaction.message
-        );
-
-      if (
-        !state ||
-        state.status !==
-          "open"
-      ) {
-        return interaction.reply({
-          content:
-            "🔒 ההצעה הזאת כבר טופלה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      return interaction.reply({
-        content:
-          "🛡️ **אפשרויות צוות**\nבחר מה לעשות:",
-
-        components: [
-          createSuggestionStaffRow(
-            interaction.message.id,
-            interaction.user.id ===
-              OWNER_USER_ID
-          )
-        ],
-
-        ephemeral:
-          true
-      });
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "suggestion_forward:"
-      )
-    ) {
-      const messageId =
-        interaction.customId
-          .split(":")[1];
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        )
-          .catch(
-            () => null
-          );
-
-      if (
-        !member ||
-        !hasStaffAccess(
-          member
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const state =
-        suggestionStates.get(
-          messageId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את ההצעה.",
-
-          ephemeral:
-            true
-        });
       }
 
       if (
-        state.forwardedBy
-      ) {
-        return interaction.reply({
-          content:
-            `ℹ️ ההצעה כבר הועברה לבעלים על ידי <@${state.forwardedBy}>.`,
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      const channel =
-        await client.channels
-          .fetch(
-            state.channelId
-          )
-          .catch(
-            () => null
-          );
-
-      const message =
-        channel?.isTextBased()
-          ? await channel.messages
-              .fetch(
-                messageId
-              )
-              .catch(
-                () => null
-              )
-          : null;
-
-      if (!message) {
-        return interaction.editReply(
-          "❌ לא מצאתי את הודעת ההצעה."
-        );
-      }
-
-      const sent =
-        await sendSuggestionForwardDM(
-          message,
-          state,
-          interaction.user
-        );
-
-      if (!sent) {
-        return interaction.editReply(
-          "❌ לא הצלחתי לשלוח לבעלים."
-        );
-      }
-
-      state.forwardedBy =
-        interaction.user.id;
-
-      await logBotData(
-        `SUGG_FORWARD|${messageId}|${interaction.user.id}`
-      );
-
-      await updateSuggestionMessage(
-        message,
-        state
-      );
-
-      return interaction.editReply(
-        "✅ ההצעה נשלחה לבעלים בפרטי."
-      );
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "suggestion_close:"
-      )
-    ) {
-      const messageId =
-        interaction.customId
-          .split(":")[1];
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        )
-          .catch(
-            () => null
-          );
-
-      if (
-        !member ||
-        !hasStaffAccess(
-          member
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const state =
-        suggestionStates.get(
-          messageId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את ההצעה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      if (
-        state.status !==
-        "open"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ ההצעה כבר טופלה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      state.status =
-        "closed";
-
-      state.statusBy =
-        interaction.user.id;
-
-      await logBotData(
-        `SUGG_STATUS|${messageId}|closed|${interaction.user.id}`
-      );
-
-      const channel =
-        await client.channels
-          .fetch(
-            state.channelId
-          )
-          .catch(
-            () => null
-          );
-
-      const message =
-        channel?.isTextBased()
-          ? await channel.messages
-              .fetch(
-                messageId
-              )
-              .catch(
-                () => null
-              )
-          : null;
-
-      if (message) {
-        await updateSuggestionMessage(
-          message,
-          state
-        );
-      }
-
-      await sendSuggestionCreatorDM(
-        state,
-        false,
-        interaction.user
-      );
-
-      return interaction.editReply(
-        "🔒 ההצעה נסגרה, ההצבעה ננעלה והיוצר קיבל DM."
-      );
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "suggestion_approve:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ רק הבעלים יכול לאשר הצעה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const messageId =
-        interaction.customId
-          .split(":")[1];
-
-      const state =
-        suggestionStates.get(
-          messageId
-        );
-
-      if (!state) {
-        return interaction.reply({
-          content:
-            "❌ לא מצאתי את ההצעה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      if (
-        state.status !==
-        "open"
-      ) {
-        return interaction.reply({
-          content:
-            "ℹ️ ההצעה כבר טופלה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      state.status =
-        "approved";
-
-      state.statusBy =
-        interaction.user.id;
-
-      await logBotData(
-        `SUGG_STATUS|${messageId}|approved|${interaction.user.id}`
-      );
-
-      const channel =
-        await client.channels
-          .fetch(
-            state.channelId
-          )
-          .catch(
-            () => null
-          );
-
-      const message =
-        channel?.isTextBased()
-          ? await channel.messages
-              .fetch(
-                messageId
-              )
-              .catch(
-                () => null
-              )
-          : null;
-
-      if (message) {
-        await updateSuggestionMessage(
-          message,
-          state
-        );
-      }
-
-      await sendSuggestionCreatorDM(
-        state,
-        true
-      );
-
-      return interaction.editReply(
-        "✅ ההצעה אושרה, סומנה כבטיפול, ההצבעה ננעלה והיוצר קיבל DM."
-      );
-    }
-
-    // ===================== TICKET MENU =====================
-
-    if (
-      interaction.isStringSelectMenu() &&
-      interaction.customId ===
-        "ticket_type"
-    ) {
-      const type =
-        interaction.values[0];
-
-      if (
-        type ===
-        "staff"
+        interaction.isButton() &&
+        interaction.customId ===
+          "suggestion_staff_options"
       ) {
         const member =
           await fetchFreshMember(
@@ -10435,129 +11372,354 @@ client.on(
             interaction.user.id
           );
 
-        const roleId =
-          getHighestLadderRoleId(
-            member
-          );
-
         if (
-          roleId ===
-          ROLE_TOP
+          !hasStaffAccess(
+            member
+          )
         ) {
-          await interaction.reply({
+          return interaction.reply({
             content:
-              "🏆 כבר הגעת לדרגה הגבוהה ביותר.",
+              "❌ אין לך גישה.",
 
             ephemeral:
               true
           });
-
-          await interaction.message.edit({
-            components: [
-              createTicketMenu()
-            ]
-          }).catch(
-            () => {}
-          );
-
-          return;
         }
 
-        const appType =
-          roleId
-            ? "promotion"
-            : "initial";
+        return interaction.reply({
+          content:
+            "🛡️ בחר פעולה:",
+
+          components: [
+            createSuggestionStaffRow(
+              interaction.message.id,
+              interaction.user.id ===
+                OWNER_USER_ID
+            )
+          ],
+
+          ephemeral:
+            true
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "suggestion_forward:"
+        )
+      ) {
+        const messageId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          suggestionStates.get(
+            messageId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא נמצאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const channel =
+          await client.channels.fetch(
+            state.channelId
+          );
+
+        const message =
+          await channel.messages.fetch(
+            messageId
+          );
+
+        const sent =
+          await sendSuggestionForwardDM(
+            message,
+            state,
+            interaction.user
+          );
+
+        if (!sent) {
+          return interaction.reply({
+            content:
+              "❌ לא הצלחתי לשלוח לבעלים.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        state.forwardedBy =
+          interaction.user.id;
+
+        await logBotData(
+          `SUGG_FORWARD|${messageId}|${interaction.user.id}`
+        );
+
+        await updateSuggestionMessage(
+          message,
+          state
+        );
+
+        return interaction.reply({
+          content:
+            "✅ נשלח לבעלים.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "suggestion_close:"
+        )
+      ) {
+        const messageId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          suggestionStates.get(
+            messageId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא נמצאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        state.status =
+          "closed";
+
+        state.statusBy =
+          interaction.user.id;
+
+        await logBotData(
+          `SUGG_STATUS|${messageId}|closed|${interaction.user.id}`
+        );
+
+        const channel =
+          await client.channels.fetch(
+            state.channelId
+          );
+
+        const message =
+          await channel.messages.fetch(
+            messageId
+          );
+
+        await updateSuggestionMessage(
+          message,
+          state
+        );
+
+        await sendSuggestionCreatorDM(
+          state,
+          false,
+          interaction.user
+        );
+
+        return interaction.reply({
+          content:
+            "🔒 ההצעה נסגרה.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "suggestion_approve:"
+        )
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק הבעלים יכול לאשר.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const messageId =
+          interaction.customId
+            .split(":")[1];
+
+        const state =
+          suggestionStates.get(
+            messageId
+          );
+
+        if (!state) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא נמצאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        state.status =
+          "approved";
+
+        state.statusBy =
+          interaction.user.id;
+
+        await logBotData(
+          `SUGG_STATUS|${messageId}|approved|${interaction.user.id}`
+        );
+
+        const channel =
+          await client.channels.fetch(
+            state.channelId
+          );
+
+        const message =
+          await channel.messages.fetch(
+            messageId
+          );
+
+        await updateSuggestionMessage(
+          message,
+          state
+        );
+
+        await sendSuggestionCreatorDM(
+          state,
+          true
+        );
+
+        return interaction.reply({
+          content:
+            "✅ ההצעה אושרה.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      // ===================== TICKET MENU =====================
+
+      if (
+        interaction.isStringSelectMenu() &&
+        interaction.customId ===
+          "ticket_type"
+      ) {
+        const type =
+          interaction.values[0];
 
         if (
-          appType ===
-          "initial"
+          type === "staff"
         ) {
-          const expiry =
-            getCooldownExpiry(
+          const member =
+            await fetchFreshMember(
+              interaction.guild,
               interaction.user.id
             );
 
-          if (expiry) {
-            await interaction.reply({
+          const roleId =
+            getHighestLadderRoleId(
+              member
+            );
+
+          if (
+            roleId === ROLE_TOP
+          ) {
+            return interaction.reply({
               content:
-                `⏳ ניתן להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`,
+                "🏆 כבר הגעת לדרגה הגבוהה ביותר.",
 
               ephemeral:
                 true
             });
+          }
 
-            await interaction.message.edit({
+          const appType =
+            roleId
+              ? "promotion"
+              : "initial";
+
+          if (
+            pendingApplications.has(
+              applicationKey(
+                appType,
+                interaction.user.id
+              )
+            )
+          ) {
+            return interaction.reply({
+              content:
+                "⏳ כבר יש לך בקשה שממתינה לטיפול.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          if (
+            appType === "initial"
+          ) {
+            const expiry =
+              getCooldownExpiry(
+                interaction.user.id
+              );
+
+            if (
+              expiry
+            ) {
+              return interaction.reply({
+                content:
+                  `⏳ ניתן להגיש שוב <t:${Math.floor(expiry / 1000)}:R>.`,
+
+                ephemeral:
+                  true
+              });
+            }
+          }
+
+          await interaction.showModal(
+            createStaffApplicationModal(
+              appType
+            )
+          );
+
+          await interaction.message
+            .edit({
               components: [
                 createTicketMenu()
               ]
-            }).catch(
+            })
+            .catch(
               () => {}
             );
-
-            return;
-          }
-        }
-
-        if (
-          pendingApplications.has(
-            applicationKey(
-              appType,
-              interaction.user.id
-            )
-          )
-        ) {
-          await interaction.reply({
-            content:
-              "⏳ כבר יש לך בקשה שממתינה לטיפול.",
-
-            ephemeral:
-              true
-          });
-
-          await interaction.message.edit({
-            components: [
-              createTicketMenu()
-            ]
-          }).catch(
-            () => {}
-          );
 
           return;
         }
 
-        await interaction.showModal(
-          createStaffApplicationModal(
-            appType
-          )
-        );
-
-        await interaction.message.edit({
-          components: [
-            createTicketMenu()
-          ]
-        }).catch(
-          () => {}
-        );
-
-        return;
-      }
-
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      try {
-        const ticketType =
-          ticketTypes[
-            type
-          ];
-
-        if (!ticketType) {
-          return interaction.editReply(
-            "❌ סוג הטיקט לא נמצא."
-          );
-        }
+        await interaction.deferReply({
+          ephemeral:
+            true
+        });
 
         await interaction.guild
           .channels
@@ -10575,15 +11737,22 @@ client.on(
                   )
             );
 
-        if (existing) {
-          await interaction.message.edit({
-            components: [
-              createTicketMenu()
-            ]
-          });
-
+        if (
+          existing
+        ) {
           return interaction.editReply(
             `❌ כבר יש לך טיקט פתוח: ${existing}`
+          );
+        }
+
+        const ticketType =
+          ticketTypes[
+            type
+          ];
+
+        if (!ticketType) {
+          return interaction.editReply(
+            "❌ סוג הטיקט לא נמצא."
           );
         }
 
@@ -10605,7 +11774,7 @@ client.on(
 
           if (
             category?.type ===
-            ChannelType.GuildCategory
+              ChannelType.GuildCategory
           ) {
             validCategoryId =
               category.id;
@@ -10668,108 +11837,67 @@ client.on(
           }
         });
 
-        await interaction.message.edit({
-          components: [
-            createTicketMenu()
-          ]
-        });
-
         return interaction.editReply(
           `✅ הטיקט נפתח: ${channel}`
         );
-
-      } catch (error) {
-        console.error(
-          "❌ פתיחת טיקט:",
-          error
-        );
-
-        await interaction.message.edit({
-          components: [
-            createTicketMenu()
-          ]
-        }).catch(
-          () => {}
-        );
-
-        return interaction.editReply(
-          "❌ הייתה בעיה בפתיחת הטיקט."
-        );
       }
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId ===
-        "close_ticket"
-    ) {
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        );
 
       if (
-        !hasStaffAccess(
-          member
+        interaction.isButton() &&
+        interaction.customId ===
+          "close_ticket"
+      ) {
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
+
+        if (
+          !hasStaffAccess(
+            member
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק צוות מורשה יכול לסגור טיקט.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        await interaction.reply(
+          "🔒 הטיקט יימחק בעוד 3 שניות..."
+        );
+
+        setTimeout(
+          () => {
+            interaction.channel
+              .delete()
+              .catch(
+                () => {}
+              );
+          },
+          3000
+        );
+
+        return;
+      }
+
+      // ===================== STAFF APPLICATION SUBMIT =====================
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId.startsWith(
+          "staff_application_modal:"
         )
       ) {
-        return interaction.reply({
-          content:
-            "❌ רק צוות מורשה יכול לסגור טיקט.",
-
+        await interaction.deferReply({
           ephemeral:
             true
         });
-      }
 
-      if (
-        !interaction.channel.topic
-          ?.includes(
-            "ticket-owner:"
-          )
-      ) {
-        return interaction.reply({
-          content:
-            "❌ החדר הזה אינו טיקט.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      await interaction.reply(
-        "🔒 הטיקט יימחק בעוד 3 שניות..."
-      );
-
-      setTimeout(
-        () => {
-          interaction.channel
-            .delete()
-            .catch(
-              () => {}
-            );
-        },
-        3000
-      );
-
-      return;
-    }
-
-    // ===================== STAFF APPLICATION SUBMIT =====================
-
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith(
-        "staff_application_modal:"
-      )
-    ) {
-      await interaction.deferReply({
-        ephemeral:
-          true
-      });
-
-      try {
         const type =
           interaction.customId
             .split(":")[1];
@@ -10785,53 +11913,6 @@ client.on(
             member
           );
 
-        if (
-          type ===
-            "initial" &&
-          currentRoleId
-        ) {
-          return interaction.editReply(
-            "ℹ️ הדרגה שלך השתנתה. פתח/י מחדש את הבחינה."
-          );
-        }
-
-        if (
-          type ===
-            "promotion" &&
-          !currentRoleId
-        ) {
-          return interaction.editReply(
-            "ℹ️ כרגע אינך מזוהה כחבר/ת צוות."
-          );
-        }
-
-        if (
-          type ===
-            "promotion" &&
-          currentRoleId ===
-            ROLE_TOP
-        ) {
-          return interaction.editReply(
-            "🏆 כבר הגעת לדרגה הגבוהה ביותר."
-          );
-        }
-
-        if (
-          type ===
-          "initial"
-        ) {
-          const expiry =
-            getCooldownExpiry(
-              interaction.user.id
-            );
-
-          if (expiry) {
-            return interaction.editReply(
-              `⏳ ניתן להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`
-            );
-          }
-        }
-
         const key =
           applicationKey(
             type,
@@ -10844,7 +11925,7 @@ client.on(
           )
         ) {
           return interaction.editReply(
-            "⏳ כבר קיימת בקשה שלך שממתינה לטיפול."
+            "⏳ כבר קיימת בקשה שלך."
           );
         }
 
@@ -10852,18 +11933,6 @@ client.on(
           await client.channels.fetch(
             STAFF_APPLICATION_CHANNEL_ID
           );
-
-        if (
-          !channel?.isTextBased()
-        ) {
-          return interaction.editReply(
-            "❌ חדר הבקשות לא נמצא."
-          );
-        }
-
-        const isPromotion =
-          type ===
-          "promotion";
 
         const currentName =
           currentRoleId
@@ -10876,16 +11945,12 @@ client.on(
         const embed =
           new EmbedBuilder()
             .setTitle(
-              isPromotion
+              type === "promotion"
                 ? "⬆️ בקשת קידום חדשה בצוות"
                 : "🛡️ בקשה חדשה להצטרפות לצוות"
             )
             .setDescription(
-              `${interaction.user} שלח/ה **${
-                isPromotion
-                  ? "בקשת קידום בצוות"
-                  : "בקשה להצטרפות לצוות"
-              }**.`
+              `${interaction.user} שלח/ה בקשה חדשה.`
             )
             .addFields(
               {
@@ -10897,7 +11962,7 @@ client.on(
               },
 
               ...(
-                isPromotion
+                type === "promotion"
                   ? [
                       {
                         name:
@@ -10912,7 +11977,7 @@ client.on(
 
               {
                 name:
-                  "🎂 בן כמה את/ה?",
+                  "🎂 גיל",
 
                 value:
                   interaction.fields
@@ -10923,7 +11988,7 @@ client.on(
 
               {
                 name:
-                  "⚠️ אם שני אנשים רבים ומקללים, מה את/ה עושה?",
+                  "⚠️ סיטואציה",
 
                 value:
                   interaction.fields
@@ -10934,7 +11999,7 @@ client.on(
 
               {
                 name:
-                  "📛 איך קוראים לך?",
+                  "📛 שם",
 
                 value:
                   interaction.fields
@@ -10945,7 +12010,7 @@ client.on(
 
               {
                 name:
-                  "🛡️ יש לך ניסיון בניהול?",
+                  "🛡️ ניסיון",
 
                 value:
                   interaction.fields
@@ -11023,131 +12088,78 @@ client.on(
                     ButtonStyle.Danger
                   )
               )
-          ],
-
-          allowedMentions: {
-            roles:
-              STAFF_ACCESS_ROLE_IDS
-          }
+          ]
         });
 
         pendingApplications.add(
           key
         );
 
-        const dmSent =
-          await sendApplicantDM(
-            interaction.user.id,
-            type,
-            "pending"
-          );
-
-        return interaction.editReply(
-          dmSent
-            ? "✅ הבקשה נשלחה ונשלחה לך גם הודעה פרטית."
-            : "✅ הבקשה נשלחה. לא הצלחתי לשלוח הודעה פרטית."
-        );
-
-      } catch (error) {
-        console.error(
-          "❌ בקשת צוות:",
-          error
+        await sendApplicantDM(
+          interaction.user.id,
+          type,
+          "pending"
         );
 
         return interaction.editReply(
-          "❌ הייתה בעיה בשליחת הבקשה."
+          "✅ הבקשה נשלחה."
         );
       }
-    }
 
-    // ===================== APP APPROVE =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "app_approve:"
-      )
-    ) {
-      const [
-        ,
-        type,
-        applicantId
-      ] =
-        interaction.customId
-          .split(":");
+      // ===================== STAFF APP APPROVE =====================
 
       if (
-        interaction.user.id ===
-        applicantId
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אי אפשר לטפל בבקשה של עצמך.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const reviewer =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        );
-
-      if (
-        !hasStaffAccess(
-          reviewer
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "app_approve:"
         )
       ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך הרשאה.",
+        const [
+          ,
+          type,
+          applicantId
+        ] =
+          interaction.customId
+            .split(":");
 
-          ephemeral:
-            true
-        });
-      }
-
-      if (
-        processingApplications.has(
-          interaction.message.id
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "⏳ מישהו כבר מטפל בבקשה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      processingApplications.add(
-        interaction.message.id
-      );
-
-      await interaction.deferUpdate();
-
-      try {
-        const applicant =
-          await fetchFreshMember(
-            interaction.guild,
-            applicantId
-          )
-            .catch(
-              () => null
-            );
-
-        if (!applicant) {
-          return interaction.followUp({
+        if (
+          interaction.user.id ===
+          applicantId
+        ) {
+          return interaction.reply({
             content:
-              "❌ המשתמש כבר לא נמצא בשרת.",
+              "❌ אי אפשר לטפל בבקשה של עצמך.",
 
             ephemeral:
               true
           });
         }
+
+        const reviewer =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
+
+        if (
+          !hasStaffAccess(
+            reviewer
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין לך הרשאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const applicant =
+          await fetchFreshMember(
+            interaction.guild,
+            applicantId
+          );
 
         const currentRoleId =
           getHighestLadderRoleId(
@@ -11158,47 +12170,18 @@ client.on(
         let labels = {};
 
         if (
-          type ===
-          "initial"
+          type === "initial"
         ) {
-          if (
-            currentRoleId
-          ) {
-            return interaction.followUp({
-              content:
-                "ℹ️ המשתמש כבר בצוות.",
-
-              ephemeral:
-                true
-            });
-          }
-
           targets = [
-            ROLE_STAFF,
-            ROLE_TEAM
+            ROLE_HELPER
           ];
 
           labels = {
-            [ROLE_STAFF]:
-              "Stuff",
-
-            [ROLE_TEAM]:
-              "Team"
+            [ROLE_HELPER]:
+              "Helper"
           };
 
         } else {
-          if (
-            !currentRoleId
-          ) {
-            return interaction.followUp({
-              content:
-                "❌ המשתמש כבר לא בצוות.",
-
-              ephemeral:
-                true
-            });
-          }
-
           targets =
             getPromotionTargets(
               currentRoleId
@@ -11208,18 +12191,18 @@ client.on(
             getPromotionLabels(
               currentRoleId
             );
+        }
 
-          if (
-            !targets.length
-          ) {
-            return interaction.followUp({
-              content:
-                "🏆 המשתמש כבר בדרגה הגבוהה ביותר.",
+        if (
+          !targets.length
+        ) {
+          return interaction.reply({
+            content:
+              "🏆 אין דרגה גבוהה יותר.",
 
-              ephemeral:
-                true
-            });
-          }
+            ephemeral:
+              true
+          });
         }
 
         const embed =
@@ -11230,7 +12213,7 @@ client.on(
 
         setStatusField(
           embed,
-          "✅ **אושר עקרונית — עכשיו בחרו איזה רול לתת**"
+          "✅ **אושר עקרונית — בחרו דרגה**"
         );
 
         embed.setFooter({
@@ -11242,7 +12225,7 @@ client.on(
             )
         });
 
-        return interaction.editReply({
+        return interaction.update({
           embeds: [
             embed
           ],
@@ -11257,90 +12240,47 @@ client.on(
             )
           ]
         });
-
-      } finally {
-        processingApplications.delete(
-          interaction.message.id
-        );
-      }
-    }
-
-    // ===================== APP REJECT =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "app_reject:"
-      )
-    ) {
-      const [
-        ,
-        type,
-        applicantId
-      ] =
-        interaction.customId
-          .split(":");
-
-      if (
-        interaction.user.id ===
-        applicantId
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אי אפשר לטפל בבקשה של עצמך.",
-
-          ephemeral:
-            true
-        });
       }
 
-      const reviewer =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        );
-
       if (
-        !hasStaffAccess(
-          reviewer
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "app_reject:"
         )
       ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך הרשאה.",
+        const [
+          ,
+          type,
+          applicantId
+        ] =
+          interaction.customId
+            .split(":");
 
-          ephemeral:
-            true
-        });
-      }
+        const reviewer =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
 
-      if (
-        processingApplications.has(
-          interaction.message.id
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "⏳ מישהו כבר מטפל בבקשה.",
+        if (
+          !hasStaffAccess(
+            reviewer
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין הרשאה.",
 
-          ephemeral:
-            true
-        });
-      }
+            ephemeral:
+              true
+          });
+        }
 
-      processingApplications.add(
-        interaction.message.id
-      );
-
-      await interaction.deferUpdate();
-
-      try {
         const rejectedAt =
           Date.now();
 
         if (
-          type ===
-          "initial"
+          type === "initial"
         ) {
           rejectionCooldowns.set(
             applicantId,
@@ -11383,7 +12323,7 @@ client.on(
             )
         });
 
-        return interaction.editReply({
+        return interaction.update({
           embeds: [
             embed
           ],
@@ -11394,128 +12334,64 @@ client.on(
             )
           ]
         });
-
-      } finally {
-        processingApplications.delete(
-          interaction.message.id
-        );
-      }
-    }
-
-    // ===================== APP ASSIGN =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "app_assign:"
-      )
-    ) {
-      const [
-        ,
-        type,
-        applicantId,
-        targetRoleId
-      ] =
-        interaction.customId
-          .split(":");
-
-      if (
-        interaction.user.id ===
-        applicantId
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אי אפשר לטפל בבקשה של עצמך.",
-
-          ephemeral:
-            true
-        });
       }
 
-      const reviewer =
-        await fetchFreshMember(
-          interaction.guild,
-          interaction.user.id
-        );
-
       if (
-        !hasStaffAccess(
-          reviewer
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "app_assign:"
         )
       ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך הרשאה.",
+        const [
+          ,
+          type,
+          applicantId,
+          targetRoleId
+        ] =
+          interaction.customId
+            .split(":");
 
-          ephemeral:
-            true
-        });
-      }
-
-      if (
-        processingApplications.has(
-          interaction.message.id
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "⏳ מישהו כבר מטפל בבקשה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      processingApplications.add(
-        interaction.message.id
-      );
-
-      await interaction.deferUpdate();
-
-      try {
-        const applicant =
+        const reviewer =
           await fetchFreshMember(
             interaction.guild,
-            applicantId
-          )
-            .catch(
-              () => null
-            );
+            interaction.user.id
+          );
 
-        if (!applicant) {
-          return interaction.followUp({
+        if (
+          !hasStaffAccess(
+            reviewer
+          )
+        ) {
+          return interaction.reply({
             content:
-              "❌ המשתמש כבר לא נמצא בשרת.",
+              "❌ אין הרשאה.",
 
             ephemeral:
               true
           });
         }
 
+        await interaction.deferUpdate();
+
+        const applicant =
+          await fetchFreshMember(
+            interaction.guild,
+            applicantId
+          );
+
         const beforeRoleId =
           getHighestLadderRoleId(
             applicant
           );
 
-        const allowed =
-          type ===
-            "initial"
-            ? [
-                ROLE_STAFF,
-                ROLE_TEAM
-              ]
-            : getPromotionTargets(
-                beforeRoleId
-              );
-
         if (
-          !allowed.includes(
-            targetRoleId
-          )
+          type === "initial" &&
+          targetRoleId !==
+            ROLE_HELPER
         ) {
           return interaction.followUp({
             content:
-              "❌ הדרגה הזאת כבר לא מתאימה.",
+              "❌ בקבלה ראשונה הדרגה היא Helper.",
 
             ephemeral:
               true
@@ -11554,8 +12430,7 @@ client.on(
             interaction.user,
 
           title:
-            type ===
-              "initial"
+            type === "initial"
               ? "✅ צירוף חדש לצוות"
               : "⬆️ קידום צוות",
 
@@ -11603,613 +12478,461 @@ client.on(
             )
           ]
         });
-
-      } finally {
-        processingApplications.delete(
-          interaction.message.id
-        );
-      }
-    }
-
-    // ===================== MANAGE ADD =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "manage_add:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפאנל הזה.",
-
-          ephemeral:
-            true
-        });
       }
 
-      const targetId =
-        interaction.customId
-          .split(":")[1];
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        )
-          .catch(
-            () => null
-          );
-
-      if (!member) {
-        await interaction.deferUpdate();
-
-        return interaction.editReply({
-          content:
-            "❌ המשתמש לא נמצא.",
-
-          embeds: [],
-
-          components: []
-        });
-      }
+      // ===================== ARCADE SELECT =====================
 
       if (
-        getHighestLadderRoleId(
-          member
-        )
+        interaction.isStringSelectMenu() &&
+        interaction.customId ===
+          "arcade_game_select"
       ) {
-        await interaction.deferUpdate();
+        const gameType =
+          interaction.values[0];
 
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "ℹ️ המשתמש כבר בצוות."
-        );
-      }
-
-      return interaction.update({
-        content:
-          "➕ **באיזו דרגה להוסיף?**",
-
-        embeds: [
-          await buildManagementEmbed(
-            interaction.guild,
-            member
-          )
-        ],
-
-        components: [
-          await createRoleChoiceRow(
-            interaction.guild,
-            targetId,
-            [
-              ROLE_STAFF,
-              ROLE_TEAM
-            ],
-            "manage_add_to",
-            {
-              [ROLE_STAFF]:
-                "Stuff",
-
-              [ROLE_TEAM]:
-                "Team"
-            }
-          )
-        ]
-      });
-    }
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "manage_add_to:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפאנל הזה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const [
-        ,
-        targetId,
-        targetRoleId
-      ] =
-        interaction.customId
-          .split(":");
-
-      await interaction.deferUpdate();
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        )
-          .catch(
-            () => null
-          );
-
-      if (!member) {
-        return interaction.editReply({
-          content:
-            "❌ המשתמש לא נמצא.",
-
-          embeds: [],
-
-          components: []
-        });
-      }
-
-      if (
-        getHighestLadderRoleId(
-          member
-        )
-      ) {
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "ℹ️ המשתמש כבר בצוות."
-        );
-      }
-
-      if (
-        ![
-          ROLE_STAFF,
-          ROLE_TEAM
-        ].includes(
-          targetRoleId
-        )
-      ) {
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "❌ דרגה לא תקינה."
-        );
-      }
-
-      await member.roles.add(
-        targetRoleId
-      );
-
-      const fresh =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        );
-
-      await applyPreferredNickname(
-        fresh
-      );
-
-      await sendStaffLog({
-        guild:
-          interaction.guild,
-
-        targetMember:
-          fresh,
-
-        actorUser:
-          interaction.user,
-
-        title:
-          "➕ הוספה ידנית לצוות",
-
-        fromRoleId:
-          null,
-
-        toRoleId:
-          targetRoleId
-      });
-
-      return refreshManagementPanel(
-        interaction,
-        targetId,
-        `✅ ${fresh.user} נוסף/ה לצוות בתור **${await getRoleName(
-          interaction.guild,
-          targetRoleId
-        )}**.`
-      );
-    }
-
-    // ===================== MANAGE PROMOTE =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "manage_promote:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפאנל הזה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const targetId =
-        interaction.customId
-          .split(":")[1];
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        )
-          .catch(
-            () => null
-          );
-
-      if (!member) {
-        await interaction.deferUpdate();
-
-        return interaction.editReply({
-          content:
-            "❌ המשתמש לא נמצא.",
-
-          embeds: [],
-
-          components: []
-        });
-      }
-
-      const roleId =
-        getHighestLadderRoleId(
-          member
-        );
-
-      const targets =
-        getPromotionTargets(
-          roleId
-        );
-
-      if (
-        !targets.length
-      ) {
-        await interaction.deferUpdate();
-
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "🏆 אין קידום נוסף."
-        );
-      }
-
-      return interaction.update({
-        content:
-          "⬆️ **לאיזו דרגה לקדם?**",
-
-        embeds: [
-          await buildManagementEmbed(
-            interaction.guild,
-            member
-          )
-        ],
-
-        components: [
-          await createRoleChoiceRow(
-            interaction.guild,
-            targetId,
-            targets,
-            "manage_promote_to",
-            getPromotionLabels(
-              roleId
+        const destination =
+          await client.channels
+            .fetch(
+              ARCADE_GAMES_CHANNEL_ID
             )
-          )
-        ]
-      });
-    }
+            .catch(
+              () => null
+            );
 
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "manage_promote_to:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפאנל הזה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const [
-        ,
-        targetId,
-        targetRoleId
-      ] =
-        interaction.customId
-          .split(":");
-
-      await interaction.deferUpdate();
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        )
-          .catch(
-            () => null
-          );
-
-      if (!member) {
-        return interaction.editReply({
-          content:
-            "❌ המשתמש לא נמצא.",
-
-          embeds: [],
-
-          components: []
-        });
-      }
-
-      const beforeRoleId =
-        getHighestLadderRoleId(
-          member
-        );
-
-      if (
-        !getPromotionTargets(
-          beforeRoleId
-        ).includes(
-          targetRoleId
-        )
-      ) {
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "❌ הקידום כבר לא מתאים."
-        );
-      }
-
-      await member.roles.add(
-        targetRoleId
-      );
-
-      const fresh =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        );
-
-      await applyPreferredNickname(
-        fresh
-      );
-
-      await sendStaffLog({
-        guild:
-          interaction.guild,
-
-        targetMember:
-          fresh,
-
-        actorUser:
-          interaction.user,
-
-        title:
-          "⬆️ קידום צוות ידני",
-
-        fromRoleId:
-          beforeRoleId,
-
-        toRoleId:
-          targetRoleId
-      });
-
-      return refreshManagementPanel(
-        interaction,
-        targetId,
-        `✅ ${fresh.user} קודם/ה ל-**${await getRoleName(
-          interaction.guild,
-          targetRoleId
-        )}**.`
-      );
-    }
-
-    // ===================== MANAGE DEMOTE =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "manage_demote:"
-      )
-    ) {
-      if (
-        interaction.user.id !==
-        OWNER_USER_ID
-      ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפאנל הזה.",
-
-          ephemeral:
-            true
-        });
-      }
-
-      const targetId =
-        interaction.customId
-          .split(":")[1];
-
-      await interaction.deferUpdate();
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        )
-          .catch(
-            () => null
-          );
-
-      if (!member) {
-        return interaction.editReply({
-          content:
-            "❌ המשתמש לא נמצא.",
-
-          embeds: [],
-
-          components: []
-        });
-      }
-
-      const currentRoleId =
-        getHighestLadderRoleId(
-          member
-        );
-
-      if (!currentRoleId) {
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "❌ המשתמש לא בצוות."
-        );
-      }
-
-      const currentIndex =
-        LADDER_ROLE_IDS.indexOf(
-          currentRoleId
-        );
-
-      let previousRoleId =
-        null;
-
-      for (
-        let i =
-          currentIndex - 1;
-        i >= 0;
-        i--
-      ) {
         if (
-          member.roles.cache.has(
-            LADDER_ROLE_IDS[i]
-          )
+          !destination?.isTextBased()
         ) {
-          previousRoleId =
-            LADDER_ROLE_IDS[i];
+          return interaction.reply({
+            content:
+              "❌ חדר המשחקים לא נמצא.",
 
-          break;
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          gameType === "ttt" ||
+          gameType === "rps"
+        ) {
+          return interaction.reply({
+            content:
+              "🎮 בחר את היריב:",
+
+            components: [
+              new ActionRowBuilder()
+                .addComponents(
+                  new UserSelectMenuBuilder()
+                    .setCustomId(
+                      `arcade_target_select:${gameType}`
+                    )
+                    .setPlaceholder(
+                      "בחר שחקן..."
+                    )
+                    .setMinValues(
+                      1
+                    )
+                    .setMaxValues(
+                      1
+                    )
+                )
+            ],
+
+            ephemeral:
+              true
+          });
+        }
+
+        const gameId =
+          crypto.randomBytes(
+            5
+          ).toString(
+            "hex"
+          );
+
+        if (
+          gameType === "impostor"
+        ) {
+          const game = {
+            id:
+              gameId,
+
+            hostId:
+              interaction.user.id,
+
+            players:
+              new Set([
+                interaction.user.id
+              ]),
+
+            started:
+              false,
+
+            impostorId:
+              null,
+
+            word:
+              null,
+
+            messageId:
+              null
+          };
+
+          const message =
+            await destination.send({
+              content:
+                `🕵️ משחק חדש נפתח על ידי ${interaction.user}!`,
+
+              embeds: [
+                createImpostorLobbyEmbed(
+                  game
+                )
+              ],
+
+              components:
+                createImpostorLobbyRows(
+                  gameId
+                )
+            });
+
+          game.messageId =
+            message.id;
+
+          arcadeImpostorGames.set(
+            gameId,
+            game
+          );
+
+          return interaction.reply({
+            content:
+              `✅ המשחק נפתח: ${message.url}`,
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          gameType === "bomba"
+        ) {
+          const game = {
+            id:
+              gameId,
+
+            hostId:
+              interaction.user.id,
+
+            players:
+              new Set([
+                interaction.user.id
+              ]),
+
+            started:
+              false,
+
+            messageId:
+              null,
+
+            timer:
+              null
+          };
+
+          const message =
+            await destination.send({
+              content:
+                `💣 משחק בומבה נפתח על ידי ${interaction.user}!`,
+
+              embeds: [
+                createBombaLobbyEmbed(
+                  game
+                )
+              ],
+
+              components:
+                createBombaLobbyRows(
+                  gameId
+                )
+            });
+
+          game.messageId =
+            message.id;
+
+          arcadeBombaGames.set(
+            gameId,
+            game
+          );
+
+          return interaction.reply({
+            content:
+              `✅ המשחק נפתח: ${message.url}`,
+
+            ephemeral:
+              true
+          });
         }
       }
 
+      // ===================== ARCADE TARGET =====================
+
       if (
-        !previousRoleId
+        interaction.isUserSelectMenu() &&
+        interaction.customId.startsWith(
+          "arcade_target_select:"
+        )
       ) {
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "ℹ️ אין דרגה קודמת שמורה. אם אתה רוצה להוציא אותו מהצוות, השתמש ב-**הורדה מהצוות**."
-        );
+        const gameType =
+          interaction.customId
+            .split(":")[1];
+
+        const targetId =
+          interaction.values[0];
+
+        if (
+          targetId ===
+          interaction.user.id
+        ) {
+          return interaction.update({
+            content:
+              "❌ אי אפשר לבחור את עצמך.",
+
+            components: []
+          });
+        }
+
+        const target =
+          await fetchFreshMember(
+            interaction.guild,
+            targetId
+          );
+
+        if (
+          target.user.bot
+        ) {
+          return interaction.update({
+            content:
+              "❌ אי אפשר להזמין בוט.",
+
+            components: []
+          });
+        }
+
+        const destination =
+          await client.channels.fetch(
+            ARCADE_GAMES_CHANNEL_ID
+          );
+
+        const gameId =
+          crypto.randomBytes(
+            5
+          ).toString(
+            "hex"
+          );
+
+        if (
+          gameType === "ttt"
+        ) {
+          const game = {
+            id:
+              gameId,
+
+            challengerId:
+              interaction.user.id,
+
+            targetId,
+
+            playerX:
+              interaction.user.id,
+
+            playerO:
+              targetId,
+
+            board:
+              Array(
+                9
+              ).fill(
+                null
+              ),
+
+            turn:
+              interaction.user.id,
+
+            accepted:
+              false,
+
+            finished:
+              false,
+
+            winner:
+              null,
+
+            draw:
+              false
+          };
+
+          arcadeTttGames.set(
+            gameId,
+            game
+          );
+
+          const message =
+            await destination.send({
+              content:
+                `${target}, ${interaction.user} הזמין אותך לאיקס עיגול!`,
+
+              components: [
+                createTttChallengeRow(
+                  gameId
+                )
+              ]
+            });
+
+          return interaction.update({
+            content:
+              `✅ ההזמנה נשלחה: ${message.url}`,
+
+            components: []
+          });
+        }
+
+        if (
+          gameType === "rps"
+        ) {
+          const game = {
+            id:
+              gameId,
+
+            challengerId:
+              interaction.user.id,
+
+            targetId,
+
+            players: [
+              interaction.user.id,
+              targetId
+            ],
+
+            accepted:
+              false,
+
+            choices:
+              new Map(),
+
+            finished:
+              false
+          };
+
+          arcadeRpsGames.set(
+            gameId,
+            game
+          );
+
+          const message =
+            await destination.send({
+              content:
+                `${target}, ${interaction.user} הזמין אותך לאבן נייר ומספריים!`,
+
+              components: [
+                createRpsChallengeRow(
+                  gameId
+                )
+              ]
+            });
+
+          return interaction.update({
+            content:
+              `✅ ההזמנה נשלחה: ${message.url}`,
+
+            components: []
+          });
+        }
       }
 
-      await member.roles.remove(
-        currentRoleId
-      );
+      // ===================== TTT =====================
 
-      const fresh =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        );
-
-      await applyPreferredNickname(
-        fresh
-      );
-
-      await sendStaffLog({
-        guild:
-          interaction.guild,
-
-        targetMember:
-          fresh,
-
-        actorUser:
-          interaction.user,
-
-        title:
-          "⬇️ הורדת דרגה",
-
-        fromRoleId:
-          currentRoleId,
-
-        toRoleId:
-          previousRoleId
-      });
-
-      return refreshManagementPanel(
-        interaction,
-        targetId,
-        `✅ ${fresh.user} הורד/ה ל-**${await getRoleName(
-          interaction.guild,
-          previousRoleId
-        )}**.`
-      );
-    }
-
-    // ===================== MANAGE REMOVE =====================
-
-    if (
-      interaction.isButton() &&
-      interaction.customId.startsWith(
-        "manage_remove:"
-      )
-    ) {
       if (
-        interaction.user.id !==
-        OWNER_USER_ID
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "ttt_accept:"
+        )
       ) {
-        return interaction.reply({
-          content:
-            "❌ אין לך גישה לפאנל הזה.",
+        const gameId =
+          interaction.customId
+            .split(":")[1];
 
-          ephemeral:
-            true
+        const game =
+          arcadeTttGames.get(
+            gameId
+          );
+
+        if (
+          !game
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המשחק לא קיים.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          interaction.user.id !==
+          game.targetId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק מי שהוזמן יכול לאשר.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.accepted =
+          true;
+
+        game.turn =
+          crypto.randomInt(
+            2
+          ) === 0
+            ? game.playerX
+            : game.playerO;
+
+        return interaction.update({
+          content:
+            `🎮 <@${game.playerX}> נגד <@${game.playerO}>`,
+
+          embeds: [
+            createTttEmbed(
+              game
+            )
+          ],
+
+          components:
+            createTttBoardRows(
+              game
+            )
         });
       }
 
-      const targetId =
-        interaction.customId
-          .split(":")[1];
-
-      await interaction.deferUpdate();
-
-      const member =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "ttt_cancel:"
         )
-          .catch(
-            () => null
-          );
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
 
-      if (!member) {
-        return interaction.editReply({
+        arcadeTttGames.delete(
+          gameId
+        );
+
+        return interaction.update({
           content:
-            "❌ המשתמש לא נמצא.",
+            "❌ המשחק בוטל.",
 
           embeds: [],
 
@@ -12217,89 +12940,3019 @@ client.on(
         });
       }
 
-      const beforeRoleId =
-        getHighestLadderRoleId(
-          member
-        );
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "ttt_cell:"
+        )
+      ) {
+        const [
+          ,
+          gameId,
+          indexRaw
+        ] =
+          interaction.customId
+            .split(":");
 
-      const rolesToRemove =
-        STAFF_ACCESS_ROLE_IDS.filter(
-          roleId =>
-            member.roles.cache.has(
-              roleId
+        const game =
+          arcadeTttGames.get(
+            gameId
+          );
+
+        if (
+          !game ||
+          game.finished
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המשחק הסתיים.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          interaction.user.id !==
+          game.turn
+        ) {
+          return interaction.reply({
+            content:
+              "⏳ זה לא התור שלך.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        const index =
+          Number(
+            indexRaw
+          );
+
+        if (
+          game.board[
+            index
+          ]
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המשבצת תפוסה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.board[
+          index
+        ] =
+          interaction.user.id ===
+            game.playerX
+            ? "❌"
+            : "⭕";
+
+        const winner =
+          getTttWinner(
+            game.board
+          );
+
+        if (
+          winner
+        ) {
+          game.finished =
+            true;
+
+          game.winner =
+            winner;
+
+        } else if (
+          game.board.every(
+            Boolean
+          )
+        ) {
+          game.finished =
+            true;
+
+          game.draw =
+            true;
+
+        } else {
+          game.turn =
+            interaction.user.id ===
+              game.playerX
+              ? game.playerO
+              : game.playerX;
+        }
+
+        return interaction.update({
+          embeds: [
+            createTttEmbed(
+              game
             )
-        );
+          ],
+
+          components:
+            createTttBoardRows(
+              game
+            )
+        });
+      }
+
+      // ===================== RPS =====================
 
       if (
-        !rolesToRemove.length
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "rps_accept:"
+        )
       ) {
-        return refreshManagementPanel(
-          interaction,
-          targetId,
-          "ℹ️ למשתמש אין רולי צוות."
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeRpsGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id !==
+          game?.targetId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק מי שהוזמן יכול לאשר.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.accepted =
+          true;
+
+        return interaction.update({
+          content:
+            `✊✋✌️ <@${game.challengerId}> נגד <@${game.targetId}>`,
+
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(
+                "✊✋✌️ אבן נייר ומספריים"
+              )
+              .setDescription(
+                "כל אחד בוחר בסתר."
+              )
+          ],
+
+          components: [
+            createRpsChoiceRow(
+              gameId
+            )
+          ]
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "rps_cancel:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        arcadeRpsGames.delete(
+          gameId
+        );
+
+        return interaction.update({
+          content:
+            "❌ המשחק בוטל.",
+
+          embeds: [],
+
+          components: []
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "rps_choice:"
+        )
+      ) {
+        const [
+          ,
+          gameId,
+          choice
+        ] =
+          interaction.customId
+            .split(":");
+
+        const game =
+          arcadeRpsGames.get(
+            gameId
+          );
+
+        if (
+          !game ||
+          !game.players.includes(
+            interaction.user.id
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אתה לא במשחק הזה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.choices.set(
+          interaction.user.id,
+          choice
+        );
+
+        await interaction.reply({
+          content:
+            `✅ בחרת ${rpsEmoji(choice)}.`,
+
+          ephemeral:
+            true
+        });
+
+        if (
+          game.choices.size < 2
+        ) {
+          return;
+        }
+
+        const firstId =
+          game.players[0];
+
+        const secondId =
+          game.players[1];
+
+        const first =
+          game.choices.get(
+            firstId
+          );
+
+        const second =
+          game.choices.get(
+            secondId
+          );
+
+        const result =
+          getRpsWinner(
+            first,
+            second
+          );
+
+        let text;
+
+        if (
+          result === "draw"
+        ) {
+          text =
+            "🤝 **תיקו!**";
+
+        } else {
+          const winnerId =
+            result === "first"
+              ? firstId
+              : secondId;
+
+          text =
+            `🏆 המנצח: <@${winnerId}>`;
+        }
+
+        game.finished =
+          true;
+
+        await interaction.message.edit({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(
+                "✊✋✌️ תוצאה"
+              )
+              .setDescription(
+                `<@${firstId}> ${rpsEmoji(first)}\n` +
+                `<@${secondId}> ${rpsEmoji(second)}\n\n` +
+                text
+              )
+          ],
+
+          components: []
+        });
+
+        return;
+      }
+
+      // ===================== IMPOSTOR =====================
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "impostor_join:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeImpostorGames.get(
+            gameId
+          );
+
+        if (
+          !game ||
+          game.started
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המשחק כבר התחיל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.players.add(
+          interaction.user.id
+        );
+
+        return interaction.update({
+          embeds: [
+            createImpostorLobbyEmbed(
+              game
+            )
+          ],
+
+          components:
+            createImpostorLobbyRows(
+              gameId
+            )
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "impostor_leave:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeImpostorGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id ===
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המארח לא יכול לצאת.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game?.players.delete(
+          interaction.user.id
+        );
+
+        return interaction.update({
+          embeds: [
+            createImpostorLobbyEmbed(
+              game
+            )
+          ],
+
+          components:
+            createImpostorLobbyRows(
+              gameId
+            )
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "impostor_cancel:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeImpostorGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id !==
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק המארח יכול לבטל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        arcadeImpostorGames.delete(
+          gameId
+        );
+
+        return interaction.update({
+          content:
+            "🗑️ המשחק בוטל.",
+
+          embeds: [],
+
+          components: []
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "impostor_start:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeImpostorGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id !==
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק המארח יכול להתחיל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          game.players.size < 3
+        ) {
+          return interaction.reply({
+            content:
+              "❌ צריך לפחות 3 שחקנים.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.started =
+          true;
+
+        const players =
+          [...game.players];
+
+        game.impostorId =
+          randomItem(
+            players
+          );
+
+        game.word =
+          randomItem(
+            IMPOSTOR_WORDS
+          );
+
+        let failed =
+          0;
+
+        for (
+          const playerId of
+          players
+        ) {
+          const user =
+            await client.users
+              .fetch(
+                playerId
+              )
+              .catch(
+                () => null
+              );
+
+          if (!user) {
+            failed++;
+            continue;
+          }
+
+          try {
+            if (
+              playerId ===
+              game.impostorId
+            ) {
+              await user.send({
+                embeds: [
+                  new EmbedBuilder()
+                    .setColor(
+                      0xED4245
+                    )
+                    .setTitle(
+                      "🕵️ אתה המתחזה!"
+                    )
+                    .setDescription(
+                      "לא קיבלת מילה. נסה להעמיד פנים שאתה יודע אותה 🤫"
+                    )
+                ]
+              });
+
+            } else {
+              await user.send({
+                embeds: [
+                  new EmbedBuilder()
+                    .setColor(
+                      0x57F287
+                    )
+                    .setTitle(
+                      "🔐 המילה שלך"
+                    )
+                    .setDescription(
+                      `# ${game.word}\n\nאל תגלה את המילה ישירות.`
+                    )
+                ]
+              });
+            }
+
+          } catch {
+            failed++;
+          }
+        }
+
+        return interaction.update({
+          content:
+            "🕵️ המשחק התחיל!",
+
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(
+                "🕵️ נחש את המתחזה"
+              )
+              .setDescription(
+                "📩 בדקו DM והתחילו לתת רמזים." +
+                (
+                  failed
+                    ? `\n⚠️ ${failed} לא הצליחו לקבל DM.`
+                    : ""
+                )
+              )
+          ],
+
+          components: [
+            new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId(
+                    `impostor_reveal:${gameId}`
+                  )
+                  .setLabel(
+                    "חשוף את המתחזה"
+                  )
+                  .setEmoji(
+                    "👀"
+                  )
+                  .setStyle(
+                    ButtonStyle.Danger
+                  )
+              )
+          ]
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "impostor_reveal:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeImpostorGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id !==
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק המארח יכול לחשוף.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        arcadeImpostorGames.delete(
+          gameId
+        );
+
+        return interaction.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(
+                0xED4245
+              )
+              .setTitle(
+                "🕵️ המתחזה היה..."
+              )
+              .setDescription(
+                `# <@${game.impostorId}>\n\n` +
+                `המילה הייתה: **${game.word}**`
+              )
+          ],
+
+          components: []
+        });
+      }
+
+      // ===================== BOMBA =====================
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "bomba_join:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeBombaGames.get(
+            gameId
+          );
+
+        if (
+          !game ||
+          game.started
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המשחק כבר התחיל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.players.add(
+          interaction.user.id
+        );
+
+        return interaction.update({
+          embeds: [
+            createBombaLobbyEmbed(
+              game
+            )
+          ],
+
+          components:
+            createBombaLobbyRows(
+              gameId
+            )
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "bomba_leave:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeBombaGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id ===
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ המארח לא יכול לצאת.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game?.players.delete(
+          interaction.user.id
+        );
+
+        return interaction.update({
+          embeds: [
+            createBombaLobbyEmbed(
+              game
+            )
+          ],
+
+          components:
+            createBombaLobbyRows(
+              gameId
+            )
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "bomba_cancel:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeBombaGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id !==
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק המארח יכול לבטל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          game.timer
+        ) {
+          clearTimeout(
+            game.timer
+          );
+        }
+
+        arcadeBombaGames.delete(
+          gameId
+        );
+
+        return interaction.update({
+          content:
+            "🗑️ המשחק בוטל.",
+
+          embeds: [],
+
+          components: []
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "bomba_start:"
+        )
+      ) {
+        const gameId =
+          interaction.customId
+            .split(":")[1];
+
+        const game =
+          arcadeBombaGames.get(
+            gameId
+          );
+
+        if (
+          interaction.user.id !==
+          game?.hostId
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק המארח יכול להתחיל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        if (
+          game.players.size < 2
+        ) {
+          return interaction.reply({
+            content:
+              "❌ צריך לפחות 2 שחקנים.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        game.started =
+          true;
+
+        const topic =
+          randomItem(
+            BOMBA_TOPICS
+          );
+
+        const players =
+          [...game.players];
+
+        const unlucky =
+          randomItem(
+            players
+          );
+
+        const explosionDelay =
+          crypto.randomInt(
+            15_000,
+            31_000
+          );
+
+        await interaction.update({
+          content:
+            "💣 **הבומבה התחילה!**",
+
+          embeds: [
+            new EmbedBuilder()
+              .setColor(
+                0xED4245
+              )
+              .setTitle(
+                "💣 בומבה!"
+              )
+              .setDescription(
+                `📚 **הנושא:** # ${topic}\n\n` +
+                "תענו מהר תשובות שמתאימות לנושא!\n" +
+                "⏱️ אף אחד לא יודע מתי הבומבה תתפוצץ..."
+              )
+          ],
+
+          components: []
+        });
+
+        game.timer =
+          setTimeout(
+            async () => {
+              if (
+                !arcadeBombaGames.has(
+                  gameId
+                )
+              ) {
+                return;
+              }
+
+              await interaction.message
+                .edit({
+                  content:
+                    "💥💥💥 **בווווום!** 💥💥💥",
+
+                  embeds: [
+                    new EmbedBuilder()
+                      .setColor(
+                        0x000000
+                      )
+                      .setTitle(
+                        "💥 הבומבה התפוצצה!"
+                      )
+                      .setDescription(
+                        `💣 היא התפוצצה על <@${unlucky}>!\n\n` +
+                        `📚 הנושא היה **${topic}**`
+                      )
+                  ],
+
+                  components: []
+                })
+                .catch(
+                  () => {}
+                );
+
+              arcadeBombaGames.delete(
+                gameId
+              );
+            },
+            explosionDelay
+          );
+
+        return;
+      }
+
+    } catch (error) {
+      console.error(
+        "❌ interactionCreate main bot:",
+        error
+      );
+
+      try {
+        if (
+          interaction.deferred ||
+          interaction.replied
+        ) {
+          await interaction.followUp({
+            content:
+              "❌ קרתה שגיאה בזמן ביצוע הפעולה.",
+
+            ephemeral:
+              true
+          });
+
+        } else {
+          await interaction.reply({
+            content:
+              "❌ קרתה שגיאה בזמן ביצוע הפעולה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+      } catch {}
+    }
+  }
+);
+// ========================================================
+//                    ROEI MUSIC BOT
+// ========================================================
+
+const musicPlayer =
+  new Player(
+    musicClient
+  );
+
+let musicExtractorReady =
+  false;
+
+// ===================== MUSIC COMMANDS =====================
+
+const musicPlayCommand =
+  new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("השמעת מוזיקה")
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("song")
+          .setDescription("הפעל שיר")
+          .addStringOption(
+            option =>
+              option
+                .setName("query")
+                .setDescription("שם השיר או קישור YouTube")
+                .setRequired(true)
+                .setMaxLength(500)
+          )
+    )
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("playlist")
+          .setDescription("הפעל פלייליסט אישי שלך")
+          .addStringOption(
+            option =>
+              option
+                .setName("name")
+                .setDescription("שם הפלייליסט")
+                .setRequired(true)
+                .setMaxLength(60)
+          )
+    );
+
+const musicPlaylistCommand =
+  new SlashCommandBuilder()
+    .setName("playlist")
+    .setDescription("ניהול הפלייליסטים האישיים שלך")
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("create")
+          .setDescription("צור פלייליסט חדש")
+          .addStringOption(
+            option =>
+              option
+                .setName("name")
+                .setDescription("שם הפלייליסט")
+                .setRequired(true)
+                .setMaxLength(60)
+          )
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("add")
+          .setDescription("הוסף שיר לפלייליסט")
+          .addStringOption(
+            option =>
+              option
+                .setName("name")
+                .setDescription("שם הפלייליסט")
+                .setRequired(true)
+                .setMaxLength(60)
+          )
+          .addStringOption(
+            option =>
+              option
+                .setName("song")
+                .setDescription("שם השיר או קישור")
+                .setRequired(true)
+                .setMaxLength(500)
+          )
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("list")
+          .setDescription("הצג את הפלייליסטים שלך")
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("show")
+          .setDescription("הצג את השירים בפלייליסט")
+          .addStringOption(
+            option =>
+              option
+                .setName("name")
+                .setDescription("שם הפלייליסט")
+                .setRequired(true)
+                .setMaxLength(60)
+          )
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("remove")
+          .setDescription("הסר שיר מפלייליסט")
+          .addStringOption(
+            option =>
+              option
+                .setName("name")
+                .setDescription("שם הפלייליסט")
+                .setRequired(true)
+                .setMaxLength(60)
+          )
+          .addIntegerOption(
+            option =>
+              option
+                .setName("position")
+                .setDescription("מספר השיר בפלייליסט")
+                .setRequired(true)
+                .setMinValue(1)
+          )
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName("delete")
+          .setDescription("מחק פלייליסט")
+          .addStringOption(
+            option =>
+              option
+                .setName("name")
+                .setDescription("שם הפלייליסט")
+                .setRequired(true)
+                .setMaxLength(60)
+          )
+    );
+
+const musicPauseCommand =
+  new SlashCommandBuilder()
+    .setName("pause")
+    .setDescription("עצור זמנית את המוזיקה");
+
+const musicResumeCommand =
+  new SlashCommandBuilder()
+    .setName("resume")
+    .setDescription("המשך את המוזיקה");
+
+const musicSkipCommand =
+  new SlashCommandBuilder()
+    .setName("skip")
+    .setDescription("דלג לשיר הבא");
+
+const musicStopCommand =
+  new SlashCommandBuilder()
+    .setName("stop")
+    .setDescription("עצור את המוזיקה ונקה את התור");
+
+const musicQueueCommand =
+  new SlashCommandBuilder()
+    .setName("queue")
+    .setDescription("הצג את תור המוזיקה");
+
+const musicNowPlayingCommand =
+  new SlashCommandBuilder()
+    .setName("nowplaying")
+    .setDescription("הצג מה מתנגן עכשיו");
+
+const musicVolumeCommand =
+  new SlashCommandBuilder()
+    .setName("volume")
+    .setDescription("שנה את עוצמת המוזיקה")
+    .addIntegerOption(
+      option =>
+        option
+          .setName("amount")
+          .setDescription("עוצמה בין 1 ל-100")
+          .setRequired(true)
+          .setMinValue(1)
+          .setMaxValue(100)
+    );
+
+const musicShuffleCommand =
+  new SlashCommandBuilder()
+    .setName("shuffle")
+    .setDescription("ערבב את השירים שבתור");
+
+const musicLoopCommand =
+  new SlashCommandBuilder()
+    .setName("loop")
+    .setDescription("בחר מצב חזרה")
+    .addStringOption(
+      option =>
+        option
+          .setName("mode")
+          .setDescription("מצב החזרה")
+          .setRequired(true)
+          .addChoices(
+            {
+              name: "כבוי",
+              value: "off"
+            },
+            {
+              name: "חזרה על השיר",
+              value: "track"
+            },
+            {
+              name: "חזרה על כל התור",
+              value: "queue"
+            }
+          )
+    );
+
+const musicRemoveCommand =
+  new SlashCommandBuilder()
+    .setName("remove")
+    .setDescription("הסר שיר מתור המוזיקה")
+    .addIntegerOption(
+      option =>
+        option
+          .setName("position")
+          .setDescription("המיקום של השיר בתור")
+          .setRequired(true)
+          .setMinValue(1)
+    );
+
+const musicCommands = [
+  musicPlayCommand,
+  musicPlaylistCommand,
+  musicPauseCommand,
+  musicResumeCommand,
+  musicSkipCommand,
+  musicStopCommand,
+  musicQueueCommand,
+  musicNowPlayingCommand,
+  musicVolumeCommand,
+  musicShuffleCommand,
+  musicLoopCommand,
+  musicRemoveCommand
+];
+
+// ===================== MUSIC HELPERS =====================
+
+async function fetchMusicMember(
+  guild,
+  userId
+) {
+  return guild.members
+    .fetch({
+      user: userId,
+      force: true
+    })
+    .catch(
+      () => null
+    );
+}
+
+function getMusicQueue(
+  guildId = GUILD_ID
+) {
+  return (
+    musicPlayer.nodes.get(
+      guildId
+    ) ||
+    null
+  );
+}
+
+async function ensureMusicExtractor() {
+  if (
+    musicExtractorReady
+  ) {
+    return;
+  }
+
+  await musicPlayer.extractors.register(
+    YouTubeDlpExtractor,
+    {}
+  );
+
+  musicExtractorReady =
+    true;
+
+  console.log(
+    "✅ Music YouTube extractor נטען"
+  );
+}
+
+async function getMusicVoiceChannel() {
+  const guild =
+    await musicClient.guilds
+      .fetch(
+        GUILD_ID
+      )
+      .catch(
+        () => null
+      );
+
+  if (!guild) {
+    throw new Error(
+      "Music guild not found"
+    );
+  }
+
+  const voiceChannel =
+    await guild.channels
+      .fetch(
+        MUSIC_VOICE_CHANNEL_ID
+      )
+      .catch(
+        () => null
+      );
+
+  if (
+    !voiceChannel ||
+    voiceChannel.type !==
+      ChannelType.GuildVoice
+  ) {
+    throw new Error(
+      "Music voice channel not found"
+    );
+  }
+
+  return {
+    guild,
+    voiceChannel
+  };
+}
+
+async function ensureMusicConnection() {
+  await ensureMusicExtractor();
+
+  const {
+    guild,
+    voiceChannel
+  } =
+    await getMusicVoiceChannel();
+
+  let queue =
+    getMusicQueue(
+      guild.id
+    );
+
+  if (
+    !queue ||
+    queue.deleted
+  ) {
+    queue =
+      musicPlayer.nodes.create(
+        guild,
+        {
+          metadata:
+            voiceChannel,
+
+          leaveOnEmpty:
+            false,
+
+          leaveOnEnd:
+            false,
+
+          leaveOnStop:
+            false,
+
+          pauseOnEmpty:
+            false,
+
+          selfDeaf:
+            true,
+
+          volume:
+            50,
+
+          bufferingTimeout:
+            20000
+        }
+      );
+  }
+
+  queue.setMetadata(
+    voiceChannel
+  );
+
+  if (
+    !queue.connection ||
+    queue.channel?.id !==
+      voiceChannel.id
+  ) {
+    await queue.connect(
+      voiceChannel,
+      {
+        deaf: true
+      }
+    );
+  }
+
+  return {
+    guild,
+    voiceChannel,
+    queue
+  };
+}
+
+async function playMusicQuery(
+  query,
+  requestedBy
+) {
+  await ensureMusicExtractor();
+
+  const {
+    voiceChannel
+  } =
+    await ensureMusicConnection();
+
+  return musicPlayer.play(
+    voiceChannel,
+    query,
+    {
+      requestedBy,
+
+      nodeOptions: {
+        metadata:
+          voiceChannel,
+
+        leaveOnEmpty:
+          false,
+
+        leaveOnEnd:
+          false,
+
+        leaveOnStop:
+          false,
+
+        pauseOnEmpty:
+          false,
+
+        selfDeaf:
+          true,
+
+        volume:
+          50,
+
+        bufferingTimeout:
+          20000
+      }
+    }
+  );
+}
+
+async function getMusicTextChannel() {
+  const channel =
+    await musicClient.channels
+      .fetch(
+        MUSIC_VOICE_CHANNEL_ID
+      )
+      .catch(
+        () => null
+      );
+
+  if (
+    !channel ||
+    !channel.isSendable()
+  ) {
+    return null;
+  }
+
+  return channel;
+}
+
+function musicWrongChannelReply(
+  interaction
+) {
+  return interaction.reply({
+    content:
+      `❌ פקודות המוזיקה עובדות רק בצ'אט של <#${MUSIC_VOICE_CHANNEL_ID}>.`,
+
+    ephemeral:
+      true
+  });
+}
+
+function musicNoPermissionReply(
+  interaction,
+  minimum
+) {
+  return interaction.reply({
+    content:
+      `❌ הפקודה הזאת זמינה רק ל-**${minimum} ומעלה**.`,
+
+    ephemeral:
+      true
+  });
+}
+
+function getTrackTitle(track) {
+  return (
+    track?.cleanTitle ||
+    track?.title ||
+    "שיר לא ידוע"
+  );
+}
+
+function getTrackUrl(track) {
+  return (
+    track?.url ||
+    null
+  );
+}
+
+function formatTrackLine(
+  track,
+  number = null
+) {
+  const title =
+    safeText(
+      getTrackTitle(
+        track
+      ),
+      80
+    );
+
+  const url =
+    getTrackUrl(
+      track
+    );
+
+  const prefix =
+    number
+      ? `**${number}.** `
+      : "";
+
+  if (url) {
+    return (
+      `${prefix}[${title}](${url})`
+    );
+  }
+
+  return (
+    `${prefix}${title}`
+  );
+}
+
+// ===================== MUSIC EVENTS =====================
+
+musicPlayer.events.on(
+  "playerStart",
+  async (
+    queue,
+    track
+  ) => {
+    try {
+      const channel =
+        await getMusicTextChannel();
+
+      if (!channel) {
+        return;
+      }
+
+      const embed =
+        new EmbedBuilder()
+          .setColor(
+            0x5865F2
+          )
+          .setTitle(
+            "🎵 מתנגן עכשיו"
+          )
+          .setDescription(
+            formatTrackLine(
+              track
+            )
+          )
+          .addFields(
+            {
+              name:
+                "⏱️ אורך",
+
+              value:
+                track.duration ||
+                "לא ידוע",
+
+              inline:
+                true
+            },
+
+            {
+              name:
+                "👤 ביקש",
+
+              value:
+                track.requestedBy
+                  ? `${track.requestedBy}`
+                  : "לא ידוע",
+
+              inline:
+                true
+            }
+          )
+          .setTimestamp();
+
+      if (
+        track.thumbnail
+      ) {
+        embed.setThumbnail(
+          track.thumbnail
         );
       }
 
-      await member.roles.remove(
-        rolesToRemove
+      await channel.send({
+        embeds: [
+          embed
+        ]
+      }).catch(
+        () => {}
       );
 
-      const fresh =
-        await fetchFreshMember(
-          interaction.guild,
-          targetId
-        );
-
-      await applyPreferredNickname(
-        fresh
-      );
-
-      await sendStaffLog({
-        guild:
-          interaction.guild,
-
-        targetMember:
-          fresh,
-
-        actorUser:
-          interaction.user,
-
-        title:
-          "❌ הורדה מהצוות",
-
-        fromRoleId:
-          beforeRoleId,
-
-        toRoleId:
-          null
-      });
-
-      return refreshManagementPanel(
-        interaction,
-        targetId,
-        `✅ ${fresh.user} הוסר/ה מהצוות.`
+    } catch (
+      error
+    ) {
+      console.error(
+        "❌ playerStart:",
+        error
       );
     }
   }
 );
 
-// ===================== ERRORS =====================
-
-client.on(
-  "error",
-  error => {
+musicPlayer.events.on(
+  "playerError",
+  (
+    queue,
+    error,
+    track
+  ) => {
     console.error(
-      "❌ Discord client error:",
+      `❌ Music player error (${track?.title || "unknown"}):`,
       error
     );
   }
 );
 
+musicPlayer.events.on(
+  "error",
+  (
+    queue,
+    error
+  ) => {
+    console.error(
+      "❌ Music queue error:",
+      error
+    );
+  }
+);
+
+musicPlayer.events.on(
+  "disconnect",
+  () => {
+    setTimeout(
+      () => {
+        ensureMusicConnection()
+          .catch(
+            error =>
+              console.error(
+                "❌ Music reconnect:",
+                error.message
+              )
+          );
+      },
+      3000
+    );
+  }
+);
+
+// ===================== MUSIC READY =====================
+
+musicClient.once(
+  "ready",
+  async () => {
+    console.log(
+      `🎵 Roei Music Bot מחובר בתור ${musicClient.user.tag}`
+    );
+
+    try {
+      await ensureMusicExtractor();
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "❌ טעינת Music Extractor:",
+        error
+      );
+    }
+
+    try {
+      const rest =
+        new REST({
+          version:
+            "10"
+        })
+          .setToken(
+            MUSIC_BOT_TOKEN
+          );
+
+      await rest.put(
+        Routes.applicationGuildCommands(
+          MUSIC_CLIENT_ID,
+          GUILD_ID
+        ),
+        {
+          body:
+            musicCommands.map(
+              command =>
+                command.toJSON()
+            )
+        }
+      );
+
+      console.log(
+        "✅ פקודות Roei Music נרשמו"
+      );
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "❌ רישום פקודות Music:",
+        error
+      );
+    }
+
+    try {
+      await ensureMusicConnection();
+
+      console.log(
+        "✅ Roei Music מחובר לחדר המוזיקה 24/7"
+      );
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "❌ כניסה לחדר המוזיקה:",
+        error
+      );
+    }
+  }
+);
+
+// אם מנתקים את בוט המוזיקה מהחדר,
+// הוא מנסה לחזור אוטומטית.
+
+musicClient.on(
+  "voiceStateUpdate",
+  (
+    oldState,
+    newState
+  ) => {
+    if (
+      newState.member?.id !==
+      musicClient.user?.id
+    ) {
+      return;
+    }
+
+    if (
+      newState.channelId ===
+      MUSIC_VOICE_CHANNEL_ID
+    ) {
+      return;
+    }
+
+    setTimeout(
+      () => {
+        ensureMusicConnection()
+          .catch(
+            () => {}
+          );
+      },
+      2500
+    );
+  }
+);
+
+// ===================== MUSIC INTERACTIONS =====================
+
+musicClient.on(
+  "interactionCreate",
+  async interaction => {
+    if (
+      !interaction.isChatInputCommand()
+    ) {
+      return;
+    }
+
+    try {
+      if (
+        interaction.guildId !==
+          GUILD_ID ||
+        interaction.channelId !==
+          MUSIC_VOICE_CHANNEL_ID
+      ) {
+        return musicWrongChannelReply(
+          interaction
+        );
+      }
+
+      const guild =
+        interaction.guild;
+
+      if (!guild) {
+        return interaction.reply({
+          content:
+            "❌ לא הצלחתי למצוא את השרת.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      const member =
+        await fetchMusicMember(
+          guild,
+          interaction.user.id
+        );
+
+      if (!member) {
+        return interaction.reply({
+          content:
+            "❌ לא הצלחתי למצוא אותך בשרת.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      // ==================================================
+      // PLAYLIST
+      // כל אחד יכול ליצור ולנהל פלייליסטים אישיים.
+      // ==================================================
+
+      if (
+        interaction.commandName ===
+        "playlist"
+      ) {
+        const sub =
+          interaction.options
+            .getSubcommand();
+
+        // ---------- CREATE ----------
+
+        if (
+          sub === "create"
+        ) {
+          const name =
+            interaction.options
+              .getString(
+                "name",
+                true
+              )
+              .trim();
+
+          const map =
+            getUserPlaylistMap(
+              interaction.user.id,
+              true
+            );
+
+          const key =
+            normalizePlaylistName(
+              name
+            );
+
+          if (
+            map.has(
+              key
+            )
+          ) {
+            return interaction.reply({
+              content:
+                `❌ כבר יש לך פלייליסט בשם **${name}**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          const playlist =
+            createUserPlaylistLocal(
+              interaction.user.id,
+              name
+            );
+
+          if (!playlist) {
+            return interaction.reply({
+              content:
+                "❌ שם הפלייליסט לא תקין.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          await logBotData(
+            `MUSIC_PL_CREATE|${interaction.user.id}|${encodeSmall(playlist.name)}`
+          );
+
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(
+                  0x57F287
+                )
+                .setTitle(
+                  "✅ הפלייליסט נוצר"
+                )
+                .setDescription(
+                  `🎵 **${playlist.name}**\n\n` +
+                  "כדי להוסיף שיר השתמש ב-`/playlist add`."
+                )
+            ],
+
+            ephemeral:
+              true
+          });
+        }
+
+        // ---------- ADD ----------
+
+        if (
+          sub === "add"
+        ) {
+          const name =
+            interaction.options
+              .getString(
+                "name",
+                true
+              );
+
+          const song =
+            interaction.options
+              .getString(
+                "song",
+                true
+              )
+              .trim();
+
+          const playlist =
+            getUserPlaylist(
+              interaction.user.id,
+              name
+            );
+
+          if (!playlist) {
+            return interaction.reply({
+              content:
+                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          if (
+            playlist.songs.length >=
+            100
+          ) {
+            return interaction.reply({
+              content:
+                "❌ אפשר לשמור עד 100 שירים בכל פלייליסט.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          await interaction.deferReply({
+            ephemeral:
+              true
+          });
+
+          try {
+            await ensureMusicExtractor();
+
+            const search =
+              await musicPlayer.search(
+                song,
+                {
+                  requestedBy:
+                    interaction.user
+                }
+              );
+
+            const track =
+              search.tracks[0];
+
+            if (!track) {
+              return interaction.editReply(
+                "❌ לא מצאתי את השיר."
+              );
+            }
+
+            const storedSong =
+              track.url ||
+              song;
+
+            playlist.songs.push(
+              storedSong
+            );
+
+            await logBotData(
+              `MUSIC_PL_ADD|${interaction.user.id}|${encodeSmall(playlist.name)}|${encodeSmall(storedSong)}`
+            );
+
+            return interaction.editReply(
+              `✅ **${getTrackTitle(track)}** נוסף ל-**${playlist.name}**.\n` +
+              `🎵 יש עכשיו **${playlist.songs.length} שירים** בפלייליסט.`
+            );
+
+          } catch (
+            error
+          ) {
+            console.error(
+              "❌ playlist add:",
+              error
+            );
+
+            return interaction.editReply(
+              "❌ לא הצלחתי למצוא את השיר הזה."
+            );
+          }
+        }
+
+        // ---------- LIST ----------
+
+        if (
+          sub === "list"
+        ) {
+          const map =
+            getUserPlaylistMap(
+              interaction.user.id,
+              false
+            );
+
+          if (
+            !map ||
+            map.size === 0
+          ) {
+            return interaction.reply({
+              content:
+                "🎵 עדיין אין לך פלייליסטים.\nצור אחד עם `/playlist create`.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          const lines =
+            [...map.values()]
+              .map(
+                (
+                  playlist,
+                  index
+                ) =>
+                  `**${index + 1}. ${playlist.name}** — ${playlist.songs.length} שירים`
+              )
+              .join(
+                "\n"
+              );
+
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(
+                  0x5865F2
+                )
+                .setTitle(
+                  "🎵 הפלייליסטים שלך"
+                )
+                .setDescription(
+                  lines
+                )
+            ],
+
+            ephemeral:
+              true
+          });
+        }
+
+        // ---------- SHOW ----------
+
+        if (
+          sub === "show"
+        ) {
+          const name =
+            interaction.options
+              .getString(
+                "name",
+                true
+              );
+
+          const playlist =
+            getUserPlaylist(
+              interaction.user.id,
+              name
+            );
+
+          if (!playlist) {
+            return interaction.reply({
+              content:
+                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          if (
+            playlist.songs.length === 0
+          ) {
+            return interaction.reply({
+              content:
+                `🎵 הפלייליסט **${playlist.name}** ריק.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          const shown =
+            playlist.songs
+              .slice(
+                0,
+                25
+              )
+              .map(
+                (
+                  song,
+                  index
+                ) =>
+                  `**${index + 1}.** ${safeText(song, 100)}`
+              )
+              .join(
+                "\n"
+              );
+
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(
+                  0x5865F2
+                )
+                .setTitle(
+                  `🎵 ${playlist.name}`
+                )
+                .setDescription(
+                  shown +
+                  (
+                    playlist.songs.length > 25
+                      ? `\n\n...ועוד **${playlist.songs.length - 25}** שירים`
+                      : ""
+                  )
+                )
+                .setFooter({
+                  text:
+                    `${playlist.songs.length} שירים`
+                })
+            ],
+
+            ephemeral:
+              true
+          });
+        }
+
+        // ---------- REMOVE ----------
+
+        if (
+          sub === "remove"
+        ) {
+          const name =
+            interaction.options
+              .getString(
+                "name",
+                true
+              );
+
+          const position =
+            interaction.options
+              .getInteger(
+                "position",
+                true
+              );
+
+          const playlist =
+            getUserPlaylist(
+              interaction.user.id,
+              name
+            );
+
+          if (!playlist) {
+            return interaction.reply({
+              content:
+                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          const index =
+            position - 1;
+
+          if (
+            index < 0 ||
+            index >=
+              playlist.songs.length
+          ) {
+            return interaction.reply({
+              content:
+                `❌ בפלייליסט יש **${playlist.songs.length} שירים**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          const removed =
+            playlist.songs.splice(
+              index,
+              1
+            )[0];
+
+          await logBotData(
+            `MUSIC_PL_REMOVE|${interaction.user.id}|${encodeSmall(playlist.name)}|${index}`
+          );
+
+          return interaction.reply({
+            content:
+              `🗑️ שיר מספר **${position}** הוסר מ-**${playlist.name}**.\n` +
+              `\`${safeText(removed, 150)}\``,
+
+            ephemeral:
+              true
+          });
+        }
+
+        // ---------- DELETE ----------
+
+        if (
+          sub === "delete"
+        ) {
+          const name =
+            interaction.options
+              .getString(
+                "name",
+                true
+              );
+
+          const map =
+            getUserPlaylistMap(
+              interaction.user.id,
+              false
+            );
+
+          const playlist =
+            getUserPlaylist(
+              interaction.user.id,
+              name
+            );
+
+          if (
+            !map ||
+            !playlist
+          ) {
+            return interaction.reply({
+              content:
+                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          map.delete(
+            normalizePlaylistName(
+              playlist.name
+            )
+          );
+
+          await logBotData(
+            `MUSIC_PL_DELETE|${interaction.user.id}|${encodeSmall(playlist.name)}`
+          );
+
+          return interaction.reply({
+            content:
+              `🗑️ הפלייליסט **${playlist.name}** נמחק.`,
+
+            ephemeral:
+              true
+          });
+        }
+
+        return;
+      }
+
+      // ==================================================
+      // PLAY — Stuff ומעלה
+      // ==================================================
+
+      if (
+        interaction.commandName ===
+        "play"
+      ) {
+        if (
+          !hasMusicDJAccess(
+            member
+          )
+        ) {
+          return musicNoPermissionReply(
+            interaction,
+            "Stuff"
+          );
+        }
+
+        const sub =
+          interaction.options
+            .getSubcommand();
+
+        // ---------- PLAY SONG ----------
+
+        if (
+          sub === "song"
+        ) {
+          const query =
+            interaction.options
+              .getString(
+                "query",
+                true
+              )
+              .trim();
+
+          await interaction.deferReply();
+
+          try {
+            const result =
+              await playMusicQuery(
+                query,
+                interaction.user
+              );
+
+            const track =
+              result?.track;
+
+            if (!track) {
+              return interaction.editReply(
+                "❌ לא מצאתי את השיר."
+              );
+            }
+
+            return interaction.editReply({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(
+                    0x57F287
+                  )
+                  .setTitle(
+                    "✅ השיר נוסף"
+                  )
+                  .setDescription(
+                    formatTrackLine(
+                      track
+                    )
+                  )
+                  .setFooter({
+                    text:
+                      `נוסף על ידי ${interaction.user.username}`
+                  })
+              ]
+            });
+
+          } catch (
+            error
+          ) {
+            console.error(
+              "❌ /play song:",
+              error
+            );
+
+            return interaction.editReply(
+              "❌ לא הצלחתי להפעיל את השיר. נסה שם אחר או קישור אחר."
+            );
+          }
+        }
+
+        // ---------- PLAY PLAYLIST ----------
+
+        if (
+          sub === "playlist"
+        ) {
+          const name =
+            interaction.options
+              .getString(
+                "name",
+                true
+              );
+
+          const playlist =
+            getUserPlaylist(
+              interaction.user.id,
+              name
+            );
+
+          if (!playlist) {
+            return interaction.reply({
+              content:
+                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          if (
+            playlist.songs.length === 0
+          ) {
+            return interaction.reply({
+              content:
+                `❌ הפלייליסט **${playlist.name}** ריק.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          await interaction.deferReply();
+
+          let added = 0;
+          let failed = 0;
+
+          for (
+            const song of
+            playlist.songs
+          ) {
+            try {
+              await playMusicQuery(
+                song,
+                interaction.user
+              );
+
+              added++;
+
+            } catch {
+              failed++;
+            }
+          }
+
+          if (
+            added === 0
+          ) {
+            return interaction.editReply(
+              "❌ לא הצלחתי להפעיל אף שיר מהפלייליסט."
+            );
+          }
+
+          return interaction.editReply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(
+                  0x57F287
+                )
+                .setTitle(
+                  "🎵 הפלייליסט נוסף לתור"
+                )
+                .setDescription(
+                  `**${playlist.name}**\n\n` +
+                  `✅ נוספו: **${added} שירים**` +
+                  (
+                    failed
+                      ? `\n❌ לא הצליחו: **${failed}**`
+                      : ""
+                  )
+                )
+            ]
+          });
+        }
+
+        return;
+      }
+
+      // ==================================================
+      // HELPER ומעלה
+      // ==================================================
+
+      if (
+        [
+          "pause",
+          "resume",
+          "skip",
+          "stop",
+          "queue",
+          "nowplaying"
+        ].includes(
+          interaction.commandName
+        )
+      ) {
+        if (
+          !hasMusicBasicAccess(
+            member
+          )
+        ) {
+          return musicNoPermissionReply(
+            interaction,
+            "Helper"
+          );
+        }
+
+        const queue =
+          getMusicQueue(
+            guild.id
+          );
+
+        // ---------- PAUSE ----------
+
+        if (
+          interaction.commandName ===
+          "pause"
+        ) {
+          if (
+            !queue?.currentTrack
+          ) {
+            return interaction.reply({
+              content:
+                "❌ אין שיר שמתנגן כרגע.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          if (
+            queue.node.isPaused()
+          ) {
+            return interaction.reply({
+              content:
+                "⏸️ המוזיקה כבר בהשהיה.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          queue.node.setPaused(
+            true
+          );
+
+          return interaction.reply(
+            "⏸️ המוזיקה נעצרה זמנית."
+          );
+        }
+
+        // ---------- RESUME ----------
+
+        if (
+          interaction.commandName ===
+          "resume"
+        ) {
+          if (
+            !queue?.currentTrack
+          ) {
+            return interaction.reply({
+              content:
+                "❌ אין שיר שמתנגן כרגע.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          if (
+            !queue.node.isPaused()
+          ) {
+            return interaction.reply({
+              content:
+                "▶️ המוזיקה כבר מתנגנת.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          queue.node.setPaused(
+            false
+          );
+
+          return interaction.reply(
+            "▶️ המוזיקה ממשיכה."
+          );
+        }
+
+        // ---------- SKIP ----------
+
+        if (
+          interaction.commandName ===
+          "skip"
+        ) {
+          if (
+            !queue?.currentTrack
+          ) {
+            return interaction.reply({
+              content:
+                "❌ אין שיר לדלג עליו.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          const skipped =
+            getTrackTitle(
+              queue.currentTrack
+            );
+
+          queue.node.skip();
+
+          return interaction.reply(
+            `⏭️ דילגתי על **${skipped}**.`
+          );
+        }
+
+        // ---------- STOP ----------
+
+        if (
+          interaction.commandName ===
+          "stop"
+        ) {
+          if (
+            !queue
+          ) {
+            return interaction.reply({
+              content:
+                "❌ אין כרגע מוזיקה פעילה.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          queue.clear();
+
+          if (
+            queue.currentTrack
+          ) {
+            queue.node.stop(
+              true
+            );
+          }
+
+          await ensureMusicConnection()
+            .catch(
+              () => {}
+            );
+
+          return interaction.reply(
+            "⏹️ המוזיקה נעצרה והתור נוקה.\n🎧 הבוט נשאר בחדר הקולי."
+          );
+        }
+
+        // ---------- QUEUE ----------
+
+        if (
+          interaction.commandName ===
+          "queue"
+        ) {
+          if (
+            !queue?.currentTrack
+          ) {
+            return interaction.reply({
+              content:
+                "🎵 התור כרגע ריק.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          const tracks =
+            queue.tracks
+              .toArray();
+
+          const nextTracks =
+            tracks
+              .slice(
+                0,
+                10
+              )
+              .map(
+                (
+                  track,
+                  index
+                ) =>
+                  formatTrackLine(
+                    track,
+                    index + 1
+                  )
+              )
+              .join(
+                "\n"
+              );
+
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(
+                  0x5865F2
+                )
+                .setTitle(
+                  "🎶 תור המוזיקה"
+                )
+                .setDescription(
+                  `**🎵 מתנגן עכשיו:**\n${formatTrackLine(queue.currentTrack)}\n\n` +
+                  (
+                    nextTracks
+                      ? `**⏭️ הבאים בתור:**\n${nextTracks}`
+                      : "**⏭️ אין עוד שירים בתור.**"
+                  )
+                )
+                .setFooter({
+                  text:
+                    tracks.length > 10
+                      ? `מוצגים 10 מתוך ${tracks.length} שירים`
+                      : `${tracks.length} שירים ממתינים`
+                })
+            ]
+          });
+        }
+
+        // ---------- NOWPLAYING ----------
+
+        if (
+          interaction.commandName ===
+          "nowplaying"
+        ) {
+          if (
+            !queue?.currentTrack
+          ) {
+            return interaction.reply({
+              content:
+                "❌ לא מתנגן כלום כרגע.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          const track =
+            queue.currentTrack;
+
+          const progress =
+            queue.node
+              .createProgressBar() ||
+            "▬▬▬▬▬▬▬▬▬▬";
+
+          const embed =
+            new EmbedBuilder()
+              .setColor(
+                0x5865F2
+              )
+              .setTitle(
+                "🎵 מתנגן עכשיו"
+              )
+              .setDescription(
+                `${formatTrackLine(track)}\n\n${progress}`
+              )
+              .addFields(
+                {
+                  name:
+                    "⏱️ אורך",
+
+                  value:
+                    track.duration ||
+                    "לא ידוע",
+
+                  inline:
+                    true
+                },
+
+                {
+                  name:
+                    "🔊 עוצמה",
+
+                  value:
+                    `${queue.node.volume}%`,
+
+                  inline:
+                    true
+                }
+              );
+
+          if (
+            track.thumbnail
+          ) {
+            embed.setThumbnail(
+              track.thumbnail
+            );
+          }
+
+          return interaction.reply({
+            embeds: [
+              embed
+            ]
+          });
+        }
+      }
+
+      // ==================================================
+      // Stuff ומעלה
+      // ==================================================
+
+      if (
+        [
+          "volume",
+          "shuffle",
+          "loop",
+          "remove"
+        ].includes(
+          interaction.commandName
+        )
+      ) {
+        if (
+          !hasMusicDJAccess(
+            member
+          )
+        ) {
+          return musicNoPermissionReply(
+            interaction,
+            "Stuff"
+          );
+        }
+
+        const queue =
+          getMusicQueue(
+            guild.id
+          );
+
+        if (
+          !queue
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין כרגע תור מוזיקה פעיל.",
+
+            ephemeral:
+              true
+          });
+        }
+
+        // ---------- VOLUME ----------
+
+        if (
+          interaction.commandName ===
+          "volume"
+        ) {
+          const amount =
+            interaction.options
+              .getInteger(
+                "amount",
+                true
+              );
+
+          queue.node.setVolume(
+            amount
+          );
+
+          return interaction.reply(
+            `🔊 העוצמה שונתה ל-**${amount}%**.`
+          );
+        }
+
+        // ---------- SHUFFLE ----------
+
+        if (
+          interaction.commandName ===
+          "shuffle"
+        ) {
+          if (
+            queue.tracks.size < 2
+          ) {
+            return interaction.reply({
+              content:
+                "❌ צריך לפחות 2 שירים שממתינים בתור.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          queue.tracks.shuffle();
+
+          return interaction.reply(
+            `🔀 ערבבתי **${queue.tracks.size} שירים** בתור.`
+          );
+        }
+
+        // ---------- LOOP ----------
+
+        if (
+          interaction.commandName ===
+          "loop"
+        ) {
+          const mode =
+            interaction.options
+              .getString(
+                "mode",
+                true
+              );
+
+          const modes = {
+            off:
+              QueueRepeatMode.OFF,
+
+            track:
+              QueueRepeatMode.TRACK,
+
+            queue:
+              QueueRepeatMode.QUEUE
+          };
+
+          const labels = {
+            off:
+              "כבוי ❌",
+
+            track:
+              "חזרה על השיר 🔂",
+
+            queue:
+              "חזרה על כל התור 🔁"
+          };
+
+          queue.setRepeatMode(
+            modes[mode]
+          );
+
+          return interaction.reply(
+            `🔁 מצב החזרה: **${labels[mode]}**`
+          );
+        }
+
+        // ---------- REMOVE ----------
+
+        if (
+          interaction.commandName ===
+          "remove"
+        ) {
+          const position =
+            interaction.options
+              .getInteger(
+                "position",
+                true
+              );
+
+          const tracks =
+            queue.tracks
+              .toArray();
+
+          const index =
+            position - 1;
+
+          if (
+            index < 0 ||
+            index >=
+              tracks.length
+          ) {
+            return interaction.reply({
+              content:
+                `❌ יש כרגע רק **${tracks.length} שירים** שממתינים בתור.`,
+
+              ephemeral:
+                true
+            });
+          }
+
+          const track =
+            tracks[index];
+
+          queue.removeTrack(
+            index
+          );
+
+          return interaction.reply(
+            `🗑️ **${getTrackTitle(track)}** הוסר מהתור.`
+          );
+        }
+      }
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "❌ Music interaction:",
+        error
+      );
+
+      try {
+        if (
+          interaction.deferred ||
+          interaction.replied
+        ) {
+          await interaction.followUp({
+            content:
+              "❌ קרתה שגיאה בפעולת המוזיקה.",
+
+            ephemeral:
+              true
+          });
+
+        } else {
+          await interaction.reply({
+            content:
+              "❌ קרתה שגיאה בפעולת המוזיקה.",
+
+            ephemeral:
+              true
+          });
+        }
+
+      } catch {}
+    }
+  }
+);
+
+// ===================== ERROR HANDLERS =====================
+
 process.on(
   "unhandledRejection",
   error => {
     console.error(
-      "❌ Unhandled Promise Rejection:",
+      "❌ unhandledRejection:",
       error
     );
   }
@@ -12309,13 +15962,13 @@ process.on(
   "uncaughtException",
   error => {
     console.error(
-      "❌ Uncaught Exception:",
+      "❌ uncaughtException:",
       error
     );
   }
 );
 
-// ===================== LOGIN =====================
+// ===================== LOGIN BOTH BOTS =====================
 
 if (
   !TOKEN ||
@@ -12323,12 +15976,26 @@ if (
   !GUILD_ID
 ) {
   console.error(
-    "❌ חסר BOT_TOKEN / CLIENT_ID / GUILD_ID ב-Railway Variables"
+    "❌ חסר BOT_TOKEN / CLIENT_ID / GUILD_ID לבוט הראשי"
   );
 
-  process.exit(1);
+} else {
+  client.login(
+    TOKEN
+  );
 }
 
-client.login(
-  TOKEN
-);
+if (
+  !MUSIC_BOT_TOKEN ||
+  !MUSIC_CLIENT_ID ||
+  !GUILD_ID
+) {
+  console.error(
+    "❌ חסר MUSIC_BOT_TOKEN / MUSIC_CLIENT_ID / GUILD_ID לבוט המוזיקה"
+  );
+
+} else {
+  musicClient.login(
+    MUSIC_BOT_TOKEN
+  );
+}
