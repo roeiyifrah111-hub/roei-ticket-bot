@@ -1,98 +1,247 @@
 const {
-  Client, GatewayIntentBits, PermissionFlagsBits, ChannelType,
-  ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
-  UserSelectMenuBuilder, EmbedBuilder, ModalBuilder, TextInputBuilder,
-  TextInputStyle, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes
+  Client,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  ChannelType,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  UserSelectMenuBuilder,
+  EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ButtonBuilder,
+  ButtonStyle,
+  SlashCommandBuilder,
+  REST,
+  Routes,
+  Events
 } = require("discord.js");
+
 const crypto = require("crypto");
-const { Player, QueueRepeatMode } = require("discord-player");
-const { YouTubeDlpExtractor } = require("discord-player-youtubedlp");
-const ffmpegPath = require("ffmpeg-static");
 
-if (ffmpegPath) process.env.FFMPEG_PATH = ffmpegPath;
+const {
+  Player,
+  QueueRepeatMode
+} = require("discord-player");
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates
-  ]
-});
+const {
+  SoundCloudExtractor
+} = require("@discord-player/extractor");
 
-const musicClient = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates
-  ]
-});
+const ffmpegPath =
+  require("ffmpeg-static");
 
-const TOKEN = process.env.BOT_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const MUSIC_BOT_TOKEN = process.env.MUSIC_BOT_TOKEN;
-const MUSIC_CLIENT_ID = process.env.MUSIC_CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
-const CATEGORY_ID = process.env.CATEGORY_ID;
-const YOUTUBE_CHANNEL_ID_FROM_ENV = process.env.YOUTUBE_CHANNEL_ID || null;
+if (ffmpegPath) {
+  process.env.FFMPEG_PATH =
+    ffmpegPath;
+}
 
-const OWNER_USER_ID = "1243097719262941224";
+// ========================================================
+// CLIENTS
+// ========================================================
 
-const PANEL_CHANNEL_ID = "1541390151757078599";
-const STAFF_APPLICATION_CHANNEL_ID = "1541391169936687195";
-const STAFF_LOG_CHANNEL_ID = "1555688820916363354";
-const WELCOME_CHANNEL_ID = "1541376515961262100";
-const RULES_CHANNEL_ID = "1541369624644554772";
+const client =
+  new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildVoiceStates
+    ]
+  });
 
-const SUGGESTIONS_PANEL_CHANNEL_ID = "1555834756481024062";
-const VIDEO_IDEAS_CHANNEL_ID = "1555835422624587826";
-const EDIT_IDEAS_CHANNEL_ID = "1555836109496516748";
-const SERVER_SUGGESTIONS_CHANNEL_ID = "1555835110010527855";
+const musicClient =
+  new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildVoiceStates
+    ]
+  });
 
-const YOUTUBE_NOTIFY_CHANNEL_ID = "1555879776936402965";
-const YOUTUBE_HANDLE_URL = "https://www.youtube.com/@RoeiKing1";
-const YOUTUBE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+// ========================================================
+// ENV
+// ========================================================
 
-const SOCIALS_CHANNEL_ID = "1555843770518609941";
-const SOCIAL_YOUTUBE_URL = "https://www.youtube.com/@RoeiKing1";
-const SOCIAL_KICK_URL = "https://kick.com/roeiking1";
-const SOCIAL_WHATSAPP_URL = "https://whatsapp.com/channel/0029Vb7TecZK0IBbMbjFcr1T";
-const DISCORD_USERNAME = "roro_king1234";
+const TOKEN =
+  process.env.BOT_TOKEN;
 
-const PARTNER_PANEL_CHANNEL_ID = "1542045433323589714";
-const PARTNER_ADS_CHANNEL_ID = "1541376165506187264";
-const PARTNER_ROLE_ID = "1555952744341180466";
-const OUR_SERVER_INVITE = "https://discord.gg/kP7f9rB33";
-const PARTNER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const CLIENT_ID =
+  process.env.CLIENT_ID;
+
+const MUSIC_BOT_TOKEN =
+  process.env.MUSIC_BOT_TOKEN;
+
+const MUSIC_CLIENT_ID =
+  process.env.MUSIC_CLIENT_ID;
+
+const GUILD_ID =
+  process.env.GUILD_ID;
+
+const CATEGORY_ID =
+  process.env.CATEGORY_ID;
+
+const YOUTUBE_CHANNEL_ID_FROM_ENV =
+  process.env.YOUTUBE_CHANNEL_ID ||
+  null;
+
+// ========================================================
+// IDS
+// ========================================================
+
+const OWNER_USER_ID =
+  "1243097719262941224";
+
+const PANEL_CHANNEL_ID =
+  "1541390151757078599";
+
+const STAFF_APPLICATION_CHANNEL_ID =
+  "1541391169936687195";
+
+const STAFF_LOG_CHANNEL_ID =
+  "1555688820916363354";
+
+const WELCOME_CHANNEL_ID =
+  "1541376515961262100";
+
+const RULES_CHANNEL_ID =
+  "1541369624644554772";
+
+// ===================== SUGGESTIONS =====================
+
+const SUGGESTIONS_PANEL_CHANNEL_ID =
+  "1555834756481024062";
+
+const VIDEO_IDEAS_CHANNEL_ID =
+  "1555835422624587826";
+
+const EDIT_IDEAS_CHANNEL_ID =
+  "1555836109496516748";
+
+const SERVER_SUGGESTIONS_CHANNEL_ID =
+  "1555835110010527855";
+
+// ===================== YOUTUBE =====================
+
+const YOUTUBE_NOTIFY_CHANNEL_ID =
+  "1555879776936402965";
+
+const YOUTUBE_HANDLE_URL =
+  "https://www.youtube.com/@RoeiKing1";
+
+const YOUTUBE_CHECK_INTERVAL_MS =
+  2 * 60 * 1000;
+
+// ===================== SOCIALS =====================
+
+const SOCIALS_CHANNEL_ID =
+  "1555843770518609941";
+
+const SOCIAL_YOUTUBE_URL =
+  "https://www.youtube.com/@RoeiKing1";
+
+const SOCIAL_KICK_URL =
+  "https://kick.com/roeiking1";
+
+const SOCIAL_WHATSAPP_URL =
+  "https://whatsapp.com/channel/0029Vb7TecZK0IBbMbjFcr1T";
+
+const DISCORD_USERNAME =
+  "roro_king1234";
+
+// ===================== PARTNER =====================
+
+const PARTNER_PANEL_CHANNEL_ID =
+  "1542045433323589714";
+
+const PARTNER_ADS_CHANNEL_ID =
+  "1541376165506187264";
+
+const PARTNER_ROLE_ID =
+  "1555952744341180466";
+
+const OUR_SERVER_INVITE =
+  "https://discord.gg/kP7f9rB33";
+
+const PARTNER_COOLDOWN_MS =
+  7 * 24 * 60 * 60 * 1000;
 
 // ===================== TEMP VOICE =====================
-const TEMP_VOICE_PANEL_CHANNEL_ID = "1556011499234009191";
-const TEMP_VOICE_CREATE_CHANNEL_ID = "1556011651013025812";
-const TEMP_VOICE_CATEGORY_ID = "1556011045460508763";
+
+const TEMP_VOICE_PANEL_CHANNEL_ID =
+  "1556011499234009191";
+
+const TEMP_VOICE_CREATE_CHANNEL_ID =
+  "1556011651013025812";
+
+const TEMP_VOICE_CATEGORY_ID =
+  "1556011045460508763";
 
 // ===================== ARCADE =====================
-const ARCADE_PANEL_CHANNEL_ID = "1556154437742104618";
-const ARCADE_GAMES_CHANNEL_ID = "1556154531417554964";
 
-// ===================== MUSIC BOT =====================
-const MUSIC_VOICE_CHANNEL_ID = "1555567802121715832";
+const ARCADE_PANEL_CHANNEL_ID =
+  "1556154437742104618";
 
-const ROLE_HELPER = "1556250971150094346";
-const ROLE_STAFF = "1555587941575696444";
-const ROLE_PROMO_1 = "1555588224636821526";
-const ROLE_TEAM = "1555588615520653332";
-const ROLE_ADMIN = "1555908830209118268";
-const ROLE_HEAD_ADMIN = "1555908924643737621";
-const ROLE_TOP = "1555588725398839376";
-const EXTRA_HANDLER_ROLE = "1541371707011629077";
+const ARCADE_GAMES_CHANNEL_ID =
+  "1556154531417554964";
+
+// ===================== MUSIC =====================
+
+const MUSIC_VOICE_CHANNEL_ID =
+  "1555567802121715832";
+
+// ========================================================
+// STAFF ROLES
+// ========================================================
+
+const ROLE_HELPER =
+  "1556250971150094346";
+
+const ROLE_STAFF =
+  "1555587941575696444";
+
+const ROLE_PROMO_1 =
+  "1555588224636821526";
+
+const ROLE_TEAM =
+  "1555588615520653332";
+
+const ROLE_ADMIN =
+  "1555908830209118268";
+
+const ROLE_HEAD_ADMIN =
+  "1555908924643737621";
+
+const ROLE_TOP =
+  "1555588725398839376";
+
+const EXTRA_HANDLER_ROLE =
+  "1541371707011629077";
 
 const STAFF_ACCESS_ROLE_IDS = [
-  ROLE_STAFF, EXTRA_HANDLER_ROLE, ROLE_PROMO_1, ROLE_TEAM,
-  ROLE_ADMIN, ROLE_HEAD_ADMIN, ROLE_TOP
+  ROLE_STAFF,
+  EXTRA_HANDLER_ROLE,
+  ROLE_PROMO_1,
+  ROLE_TEAM,
+  ROLE_ADMIN,
+  ROLE_HEAD_ADMIN,
+  ROLE_TOP
 ];
 
 const LADDER_ROLE_IDS = [
-  ROLE_HELPER, ROLE_STAFF, ROLE_PROMO_1, ROLE_TEAM, ROLE_ADMIN, ROLE_HEAD_ADMIN, ROLE_TOP
+  ROLE_HELPER,
+  ROLE_STAFF,
+  ROLE_PROMO_1,
+  ROLE_TEAM,
+  ROLE_ADMIN,
+  ROLE_HEAD_ADMIN,
+  ROLE_TOP
 ];
+
+// ========================================================
+// NICKNAME PREFIXES
+// ========================================================
 
 const NICKNAME_PREFIX_BY_ROLE = {
   [ROLE_HELPER]: "He",
@@ -104,98 +253,215 @@ const NICKNAME_PREFIX_BY_ROLE = {
   [ROLE_TOP]: "CO"
 };
 
-const PREFIX_RANKS = { HE: 0, ST: 1, BST: 2, TM: 3, AD: 4, HA: 5, CO: 6 };
-const STAFF_PREFIX_REGEX = /^\s*(HE|ST|BST|TM|AD|HA|CO)\s*(?:\||｜|│|:|-|–|—)\s*/i;
+const PREFIX_RANKS = {
+  HE: 0,
+  ST: 1,
+  BST: 2,
+  TM: 3,
+  AD: 4,
+  HA: 5,
+  CO: 6
+};
 
-// כל קידומת בסגנון "משהו | שם" נחשבת קידומת.
-// לצוות/Partner מותרת רק הקידומת שהבוט נותן לפי הרול שלהם.
-const ANY_PREFIX_REGEX = /^\s*([^|｜│]+?)\s*(?:\||｜|│)\s*/;
+const STAFF_PREFIX_REGEX =
+  /^\s*(HE|ST|BST|TM|AD|HA|CO)\s*(?:\||｜|│|:|-|–|—)\s*/i;
 
-const FAKE_PROMOTION_TIMEOUT_MS = 15 * 60 * 1000;
+const ANY_PREFIX_REGEX =
+  /^\s*([^|｜│]+?)\s*(?:\||｜|│)\s*/;
 
-const REJECT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const FAKE_PROMOTION_TIMEOUT_MS =
+  15 * 60 * 1000;
 
-const rejectionCooldowns = new Map();
-const pendingApplications = new Set();
-const processingApplications = new Set();
+// ========================================================
+// APPLICATIONS
+// ========================================================
 
-const activeGiveaways = new Map();
+const REJECT_COOLDOWN_MS =
+  7 * 24 * 60 * 60 * 1000;
 
-const suggestionStates = new Map();
-const processingSuggestions = new Set();
+const rejectionCooldowns =
+  new Map();
 
-const partnerStates = new Map();
-const partnerPendingByUser = new Map();
-const partnerCooldowns = new Map();
-const processingPartners = new Set();
+const pendingApplications =
+  new Set();
 
-const youtubeSeen = new Map();
+const processingApplications =
+  new Set();
 
-const tempVoiceOwners = new Map();
-const tempVoiceCreating = new Set();
+// ========================================================
+// GIVEAWAYS
+// ========================================================
 
-const arcadeTttGames = new Map();
-const arcadeRpsGames = new Map();
-const arcadeImpostorGames = new Map();
-const arcadeBombaGames = new Map();
+const activeGiveaways =
+  new Map();
 
-const musicPlaylists = new Map();
+// ========================================================
+// SUGGESTIONS
+// ========================================================
 
-let youtubeInitialized = false;
-let resolvedYouTubeChannelId = YOUTUBE_CHANNEL_ID_FROM_ENV;
-let youtubePollRunning = false;
-let botDataChannelId = null;
+const suggestionStates =
+  new Map();
 
-const BOT_DATA_CHANNEL_NAME = "bot-data";
-const BOT_DATA_CHANNEL_TOPIC = "roei-bot-private-data-v2";
+const processingSuggestions =
+  new Set();
+
+// ========================================================
+// PARTNER
+// ========================================================
+
+const partnerStates =
+  new Map();
+
+const partnerPendingByUser =
+  new Map();
+
+const partnerCooldowns =
+  new Map();
+
+const processingPartners =
+  new Set();
+
+// ========================================================
+// YOUTUBE
+// ========================================================
+
+const youtubeSeen =
+  new Map();
+
+let youtubeInitialized =
+  false;
+
+let resolvedYouTubeChannelId =
+  YOUTUBE_CHANNEL_ID_FROM_ENV;
+
+let youtubePollRunning =
+  false;
+
+// ========================================================
+// TEMP VOICE
+// ========================================================
+
+const tempVoiceOwners =
+  new Map();
+
+const tempVoiceCreating =
+  new Set();
+
+// ========================================================
+// ARCADE
+// ========================================================
+
+const arcadeTttGames =
+  new Map();
+
+const arcadeRpsGames =
+  new Map();
+
+const arcadeImpostorGames =
+  new Map();
+
+const arcadeBombaGames =
+  new Map();
+
+// ========================================================
+// MUSIC PLAYLISTS
+// ========================================================
+
+const musicPlaylists =
+  new Map();
+
+// ========================================================
+// BOT DATA
+// ========================================================
+
+let botDataChannelId =
+  null;
+
+const BOT_DATA_CHANNEL_NAME =
+  "bot-data";
+
+const BOT_DATA_CHANNEL_TOPIC =
+  "roei-bot-private-data-v2";
+
+// ========================================================
+// TICKETS
+// ========================================================
 
 const ticketTypes = {
   report: {
-    channelName: "דיווח"
+    channelName:
+      "דיווח"
   },
 
   technical: {
-    channelName: "תמיכה"
+    channelName:
+      "תמיכה"
   },
 
   general: {
-    channelName: "כללי"
+    channelName:
+      "כללי"
   }
 };
 
-// ===================== BASIC HELPERS =====================
+// ========================================================
+// BASIC HELPERS
+// ========================================================
 
 async function getMainGuild() {
-  if (!GUILD_ID) return null;
+  if (!GUILD_ID) {
+    return null;
+  }
 
   return client.guilds
     .fetch(GUILD_ID)
-    .catch(() => null);
+    .catch(
+      () => null
+    );
 }
 
-async function fetchFreshMember(guild, userId) {
+async function fetchFreshMember(
+  guild,
+  userId
+) {
   return guild.members.fetch({
-    user: userId,
-    force: true
+    user:
+      userId,
+
+    force:
+      true
   });
 }
 
 function hasStaffAccess(member) {
-  if (!member) return false;
+  if (!member) {
+    return false;
+  }
 
-  if (member.id === OWNER_USER_ID) {
+  if (
+    member.id ===
+    OWNER_USER_ID
+  ) {
     return true;
   }
 
   return STAFF_ACCESS_ROLE_IDS.some(
-    id => member.roles.cache.has(id)
+    id =>
+      member.roles.cache.has(
+        id
+      )
   );
 }
 
 function hasClearAccess(member) {
-  if (!member) return false;
+  if (!member) {
+    return false;
+  }
 
-  if (member.id === OWNER_USER_ID) {
+  if (
+    member.id ===
+    OWNER_USER_ID
+  ) {
     return true;
   }
 
@@ -205,14 +471,22 @@ function hasClearAccess(member) {
     ROLE_HEAD_ADMIN,
     ROLE_TOP
   ].some(
-    id => member.roles.cache.has(id)
+    id =>
+      member.roles.cache.has(
+        id
+      )
   );
 }
 
 function hasMusicBasicAccess(member) {
-  if (!member) return false;
+  if (!member) {
+    return false;
+  }
 
-  if (member.id === OWNER_USER_ID) {
+  if (
+    member.id ===
+    OWNER_USER_ID
+  ) {
     return true;
   }
 
@@ -225,14 +499,22 @@ function hasMusicBasicAccess(member) {
     ROLE_HEAD_ADMIN,
     ROLE_TOP
   ].some(
-    id => member.roles.cache.has(id)
+    id =>
+      member.roles.cache.has(
+        id
+      )
   );
 }
 
 function hasMusicDJAccess(member) {
-  if (!member) return false;
+  if (!member) {
+    return false;
+  }
 
-  if (member.id === OWNER_USER_ID) {
+  if (
+    member.id ===
+    OWNER_USER_ID
+  ) {
     return true;
   }
 
@@ -244,15 +526,23 @@ function hasMusicDJAccess(member) {
     ROLE_HEAD_ADMIN,
     ROLE_TOP
   ].some(
-    id => member.roles.cache.has(id)
+    id =>
+      member.roles.cache.has(
+        id
+      )
   );
 }
 
-function getHighestLadderRoleId(member) {
-  if (!member) return null;
+function getHighestLadderRoleId(
+  member
+) {
+  if (!member) {
+    return null;
+  }
 
   for (
-    let i = LADDER_ROLE_IDS.length - 1;
+    let i =
+      LADDER_ROLE_IDS.length - 1;
     i >= 0;
     i--
   ) {
@@ -268,110 +558,185 @@ function getHighestLadderRoleId(member) {
   return null;
 }
 
-function getPromotionTargets(roleId) {
-  if (roleId === ROLE_HELPER) {
-    return [ROLE_STAFF];
+function getPromotionTargets(
+  roleId
+) {
+  if (
+    roleId ===
+    ROLE_HELPER
+  ) {
+    return [
+      ROLE_STAFF
+    ];
   }
 
-  if (roleId === ROLE_STAFF) {
+  if (
+    roleId ===
+    ROLE_STAFF
+  ) {
     return [
       ROLE_PROMO_1,
       ROLE_TEAM
     ];
   }
 
-  if (roleId === ROLE_PROMO_1) {
-    return [ROLE_TEAM];
+  if (
+    roleId ===
+    ROLE_PROMO_1
+  ) {
+    return [
+      ROLE_TEAM
+    ];
   }
 
-  if (roleId === ROLE_TEAM) {
-    return [ROLE_ADMIN];
+  if (
+    roleId ===
+    ROLE_TEAM
+  ) {
+    return [
+      ROLE_ADMIN
+    ];
   }
 
-  if (roleId === ROLE_ADMIN) {
-    return [ROLE_HEAD_ADMIN];
+  if (
+    roleId ===
+    ROLE_ADMIN
+  ) {
+    return [
+      ROLE_HEAD_ADMIN
+    ];
   }
 
-  if (roleId === ROLE_HEAD_ADMIN) {
-    return [ROLE_TOP];
+  if (
+    roleId ===
+    ROLE_HEAD_ADMIN
+  ) {
+    return [
+      ROLE_TOP
+    ];
   }
 
   return [];
 }
 
-function getPromotionLabels(roleId) {
-  if (roleId === ROLE_HELPER) {
+function getPromotionLabels(
+  roleId
+) {
+  if (
+    roleId ===
+    ROLE_HELPER
+  ) {
     return {
-      [ROLE_STAFF]: "Stuff"
+      [ROLE_STAFF]:
+        "Stuff"
     };
   }
 
-  if (roleId === ROLE_STAFF) {
+  if (
+    roleId ===
+    ROLE_STAFF
+  ) {
     return {
-      [ROLE_PROMO_1]: "Big Stuff",
-      [ROLE_TEAM]: "Team"
+      [ROLE_PROMO_1]:
+        "Big Stuff",
+
+      [ROLE_TEAM]:
+        "Team"
     };
   }
 
-  if (roleId === ROLE_PROMO_1) {
+  if (
+    roleId ===
+    ROLE_PROMO_1
+  ) {
     return {
-      [ROLE_TEAM]: "Team"
+      [ROLE_TEAM]:
+        "Team"
     };
   }
 
-  if (roleId === ROLE_TEAM) {
+  if (
+    roleId ===
+    ROLE_TEAM
+  ) {
     return {
-      [ROLE_ADMIN]: "Admin"
+      [ROLE_ADMIN]:
+        "Admin"
     };
   }
 
-  if (roleId === ROLE_ADMIN) {
+  if (
+    roleId ===
+    ROLE_ADMIN
+  ) {
     return {
-      [ROLE_HEAD_ADMIN]: "Head Admin"
+      [ROLE_HEAD_ADMIN]:
+        "Head Admin"
     };
   }
 
-  if (roleId === ROLE_HEAD_ADMIN) {
+  if (
+    roleId ===
+    ROLE_HEAD_ADMIN
+  ) {
     return {
-      [ROLE_TOP]: "Co-owner"
+      [ROLE_TOP]:
+        "Co-owner"
     };
   }
 
   return {};
 }
 
-async function getRoleName(guild, roleId) {
+async function getRoleName(
+  guild,
+  roleId
+) {
   if (!roleId) {
     return "ללא";
   }
 
   const role =
-    guild.roles.cache.get(roleId) ||
+    guild.roles.cache.get(
+      roleId
+    ) ||
     await guild.roles
       .fetch(roleId)
-      .catch(() => null);
+      .catch(
+        () => null
+      );
 
-  return role?.name || roleId;
+  return (
+    role?.name ||
+    roleId
+  );
 }
 
 function getStaffMentions() {
   return STAFF_ACCESS_ROLE_IDS
     .map(
-      id => `<@&${id}>`
+      id =>
+        `<@&${id}>`
     )
     .join(" ");
 }
 
-function safeText(value, max = 1000) {
+function safeText(
+  value,
+  max = 1000
+) {
   const text =
-    String(value ?? "")
-      .trim();
+    String(
+      value ?? ""
+    ).trim();
 
   if (!text) {
     return "לא נכתב";
   }
 
-  if (text.length <= max) {
+  if (
+    text.length <= max
+  ) {
     return text;
   }
 
@@ -386,7 +751,9 @@ function safeText(value, max = 1000) {
 
 function encodeSmall(value) {
   return Buffer.from(
-    String(value ?? ""),
+    String(
+      value ?? ""
+    ),
     "utf8"
   ).toString(
     "base64url"
@@ -401,17 +768,22 @@ function decodeSmall(value) {
     ).toString(
       "utf8"
     );
+
   } catch {
     return "";
   }
 }
 
-function normalizePlaylistName(name) {
+function normalizePlaylistName(
+  name
+) {
   return String(
     name || ""
   )
     .trim()
-    .toLocaleLowerCase("he");
+    .toLocaleLowerCase(
+      "he"
+    );
 }
 
 function getUserPlaylistMap(
@@ -419,7 +791,9 @@ function getUserPlaylistMap(
   create = false
 ) {
   if (
-    !musicPlaylists.has(userId) &&
+    !musicPlaylists.has(
+      userId
+    ) &&
     create
   ) {
     musicPlaylists.set(
@@ -429,7 +803,9 @@ function getUserPlaylistMap(
   }
 
   return (
-    musicPlaylists.get(userId) ||
+    musicPlaylists.get(
+      userId
+    ) ||
     null
   );
 }
@@ -450,7 +826,9 @@ function getUserPlaylist(
 
   return (
     map.get(
-      normalizePlaylistName(name)
+      normalizePlaylistName(
+        name
+      )
     ) ||
     null
   );
@@ -461,7 +839,9 @@ function createUserPlaylistLocal(
   name
 ) {
   const clean =
-    String(name || "")
+    String(
+      name || ""
+    )
       .trim()
       .slice(
         0,
@@ -483,57 +863,83 @@ function createUserPlaylistLocal(
       true
     );
 
-  if (!map.has(key)) {
+  if (
+    !map.has(
+      key
+    )
+  ) {
     map.set(
       key,
       {
-        name: clean,
-        songs: []
+        name:
+          clean,
+
+        songs:
+          []
       }
     );
   }
 
-  return map.get(key);
+  return map.get(
+    key
+  );
 }
 
-// ===================== PERSISTENCE =====================
+// ========================================================
+// BOT DATA
+// ========================================================
 
-async function ensureBotDataChannel(guild) {
+async function ensureBotDataChannel(
+  guild
+) {
   await guild.channels.fetch();
 
   let channel =
     guild.channels.cache.find(
       ch =>
-        ch.type === ChannelType.GuildText &&
-        ch.topic === BOT_DATA_CHANNEL_TOPIC
+        ch.type ===
+          ChannelType.GuildText &&
+        ch.topic ===
+          BOT_DATA_CHANNEL_TOPIC
     );
 
   if (!channel) {
     channel =
       guild.channels.cache.find(
         ch =>
-          ch.type === ChannelType.GuildText &&
-          ch.name === BOT_DATA_CHANNEL_NAME
+          ch.type ===
+            ChannelType.GuildText &&
+          ch.name ===
+            BOT_DATA_CHANNEL_NAME
       );
   }
 
   if (!channel) {
     channel =
       await guild.channels.create({
-        name: BOT_DATA_CHANNEL_NAME,
-        type: ChannelType.GuildText,
-        topic: BOT_DATA_CHANNEL_TOPIC,
+        name:
+          BOT_DATA_CHANNEL_NAME,
+
+        type:
+          ChannelType.GuildText,
+
+        topic:
+          BOT_DATA_CHANNEL_TOPIC,
 
         permissionOverwrites: [
           {
-            id: guild.id,
+            id:
+              guild.id,
+
             deny: [
               PermissionFlagsBits.ViewChannel
             ]
           },
 
           {
-            id: client.user.id,
+            id:
+              client.user.id,
+
             allow: [
               PermissionFlagsBits.ViewChannel,
               PermissionFlagsBits.SendMessages,
@@ -543,7 +949,9 @@ async function ensureBotDataChannel(guild) {
           },
 
           {
-            id: OWNER_USER_ID,
+            id:
+              OWNER_USER_ID,
+
             allow: [
               PermissionFlagsBits.ViewChannel,
               PermissionFlagsBits.ReadMessageHistory
@@ -551,24 +959,28 @@ async function ensureBotDataChannel(guild) {
           }
         ],
 
-        reason: "Private persistent storage for bot state"
+        reason:
+          "Private persistent storage for bot state"
       });
 
     await channel.send({
       content:
         "🤖 **חדר נתונים של הבוט**\n" +
-        "החדר הזה שומר הצעות, Partner ו-YouTube אחרי Restart/Deploy.\n" +
+        "החדר הזה שומר נתונים של הבוט אחרי Restart/Deploy.\n" +
         "**לא למחוק הודעות מכאן.**"
     });
   }
 
-  botDataChannelId = channel.id;
+  botDataChannelId =
+    channel.id;
 
   return channel;
 }
 
 async function getBotDataChannel() {
-  if (botDataChannelId) {
+  if (
+    botDataChannelId
+  ) {
     const cached =
       client.channels.cache.get(
         botDataChannelId
@@ -595,7 +1007,9 @@ async function getBotDataChannel() {
   );
 }
 
-async function logBotData(line) {
+async function logBotData(
+  line
+) {
   const channel =
     await getBotDataChannel();
 
@@ -605,16 +1019,20 @@ async function logBotData(line) {
 
   try {
     await channel.send({
-      content: line,
+      content:
+        line,
 
       allowedMentions: {
-        parse: []
+        parse:
+          []
       }
     });
 
     return true;
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "❌ שמירת נתונים נכשלה:",
       error.message
@@ -630,9 +1048,12 @@ async function savePartnerField(
   value
 ) {
   const encoded =
-    encodeSmall(value);
+    encodeSmall(
+      value
+    );
 
-  const maxChunk = 1500;
+  const maxChunk =
+    1500;
 
   const total =
     Math.max(
@@ -657,11 +1078,17 @@ async function savePartnerField(
   }
 }
 
-async function savePartnerOwnerMessage(state) {
+async function savePartnerOwnerMessage(
+  state
+) {
   await logBotData(
     `PARTNER_OWNERMSG|${state.requestId}|${state.ownerDmChannelId || "-"}|${state.ownerDmMessageId || "-"}`
   );
 }
+
+// ========================================================
+// LOAD PERSISTENT DATA
+// ========================================================
 
 async function loadPersistentBotData() {
   const channel =
@@ -671,17 +1098,20 @@ async function loadPersistentBotData() {
     return;
   }
 
-  const all = [];
+  const all =
+    [];
 
   let before;
-  let scanned = 0;
+  let scanned =
+    0;
 
   while (
     scanned < 30000
   ) {
     const batch =
       await channel.messages.fetch({
-        limit: 100,
+        limit:
+          100,
 
         ...(before
           ? {
@@ -690,9 +1120,7 @@ async function loadPersistentBotData() {
           : {})
       });
 
-    if (
-      !batch.size
-    ) {
+    if (!batch.size) {
       break;
     }
 
@@ -715,7 +1143,10 @@ async function loadPersistentBotData() {
   }
 
   all.sort(
-    (a, b) =>
+    (
+      a,
+      b
+    ) =>
       a.createdTimestamp -
       b.createdTimestamp
   );
@@ -727,13 +1158,17 @@ async function loadPersistentBotData() {
     const message of all
   ) {
     const line =
-      message.content ||
-      "";
+      message.content || "";
+
+    // ===================== YOUTUBE =====================
 
     if (
-      line === "YT_INIT"
+      line ===
+      "YT_INIT"
     ) {
-      youtubeInitialized = true;
+      youtubeInitialized =
+        true;
+
       continue;
     }
 
@@ -801,11 +1236,14 @@ async function loadPersistentBotData() {
         );
 
       if (state) {
-        state.ended = true;
+        state.ended =
+          true;
       }
 
       continue;
     }
+
+    // ===================== SUGGESTIONS =====================
 
     if (
       line.startsWith(
@@ -881,15 +1319,18 @@ async function loadPersistentBotData() {
       }
 
       if (
-        choice === "none"
+        choice ===
+        "none"
       ) {
         state.votes.delete(
           userId
         );
 
       } else if (
-        choice === "up" ||
-        choice === "down"
+        choice ===
+          "up" ||
+        choice ===
+          "down"
       ) {
         state.votes.set(
           userId,
@@ -981,6 +1422,8 @@ async function loadPersistentBotData() {
       continue;
     }
 
+    // ===================== PARTNER =====================
+
     if (
       line.startsWith(
         "PARTNER_CREATE|"
@@ -1013,13 +1456,26 @@ async function loadPersistentBotData() {
             ) ||
             Date.now(),
 
-          inviteUrl: "",
-          promoText: "",
-          notes: "",
-          status: "pending",
-          handledAt: null,
-          ownerDmChannelId: null,
-          ownerDmMessageId: null
+          inviteUrl:
+            "",
+
+          promoText:
+            "",
+
+          notes:
+            "",
+
+          status:
+            "pending",
+
+          handledAt:
+            null,
+
+          ownerDmChannelId:
+            null,
+
+          ownerDmMessageId:
+            null
         }
       );
 
@@ -1095,8 +1551,7 @@ async function loadPersistentBotData() {
         .parts
         .set(
           partNumber,
-          data ||
-          ""
+          data || ""
         );
 
       continue;
@@ -1168,22 +1623,14 @@ async function loadPersistentBotData() {
         null;
 
       if (
-        status === "approved" ||
-        status === "rejected"
+        status ===
+          "approved" ||
+        status ===
+          "rejected"
       ) {
         partnerPendingByUser.delete(
           state.applicantId
         );
-
-        if (
-          state.handledAt
-        ) {
-          partnerCooldowns.set(
-            state.applicantId,
-            state.handledAt +
-              PARTNER_COOLDOWN_MS
-          );
-        }
 
       } else {
         partnerPendingByUser.set(
@@ -1194,6 +1641,39 @@ async function loadPersistentBotData() {
 
       continue;
     }
+
+    if (
+      line.startsWith(
+        "PARTNER_COOLDOWN|"
+      )
+    ) {
+      const [
+        ,
+        userId,
+        expiryRaw
+      ] =
+        line.split("|");
+
+      const expiry =
+        Number(
+          expiryRaw
+        ) ||
+        0;
+
+      if (
+        expiry >
+        Date.now()
+      ) {
+        partnerCooldowns.set(
+          userId,
+          expiry
+        );
+      }
+
+      continue;
+    }
+
+    // ===================== TEMP VOICE =====================
 
     if (
       line.startsWith(
@@ -1264,6 +1744,8 @@ async function loadPersistentBotData() {
 
       continue;
     }
+
+    // ===================== MUSIC PLAYLISTS =====================
 
     if (
       line.startsWith(
@@ -1401,37 +1883,6 @@ async function loadPersistentBotData() {
           )
         );
       }
-
-      continue;
-    }
-
-    if (
-      line.startsWith(
-        "PARTNER_COOLDOWN|"
-      )
-    ) {
-      const [
-        ,
-        userId,
-        expiryRaw
-      ] =
-        line.split("|");
-
-      const expiry =
-        Number(
-          expiryRaw
-        ) ||
-        0;
-
-      if (
-        expiry >
-        Date.now()
-      ) {
-        partnerCooldowns.set(
-          userId,
-          expiry
-        );
-      }
     }
   }
 
@@ -1439,14 +1890,21 @@ async function loadPersistentBotData() {
     const [
       key,
       data
-    ] of
-    partnerFieldParts.entries()
+    ] of partnerFieldParts.entries()
   ) {
-    const [
-      requestId,
-      field
-    ] =
-      key.split(":");
+    const separatorIndex =
+      key.indexOf(":");
+
+    const requestId =
+      key.slice(
+        0,
+        separatorIndex
+      );
+
+    const field =
+      key.slice(
+        separatorIndex + 1
+      );
 
     const state =
       partnerStates.get(
@@ -1457,7 +1915,8 @@ async function loadPersistentBotData() {
       continue;
     }
 
-    let merged = "";
+    let merged =
+      "";
 
     for (
       let i = 1;
@@ -1479,12 +1938,13 @@ async function loadPersistentBotData() {
     const [
       requestId,
       state
-    ] of
-    partnerStates.entries()
+    ] of partnerStates.entries()
   ) {
     if (
-      state.status === "pending" ||
-      state.status === "waiting_publication"
+      state.status ===
+        "pending" ||
+      state.status ===
+        "waiting_publication"
     ) {
       partnerPendingByUser.set(
         state.applicantId,
@@ -1494,8 +1954,10 @@ async function loadPersistentBotData() {
 
     if (
       (
-        state.status === "approved" ||
-        state.status === "rejected"
+        state.status ===
+          "approved" ||
+        state.status ===
+          "rejected"
       ) &&
       state.handledAt
     ) {
@@ -1520,9 +1982,13 @@ async function loadPersistentBotData() {
   );
 }
 
-// ===================== NICKNAMES =====================
+// ========================================================
+// NICKNAMES
+// ========================================================
 
-function getStaffNicknamePrefix(member) {
+function getStaffNicknamePrefix(
+  member
+) {
   const roleId =
     getHighestLadderRoleId(
       member
@@ -1535,11 +2001,12 @@ function getStaffNicknamePrefix(member) {
     : null;
 }
 
-function getAttemptedStaffPrefix(name) {
+function getAttemptedStaffPrefix(
+  name
+) {
   const match =
     String(
-      name ||
-      ""
+      name || ""
     )
       .trim()
       .match(
@@ -1551,20 +2018,22 @@ function getAttemptedStaffPrefix(name) {
     : null;
 }
 
-function hasAnyPrefix(name) {
+function hasAnyPrefix(
+  name
+) {
   return ANY_PREFIX_REGEX.test(
     String(
-      name ||
-      ""
+      name || ""
     ).trim()
   );
 }
 
-function stripAnyPrefix(name) {
+function stripAnyPrefix(
+  name
+) {
   let value =
     String(
-      name ||
-      ""
+      name || ""
     ).trim();
 
   while (
@@ -1584,7 +2053,9 @@ function stripAnyPrefix(name) {
   return value;
 }
 
-function getBaseName(member) {
+function getBaseName(
+  member
+) {
   let base =
     stripAnyPrefix(
       member.nickname ||
@@ -1610,7 +2081,9 @@ function getBaseName(member) {
   ).trim();
 }
 
-function getDesiredPrefix(member) {
+function getDesiredPrefix(
+  member
+) {
   const staff =
     getStaffNicknamePrefix(
       member
@@ -1631,7 +2104,9 @@ function getDesiredPrefix(member) {
   return null;
 }
 
-async function applyPreferredNickname(member) {
+async function applyPreferredNickname(
+  member
+) {
   if (!member) {
     return;
   }
@@ -1673,15 +2148,14 @@ async function applyPreferredNickname(member) {
   const base =
     getBaseName(
       member
-    )
-      .slice(
-        0,
-        Math.max(
-          1,
-          32 -
-          prefixText.length
-        )
-      );
+    ).slice(
+      0,
+      Math.max(
+        1,
+        32 -
+        prefixText.length
+      )
+    );
 
   const wanted =
     prefixText +
@@ -1719,47 +2193,44 @@ async function notifyOwnerFakeName(
     return;
   }
 
-  const embed =
-    new EmbedBuilder()
-      .setTitle(
-        "⚠️ נמצאה קידומת לא מורשית"
-      )
-      .setDescription(
-        `${member.user} השתמש/ה בקידומת לפני השם בלי רול שמאפשר אותה.\n\n` +
-        `📝 **השם שהיה:** \`${attemptedName}\`\n` +
-        "🔄 **הניקניים שונה ל:** `אין שם`"
-      )
-      .setFooter({
-        text:
-          `User ID: ${member.id}`
-      })
-      .setTimestamp();
-
-  const row =
-    new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(
-            `nickname_edit:${member.guild.id}:${member.id}`
-          )
-          .setLabel(
-            "שנה ניקניים"
-          )
-          .setEmoji(
-            "✏️"
-          )
-          .setStyle(
-            ButtonStyle.Primary
-          )
-      );
-
   await owner.send({
     embeds: [
-      embed
+      new EmbedBuilder()
+        .setColor(
+          0xED4245
+        )
+        .setTitle(
+          "⚠️ נמצאה קידומת לא מורשית"
+        )
+        .setDescription(
+          `${member.user} השתמש/ה בקידומת לפני השם בלי רול שמאפשר אותה.\n\n` +
+          `📝 **השם שהיה:** \`${safeText(attemptedName, 100)}\`\n` +
+          "🔄 **הניקניים שונה ל:** `אין שם`"
+        )
+        .setFooter({
+          text:
+            `User ID: ${member.id}`
+        })
+        .setTimestamp()
     ],
 
     components: [
-      row
+      new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(
+              `nickname_edit:${member.guild.id}:${member.id}`
+            )
+            .setLabel(
+              "שנה ניקניים"
+            )
+            .setEmoji(
+              "✏️"
+            )
+            .setStyle(
+              ButtonStyle.Primary
+            )
+        )
     ]
   }).catch(
     () => {}
@@ -1875,6 +2346,9 @@ async function handleFakePromotion(
     await owner.send({
       embeds: [
         new EmbedBuilder()
+          .setColor(
+            0xED4245
+          )
           .setTitle(
             "🚨 ניסיון לזייף דרגת צוות"
           )
@@ -1882,7 +2356,7 @@ async function handleFakePromotion(
             `${member.user} ניסה/תה לשים תג של דרגה גבוהה יותר.\n\n` +
             `🎖️ **הדרגה האמיתית:** ${roleName} (\`${realPrefix}\`)\n` +
             `⚠️ **התג שניסה/תה:** \`${attemptedPrefix}\`\n` +
-            `📝 **השם שניסה/תה:** \`${attemptedName}\`\n\n` +
+            `📝 **השם שניסה/תה:** \`${safeText(attemptedName, 100)}\`\n\n` +
             (
               timeoutSuccess
                 ? "⏱️ ניתן Timeout ל-15 דקות והשם תוקן."
@@ -1922,7 +2396,6 @@ async function sendStaffChangeDM(
 
   let title;
   let description;
-
   let color =
     0x5865F2;
 
@@ -2019,9 +2492,13 @@ async function sendStaffChangeDM(
   );
 }
 
-// ===================== WELCOME =====================
+// ========================================================
+// WELCOME
+// ========================================================
 
-async function sendWelcomeMessage(member) {
+async function sendWelcomeMessage(
+  member
+) {
   const channel =
     await client.channels
       .fetch(
@@ -2039,6 +2516,9 @@ async function sendWelcomeMessage(member) {
 
   const embed =
     new EmbedBuilder()
+      .setColor(
+        0x5865F2
+      )
       .setTitle(
         "👋 ברוך/ה הבא/ה לשרת!"
       )
@@ -2094,7 +2574,9 @@ async function sendWelcomeMessage(member) {
   );
 }
 
-// ===================== STAFF APPLICATIONS =====================
+// ========================================================
+// STAFF APPLICATION HELPERS
+// ========================================================
 
 function applicationKey(
   type,
@@ -2112,9 +2594,7 @@ function buildApplicationFooter(
   let text =
     `applicant:${userId}|type:${type}|status:${status}`;
 
-  if (
-    rejectedAt
-  ) {
+  if (rejectedAt) {
     text +=
       `|rejectedAt:${rejectedAt}`;
   }
@@ -2122,7 +2602,9 @@ function buildApplicationFooter(
   return text;
 }
 
-function parseApplicationFooter(text) {
+function parseApplicationFooter(
+  text
+) {
   if (
     !text ||
     !text.includes(
@@ -2132,7 +2614,8 @@ function parseApplicationFooter(text) {
     return null;
   }
 
-  const data = {};
+  const data =
+    {};
 
   for (
     const part of
@@ -2167,7 +2650,9 @@ function parseApplicationFooter(text) {
   return data;
 }
 
-function getCooldownExpiry(userId) {
+function getCooldownExpiry(
+  userId
+) {
   const expiry =
     rejectionCooldowns.get(
       userId
@@ -2208,7 +2693,8 @@ async function loadApplicationState() {
   }
 
   let before;
-  let scanned = 0;
+  let scanned =
+    0;
 
   while (
     scanned < 2000
@@ -2225,9 +2711,7 @@ async function loadApplicationState() {
           : {})
       });
 
-    if (
-      !batch.size
-    ) {
+    if (!batch.size) {
       break;
     }
 
@@ -2247,8 +2731,10 @@ async function loadApplicationState() {
       }
 
       if (
-        data.status === "pending" ||
-        data.status === "awaiting_role"
+        data.status ===
+          "pending" ||
+        data.status ===
+          "awaiting_role"
       ) {
         pendingApplications.add(
           applicationKey(
@@ -2259,8 +2745,10 @@ async function loadApplicationState() {
       }
 
       if (
-        data.type === "initial" &&
-        data.status === "rejected" &&
+        data.type ===
+          "initial" &&
+        data.status ===
+          "rejected" &&
         data.rejectedAt
       ) {
         const expiry =
@@ -2279,8 +2767,7 @@ async function loadApplicationState() {
               expiry,
               rejectionCooldowns.get(
                 data.applicant
-              ) ||
-              0
+              ) || 0
             )
           );
         }
@@ -2302,14 +2789,17 @@ async function loadApplicationState() {
   }
 }
 
-function createStaffApplicationModal(type) {
+function createStaffApplicationModal(
+  type
+) {
   const modal =
     new ModalBuilder()
       .setCustomId(
         `staff_application_modal:${type}`
       )
       .setTitle(
-        type === "promotion"
+        type ===
+          "promotion"
           ? "בחינת קידום בצוות 🛡️"
           : "בחינה לצוות 🛡️"
       );
@@ -2369,25 +2859,18 @@ function createStaffApplicationModal(type) {
       style,
       required,
       maxLength
-    ] of
-    fields
+    ] of fields
   ) {
     modal.addComponents(
       new ActionRowBuilder()
         .addComponents(
           new TextInputBuilder()
-            .setCustomId(
-              id
-            )
-            .setLabel(
-              label
-            )
+            .setCustomId(id)
+            .setLabel(label)
             .setPlaceholder(
               placeholder
             )
-            .setStyle(
-              style
-            )
+            .setStyle(style)
             .setRequired(
               required
             )
@@ -2409,12 +2892,11 @@ function setStatusField(
     (
       embed.data.fields ||
       []
-    )
-      .filter(
-        field =>
-          field.name !==
-          "📋 סטטוס"
-      );
+    ).filter(
+      field =>
+        field.name !==
+        "📋 סטטוס"
+    );
 
   embed.setFields(
     ...fields,
@@ -2430,7 +2912,9 @@ function setStatusField(
   return embed;
 }
 
-function createHandledRow(displayName) {
+function createHandledRow(
+  displayName
+) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -2462,9 +2946,7 @@ async function sendApplicantDM(
 ) {
   const user =
     await client.users
-      .fetch(
-        userId
-      )
+      .fetch(userId)
       .catch(
         () => null
       );
@@ -2476,8 +2958,12 @@ async function sendApplicantDM(
   const embed =
     status === "pending"
       ? new EmbedBuilder()
+          .setColor(
+            0x5865F2
+          )
           .setTitle(
-            type === "promotion"
+            type ===
+              "promotion"
               ? "⬆️ בקשת הקידום שלך בבדיקה"
               : "🛡️ הבקשה שלך בבדיקה"
           )
@@ -2488,13 +2974,18 @@ async function sendApplicantDM(
           )
 
       : new EmbedBuilder()
+          .setColor(
+            0xED4245
+          )
           .setTitle(
-            type === "promotion"
+            type ===
+              "promotion"
               ? "❌ בקשת הקידום לא אושרה"
               : "❌ עדכון לגבי הבקשה שלך"
           )
           .setDescription(
-            type === "promotion"
+            type ===
+              "promotion"
               ? "בקשת הקידום נבדקה, אך הפעם לא אושרה."
               : "הבקשה נבדקה, אך הפעם לא אושרה.\n\n⏳ ניתן להגיש בקשה חדשה בעוד **7 ימים**."
           );
@@ -2513,7 +3004,9 @@ async function sendApplicantDM(
   }
 }
 
-// ===================== STAFF LOG / MANAGE =====================
+// ========================================================
+// STAFF LOG / MANAGE
+// ========================================================
 
 async function sendStaffLog({
   guild,
@@ -2557,6 +3050,9 @@ async function sendStaffLog({
   await channel.send({
     embeds: [
       new EmbedBuilder()
+        .setColor(
+          0x5865F2
+        )
         .setTitle(
           title
         )
@@ -2628,6 +3124,9 @@ async function buildManagementEmbed(
       : "לא בצוות";
 
   return new EmbedBuilder()
+    .setColor(
+      0x5865F2
+    )
     .setTitle(
       "🛡️ ניהול צוות"
     )
@@ -2642,7 +3141,9 @@ async function buildManagementEmbed(
     );
 }
 
-function createManagementButtons(member) {
+function createManagementButtons(
+  member
+) {
   const roleId =
     getHighestLadderRoleId(
       member
@@ -2686,7 +3187,8 @@ function createManagementButtons(member) {
             ButtonStyle.Success
           )
           .setDisabled(
-            roleId === ROLE_TOP
+            roleId ===
+            ROLE_TOP
           ),
 
         new ButtonBuilder()
@@ -2729,19 +3231,20 @@ async function refreshManagementPanel(
     await fetchFreshMember(
       interaction.guild,
       userId
-    )
-      .catch(
-        () => null
-      );
+    ).catch(
+      () => null
+    );
 
   if (!member) {
     return interaction.editReply({
       content:
         "❌ המשתמש לא נמצא בשרת.",
 
-      embeds: [],
+      embeds:
+        [],
 
-      components: []
+      components:
+        []
     });
   }
 
@@ -2774,11 +3277,12 @@ async function createRoleChoiceRow(
     new ActionRowBuilder();
 
   for (
-    const roleId of
-    roleIds
+    const roleId of roleIds
   ) {
     const name =
-      labels[roleId] ||
+      labels[
+        roleId
+      ] ||
       await getRoleName(
         guild,
         roleId
@@ -2804,7 +3308,9 @@ async function createRoleChoiceRow(
   return row;
 }
 
-// ===================== TICKETS =====================
+// ========================================================
+// TICKETS
+// ========================================================
 
 function createTicketMenu() {
   return new ActionRowBuilder()
@@ -2878,6 +3384,9 @@ function createTicketMenu() {
 
 function createTicketPanelEmbed() {
   return new EmbedBuilder()
+    .setColor(
+      0x5865F2
+    )
     .setTitle(
       "מערכת טיקטים🎫"
     )
@@ -2919,6 +3428,9 @@ function createTicketEmbed(
     type === "report"
   ) {
     return new EmbedBuilder()
+      .setColor(
+        0xED4245
+      )
       .setTitle(
         "🚨 דיווח על משתמש"
       )
@@ -2935,6 +3447,9 @@ function createTicketEmbed(
     type === "technical"
   ) {
     return new EmbedBuilder()
+      .setColor(
+        0x3498DB
+      )
       .setTitle(
         "🛠️ תמיכה טכנית"
       )
@@ -2948,6 +3463,9 @@ function createTicketEmbed(
   }
 
   return new EmbedBuilder()
+    .setColor(
+      0x5865F2
+    )
     .setTitle(
       "💬 פנייה כללית"
     )
@@ -3045,12 +3563,14 @@ async function setupTicketPanel() {
   const old =
     messages.find(
       message =>
-        message.author.id === client.user.id &&
+        message.author.id ===
+          client.user.id &&
         message.components.some(
           row =>
             row.components.some(
               component =>
-                component.customId === "ticket_type"
+                component.customId ===
+                "ticket_type"
             )
         )
     );
@@ -3069,20 +3589,22 @@ async function setupTicketPanel() {
     await old.edit(
       payload
     );
+
   } else {
     await channel.send(
       payload
     );
   }
+  
 }
-
-// ===================== GIVEAWAYS =====================
+// ========================================================
+// GIVEAWAYS
+// ========================================================
 
 function parseGiveawayDuration(input) {
   const match =
     String(
-      input ||
-      ""
+      input || ""
     )
       .trim()
       .toLowerCase()
@@ -3100,23 +3622,10 @@ function parseGiveawayDuration(input) {
     );
 
   const multiplier = {
-    s:
-      1000,
-
-    m:
-      60 *
-      1000,
-
-    h:
-      60 *
-      60 *
-      1000,
-
-    d:
-      24 *
-      60 *
-      60 *
-      1000
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000
   }[
     match[2]
   ];
@@ -3131,7 +3640,12 @@ function parseGiveawayDuration(input) {
     ) ||
     amount <= 0 ||
     ms < 10 * 1000 ||
-    ms > 30 * 24 * 60 * 60 * 1000
+    ms >
+      30 *
+      24 *
+      60 *
+      60 *
+      1000
   ) {
     return null;
   }
@@ -3269,8 +3783,8 @@ function createGiveawayEmbed(
       .setFooter({
         text:
           ended
-            ? "ההגרלה נסגרה • בהצלחה בפעם הבאה!"
-            : "🎲 הזוכה נבחר באקראי לחלוטין"
+            ? "ההגרלה נסגרה"
+            : "🎲 הזוכה נבחר באקראי"
       })
       .setTimestamp();
 
@@ -3298,7 +3812,9 @@ function createGiveawayEmbed(
                 id =>
                   `<@${id}>`
               )
-              .join("\n")
+              .join(
+                "\n"
+              )
           : "לא היו משתתפים בהגרלה."
     });
   }
@@ -3395,7 +3911,9 @@ async function endGiveaway(
         () => null
       );
 
-  if (message) {
+  if (
+    message
+  ) {
     await message.edit({
       embeds: [
         createGiveawayEmbed(
@@ -3430,7 +3948,9 @@ async function endGiveaway(
                   id =>
                     `<@${id}>`
                 )
-                .join(", ")
+                .join(
+                  ", "
+                )
             }\n` +
             `🎁 **הפרס:** ${giveaway.prize}` +
             (
@@ -3452,46 +3972,55 @@ async function endGiveaway(
   }).catch(
     () => {}
   );
+
+  activeGiveaways.delete(
+    giveaway.messageId
+  );
 }
 
-function scheduleGiveaway(giveaway) {
-  const run = () => {
-    if (
-      giveaway.ended
-    ) {
-      return;
-    }
+function scheduleGiveaway(
+  giveaway
+) {
+  const run =
+    () => {
+      if (
+        giveaway.ended
+      ) {
+        return;
+      }
 
-    const remaining =
-      giveaway.endsAt -
-      Date.now();
+      const remaining =
+        giveaway.endsAt -
+        Date.now();
 
-    if (
-      remaining <= 0
-    ) {
-      endGiveaway(
-        giveaway
-      ).catch(
-        console.error
-      );
+      if (
+        remaining <= 0
+      ) {
+        endGiveaway(
+          giveaway
+        ).catch(
+          console.error
+        );
 
-      return;
-    }
+        return;
+      }
 
-    giveaway.timer =
-      setTimeout(
-        run,
-        Math.min(
-          remaining,
-          2147000000
-        )
-      );
-  };
+      giveaway.timer =
+        setTimeout(
+          run,
+          Math.min(
+            remaining,
+            2147000000
+          )
+        );
+    };
 
   run();
 }
 
-// ===================== SUGGESTIONS =====================
+// ========================================================
+// SUGGESTIONS
+// ========================================================
 
 const suggestionTypes = {
   video: {
@@ -3614,7 +4143,9 @@ function createSuggestionsPanelMenu() {
     );
 }
 
-function createSuggestionModal(type) {
+function createSuggestionModal(
+  type
+) {
   const config =
     suggestionTypes[
       type
@@ -3657,7 +4188,9 @@ function createSuggestionModal(type) {
     );
 }
 
-function countSuggestionVotes(state) {
+function countSuggestionVotes(
+  state
+) {
   let up = 0;
   let down = 0;
 
@@ -3684,7 +4217,9 @@ function countSuggestionVotes(state) {
   };
 }
 
-function suggestionStatusText(state) {
+function suggestionStatusText(
+  state
+) {
   if (
     state.status ===
     "approved"
@@ -3813,7 +4348,9 @@ function createSuggestionEmbed(
     .setTimestamp();
 }
 
-function createSuggestionButtons(state) {
+function createSuggestionButtons(
+  state
+) {
   const {
     up,
     down
@@ -3934,7 +4471,9 @@ function createSuggestionStaffRow(
     );
 }
 
-function getSuggestionIdea(message) {
+function getSuggestionIdea(
+  message
+) {
   return (
     message.embeds[0]
       ?.description ||
@@ -3947,13 +4486,17 @@ function getSuggestionIdea(message) {
     .trim();
 }
 
-function hydrateSuggestion(message) {
+function hydrateSuggestion(
+  message
+) {
   const existing =
     suggestionStates.get(
       message.id
     );
 
-  if (existing) {
+  if (
+    existing
+  ) {
     return existing;
   }
 
@@ -3968,7 +4511,9 @@ function hydrateSuggestion(message) {
       /^suggestion:([^:]+):(\d+)$/
     );
 
-  if (!match) {
+  if (
+    !match
+  ) {
     return null;
   }
 
@@ -4046,7 +4591,9 @@ async function sendSuggestionThresholdDM(
         () => null
       );
 
-  if (!owner) {
+  if (
+    !owner
+  ) {
     return;
   }
 
@@ -4152,7 +4699,9 @@ async function sendSuggestionForwardDM(
         () => null
       );
 
-  if (!owner) {
+  if (
+    !owner
+  ) {
     return false;
   }
 
@@ -4270,7 +4819,9 @@ async function sendSuggestionCreatorDM(
         () => null
       );
 
-  if (!user) {
+  if (
+    !user
+  ) {
     return;
   }
 
@@ -4338,12 +4889,14 @@ async function setupSuggestionsPanel() {
   const old =
     messages.find(
       message =>
-        message.author.id === client.user.id &&
+        message.author.id ===
+          client.user.id &&
         message.components.some(
           row =>
             row.components.some(
               component =>
-                component.customId === "suggestion_type"
+                component.customId ===
+                "suggestion_type"
             )
         )
     );
@@ -4358,22 +4911,32 @@ async function setupSuggestionsPanel() {
     ]
   };
 
-  if (old) {
+  if (
+    old
+  ) {
     await old.edit(
       payload
     );
+
   } else {
     await channel.send(
       payload
     );
   }
 }
-// ===================== SOCIALS =====================
+
+// ========================================================
+// SOCIALS
+// ========================================================
 
 function createSocialsEmbed() {
   return new EmbedBuilder()
-    .setColor(0x00BFFF)
-    .setTitle("🌐 הרשתות החברתיות של Roei")
+    .setColor(
+      0x00BFFF
+    )
+    .setTitle(
+      "🌐 הרשתות החברתיות של Roei"
+    )
     .setDescription(
       "**כל המקומות שבהם אפשר למצוא אותי במקום אחד!**\n\n" +
       "🎬 **YouTube** — סרטונים, Shorts ולייבים\n" +
@@ -4383,7 +4946,8 @@ function createSocialsEmbed() {
       "👇 לחצו על הכפתור של הרשת שאתם רוצים לפתוח."
     )
     .setFooter({
-      text: "socials-panel-v1"
+      text:
+        "socials-panel-v1"
     });
 }
 
@@ -4391,22 +4955,46 @@ function createSocialsButtons() {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
-        .setLabel("YouTube")
-        .setEmoji("▶️")
-        .setStyle(ButtonStyle.Link)
-        .setURL(SOCIAL_YOUTUBE_URL),
+        .setLabel(
+          "YouTube"
+        )
+        .setEmoji(
+          "▶️"
+        )
+        .setStyle(
+          ButtonStyle.Link
+        )
+        .setURL(
+          SOCIAL_YOUTUBE_URL
+        ),
 
       new ButtonBuilder()
-        .setLabel("Kick")
-        .setEmoji("🟢")
-        .setStyle(ButtonStyle.Link)
-        .setURL(SOCIAL_KICK_URL),
+        .setLabel(
+          "Kick"
+        )
+        .setEmoji(
+          "🟢"
+        )
+        .setStyle(
+          ButtonStyle.Link
+        )
+        .setURL(
+          SOCIAL_KICK_URL
+        ),
 
       new ButtonBuilder()
-        .setLabel("WhatsApp")
-        .setEmoji("💚")
-        .setStyle(ButtonStyle.Link)
-        .setURL(SOCIAL_WHATSAPP_URL)
+        .setLabel(
+          "WhatsApp"
+        )
+        .setEmoji(
+          "💚"
+        )
+        .setStyle(
+          ButtonStyle.Link
+        )
+        .setURL(
+          SOCIAL_WHATSAPP_URL
+        )
     );
 }
 
@@ -4428,14 +5016,19 @@ async function setupSocialsPanel() {
 
   const messages =
     await channel.messages.fetch({
-      limit: 100
+      limit:
+        100
     });
 
   const old =
     messages.find(
       message =>
-        message.author.id === client.user.id &&
-        message.embeds[0]?.footer?.text === "socials-panel-v1"
+        message.author.id ===
+          client.user.id &&
+        message.embeds[0]
+          ?.footer
+          ?.text ===
+          "socials-panel-v1"
     );
 
   const payload = {
@@ -4448,10 +5041,13 @@ async function setupSocialsPanel() {
     ]
   };
 
-  if (old) {
+  if (
+    old
+  ) {
     await old.edit(
       payload
     );
+
   } else {
     await channel.send(
       payload
@@ -4459,12 +5055,18 @@ async function setupSocialsPanel() {
   }
 }
 
-// ===================== PARTNER =====================
+// ========================================================
+// PARTNER
+// ========================================================
 
 function createPartnerPanelEmbed() {
   return new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle("🤝 מערכת Partner / שיתוף פעולה")
+    .setColor(
+      0x5865F2
+    )
+    .setTitle(
+      "🤝 מערכת Partner / שיתוף פעולה"
+    )
     .setDescription(
       "**רוצים לעשות Partner עם השרת שלנו?**\n\n" +
       "Partner אומר שאנחנו מפרסמים את השרת שלכם — ואתם מפרסמים את השרת שלנו.\n\n" +
@@ -4473,7 +5075,8 @@ function createPartnerPanelEmbed() {
       "⏳ אחרי שבקשה מטופלת, ניתן להגיש בקשה חדשה אחרי **7 ימים**."
     )
     .setFooter({
-      text: "partner-panel-v1"
+      text:
+        "partner-panel-v1"
     });
 }
 
@@ -4514,14 +5117,19 @@ async function setupPartnerPanel() {
 
   const messages =
     await channel.messages.fetch({
-      limit: 100
+      limit:
+        100
     });
 
   const old =
     messages.find(
       message =>
-        message.author.id === client.user.id &&
-        message.embeds[0]?.footer?.text === "partner-panel-v1"
+        message.author.id ===
+          client.user.id &&
+        message.embeds[0]
+          ?.footer
+          ?.text ===
+          "partner-panel-v1"
     );
 
   const payload = {
@@ -4534,10 +5142,13 @@ async function setupPartnerPanel() {
     ]
   };
 
-  if (old) {
+  if (
+    old
+  ) {
     await old.edit(
       payload
     );
+
   } else {
     await channel.send(
       payload
@@ -4625,7 +5236,9 @@ function createPartnerModal() {
     );
 }
 
-function partnerStatusText(state) {
+function partnerStatusText(
+  state
+) {
   if (
     state.status ===
     "approved"
@@ -4650,14 +5263,19 @@ function partnerStatusText(state) {
   return "🕒 **ממתין לבדיקה**";
 }
 
-function createPartnerOwnerEmbed(state) {
+function createPartnerOwnerEmbed(
+  state
+) {
   return new EmbedBuilder()
     .setColor(
-      state.status === "approved"
+      state.status ===
+        "approved"
         ? 0x57F287
-        : state.status === "rejected"
+        : state.status ===
+          "rejected"
           ? 0xED4245
-          : state.status === "waiting_publication"
+          : state.status ===
+            "waiting_publication"
             ? 0xFEE75C
             : 0x5865F2
     )
@@ -4709,10 +5327,14 @@ function createPartnerOwnerEmbed(state) {
     );
 }
 
-function createPartnerOwnerButtons(state) {
+function createPartnerOwnerButtons(
+  state
+) {
   const handled =
-    state.status === "approved" ||
-    state.status === "rejected";
+    state.status ===
+      "approved" ||
+    state.status ===
+      "rejected";
 
   return [
     new ActionRowBuilder()
@@ -4785,7 +5407,9 @@ function createPartnerOwnerButtons(state) {
   ];
 }
 
-function createPartnerApprovalConfirmRow(requestId) {
+function createPartnerApprovalConfirmRow(
+  requestId
+) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -4818,7 +5442,9 @@ function createPartnerApprovalConfirmRow(requestId) {
     );
 }
 
-function createPartnerRejectModal(requestId) {
+function createPartnerRejectModal(
+  requestId
+) {
   return new ModalBuilder()
     .setCustomId(
       `partner_reject_modal:${requestId}`
@@ -4852,7 +5478,9 @@ function createPartnerRejectModal(requestId) {
     );
 }
 
-function createPartnerEditModal(state) {
+function createPartnerEditModal(
+  state
+) {
   const input =
     new TextInputBuilder()
       .setCustomId(
@@ -4897,13 +5525,17 @@ function createPartnerEditModal(state) {
     );
 }
 
-function getPartnerCooldownExpiry(userId) {
+function getPartnerCooldownExpiry(
+  userId
+) {
   const expiry =
     partnerCooldowns.get(
       userId
     );
 
-  if (!expiry) {
+  if (
+    !expiry
+  ) {
     return null;
   }
 
@@ -4921,7 +5553,9 @@ function getPartnerCooldownExpiry(userId) {
   return expiry;
 }
 
-async function savePartnerFields(state) {
+async function savePartnerFields(
+  state
+) {
   await savePartnerField(
     state.requestId,
     "inviteUrl",
@@ -4941,7 +5575,9 @@ async function savePartnerFields(state) {
   );
 }
 
-async function sendPartnerRequestToOwner(state) {
+async function sendPartnerRequestToOwner(
+  state
+) {
   const owner =
     await client.users
       .fetch(
@@ -4951,7 +5587,9 @@ async function sendPartnerRequestToOwner(state) {
         () => null
       );
 
-  if (!owner) {
+  if (
+    !owner
+  ) {
     return null;
   }
 
@@ -4962,7 +5600,9 @@ async function sendPartnerRequestToOwner(state) {
         () => null
       );
 
-  if (!dm) {
+  if (
+    !dm
+  ) {
     return null;
   }
 
@@ -4983,7 +5623,9 @@ async function sendPartnerRequestToOwner(state) {
         () => null
       );
 
-  if (!message) {
+  if (
+    !message
+  ) {
     return null;
   }
 
@@ -5000,7 +5642,9 @@ async function sendPartnerRequestToOwner(state) {
   return message;
 }
 
-async function updatePartnerOwnerMessage(state) {
+async function updatePartnerOwnerMessage(
+  state
+) {
   if (
     !state.ownerDmChannelId ||
     !state.ownerDmMessageId
@@ -5032,7 +5676,9 @@ async function updatePartnerOwnerMessage(state) {
         () => null
       );
 
-  if (!message) {
+  if (
+    !message
+  ) {
     return;
   }
 
@@ -5099,7 +5745,9 @@ async function rejectPartnerRequest(
         () => null
       );
 
-  if (user) {
+  if (
+    user
+  ) {
     await user.send({
       embeds: [
         new EmbedBuilder()
@@ -5129,11 +5777,15 @@ async function rejectPartnerRequest(
   }
 }
 
-async function finalizePartnerApproval(state) {
+async function finalizePartnerApproval(
+  state
+) {
   const guild =
     await getMainGuild();
 
-  if (!guild) {
+  if (
+    !guild
+  ) {
     throw new Error(
       "Guild not found"
     );
@@ -5148,7 +5800,9 @@ async function finalizePartnerApproval(state) {
         () => null
       );
 
-  if (!member) {
+  if (
+    !member
+  ) {
     throw new Error(
       "Applicant is not in the server"
     );
@@ -5293,30 +5947,26 @@ async function finalizePartnerApproval(state) {
     () => {}
   );
 }
-
-// ===================== TEMP VOICE =====================
+// ========================================================
+// TEMP VOICE
+// ========================================================
 
 function createTempVoicePanelEmbed() {
   return new EmbedBuilder()
-    .setColor(
-      0x5865F2
-    )
-    .setTitle(
-      "🎙️・ניהול חדר קולי אישי"
-    )
+    .setColor(0x5865F2)
+    .setTitle("🎙️・ניהול חדר קולי אישי")
     .setDescription(
       `כדי לפתוח חדר אישי, היכנסו ל-<#${TEMP_VOICE_CREATE_CHANNEL_ID}>.\n` +
-      "הבוט ייצור לכם חדר קולי משלכם ויעביר אתכם אליו אוטומטית.\n\n" +
-      "**שליטה בחדר:**\n" +
-      "🔒 נעילה • 🔓 פתיחה • 🙈 הסתרה • 👁️ הצגה\n" +
+      "הבוט ייצור לכם חדר קולי ויעביר אתכם אליו אוטומטית.\n\n" +
+      "🔒 נעילה • 🔓 פתיחה\n" +
+      "🙈 הסתרה • 👁️ הצגה\n" +
       "👥 הגבלת משתמשים • ✏️ שינוי שם\n" +
-      "💌 הזמנה • ✅ אישור משתמש • ⛔ חסימת משתמש\n" +
-      "👢 הוצאה מהחדר • 👑 העברת בעלות • 🗑️ מחיקת החדר\n\n" +
-      "⚠️ הכפתורים עובדים רק על **החדר האישי שלך**."
+      "💌 הזמנה • ✅ אישור משתמש\n" +
+      "⛔ חסימת משתמש • 👢 הוצאה\n" +
+      "👑 העברת בעלות • 🗑️ מחיקת החדר"
     )
     .setFooter({
-      text:
-        "temp-voice-panel-v1"
+      text: "temp-voice-panel-v1"
     });
 }
 
@@ -5325,178 +5975,82 @@ function createTempVoicePanelRows() {
     new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId(
-            "temp_lock"
-          )
-          .setLabel(
-            "נעילה"
-          )
-          .setEmoji(
-            "🔒"
-          )
-          .setStyle(
-            ButtonStyle.Secondary
-          ),
+          .setCustomId("temp_lock")
+          .setLabel("נעילה")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Secondary),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_unlock"
-          )
-          .setLabel(
-            "פתיחה"
-          )
-          .setEmoji(
-            "🔓"
-          )
-          .setStyle(
-            ButtonStyle.Secondary
-          ),
+          .setCustomId("temp_unlock")
+          .setLabel("פתיחה")
+          .setEmoji("🔓")
+          .setStyle(ButtonStyle.Secondary),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_hide"
-          )
-          .setLabel(
-            "הסתרה"
-          )
-          .setEmoji(
-            "🙈"
-          )
-          .setStyle(
-            ButtonStyle.Secondary
-          ),
+          .setCustomId("temp_hide")
+          .setLabel("הסתרה")
+          .setEmoji("🙈")
+          .setStyle(ButtonStyle.Secondary),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_show"
-          )
-          .setLabel(
-            "הצגה"
-          )
-          .setEmoji(
-            "👁️"
-          )
-          .setStyle(
-            ButtonStyle.Secondary
-          ),
+          .setCustomId("temp_show")
+          .setLabel("הצגה")
+          .setEmoji("👁️")
+          .setStyle(ButtonStyle.Secondary),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_limit"
-          )
-          .setLabel(
-            "הגבלה"
-          )
-          .setEmoji(
-            "👥"
-          )
-          .setStyle(
-            ButtonStyle.Primary
-          )
+          .setCustomId("temp_limit")
+          .setLabel("הגבלה")
+          .setEmoji("👥")
+          .setStyle(ButtonStyle.Primary)
       ),
 
     new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId(
-            "temp_rename"
-          )
-          .setLabel(
-            "שינוי שם"
-          )
-          .setEmoji(
-            "✏️"
-          )
-          .setStyle(
-            ButtonStyle.Primary
-          ),
+          .setCustomId("temp_rename")
+          .setLabel("שינוי שם")
+          .setEmoji("✏️")
+          .setStyle(ButtonStyle.Primary),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_invite"
-          )
-          .setLabel(
-            "הזמנה"
-          )
-          .setEmoji(
-            "💌"
-          )
-          .setStyle(
-            ButtonStyle.Success
-          ),
+          .setCustomId("temp_invite")
+          .setLabel("הזמנה")
+          .setEmoji("💌")
+          .setStyle(ButtonStyle.Success),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_permit"
-          )
-          .setLabel(
-            "אישור"
-          )
-          .setEmoji(
-            "✅"
-          )
-          .setStyle(
-            ButtonStyle.Success
-          ),
+          .setCustomId("temp_permit")
+          .setLabel("אישור")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Success),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_reject"
-          )
-          .setLabel(
-            "חסימה"
-          )
-          .setEmoji(
-            "⛔"
-          )
-          .setStyle(
-            ButtonStyle.Danger
-          ),
+          .setCustomId("temp_reject")
+          .setLabel("חסימה")
+          .setEmoji("⛔")
+          .setStyle(ButtonStyle.Danger),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_kick"
-          )
-          .setLabel(
-            "הוצאה"
-          )
-          .setEmoji(
-            "👢"
-          )
-          .setStyle(
-            ButtonStyle.Danger
-          )
+          .setCustomId("temp_kick")
+          .setLabel("הוצאה")
+          .setEmoji("👢")
+          .setStyle(ButtonStyle.Danger)
       ),
 
     new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId(
-            "temp_transfer"
-          )
-          .setLabel(
-            "העברת בעלות"
-          )
-          .setEmoji(
-            "👑"
-          )
-          .setStyle(
-            ButtonStyle.Primary
-          ),
+          .setCustomId("temp_transfer")
+          .setLabel("העברת בעלות")
+          .setEmoji("👑")
+          .setStyle(ButtonStyle.Primary),
 
         new ButtonBuilder()
-          .setCustomId(
-            "temp_delete"
-          )
-          .setLabel(
-            "מחיקת החדר"
-          )
-          .setEmoji(
-            "🗑️"
-          )
-          .setStyle(
-            ButtonStyle.Danger
-          )
+          .setCustomId("temp_delete")
+          .setLabel("מחיקת החדר")
+          .setEmoji("🗑️")
+          .setStyle(ButtonStyle.Danger)
       )
   ];
 }
@@ -5507,17 +6061,11 @@ async function setupTempVoicePanel() {
       .fetch(
         TEMP_VOICE_PANEL_CHANNEL_ID
       )
-      .catch(
-        () => null
-      );
+      .catch(() => null);
 
   if (
     !channel?.isTextBased()
   ) {
-    console.log(
-      "⚠️ חדר הפאנל של החדרים האישיים לא נמצא."
-    );
-
     return;
   }
 
@@ -5526,9 +6074,7 @@ async function setupTempVoicePanel() {
       .fetch({
         limit: 100
       })
-      .catch(
-        () => null
-      );
+      .catch(() => null);
 
   if (!messages) {
     return;
@@ -5537,8 +6083,12 @@ async function setupTempVoicePanel() {
   const old =
     messages.find(
       message =>
-        message.author.id === client.user.id &&
-        message.embeds[0]?.footer?.text === "temp-voice-panel-v1"
+        message.author.id ===
+          client.user.id &&
+        message.embeds[0]
+          ?.footer
+          ?.text ===
+          "temp-voice-panel-v1"
     );
 
   const payload = {
@@ -5553,19 +6103,17 @@ async function setupTempVoicePanel() {
   if (old) {
     await old.edit(
       payload
-    ).catch(
-      () => {}
-    );
+    ).catch(() => {});
   } else {
     await channel.send(
       payload
-    ).catch(
-      () => {}
-    );
+    ).catch(() => {});
   }
 }
 
-function buildTempRoomName(member) {
+function buildTempRoomName(
+  member
+) {
   const raw =
     stripAnyPrefix(
       member.displayName ||
@@ -5574,32 +6122,11 @@ function buildTempRoomName(member) {
       "User"
     );
 
-  const clean =
-    (
-      raw ||
-      member.user.username ||
-      "User"
-    )
-      .replace(
-        /[\r\n]/g,
-        " "
-      )
-      .trim();
-
   return (
-    `TW | ${clean}'s Channel`
+    `TW | ${raw || member.user.username}'s Channel`
   ).slice(
     0,
     100
-  );
-}
-
-function getTempRoomOwnerId(channelId) {
-  return (
-    tempVoiceOwners.get(
-      channelId
-    ) ||
-    null
   );
 }
 
@@ -5610,17 +6137,17 @@ async function getTempRoomOwnedBy(
   for (
     const [
       channelId,
-      mappedOwnerId
-    ] of
-    tempVoiceOwners.entries()
+      mappedOwner
+    ] of tempVoiceOwners.entries()
   ) {
     if (
-      mappedOwnerId !== ownerId
+      mappedOwner !==
+      ownerId
     ) {
       continue;
     }
 
-    const channel =
+    const room =
       guild.channels.cache.get(
         channelId
       ) ||
@@ -5628,15 +6155,15 @@ async function getTempRoomOwnedBy(
         .fetch(
           channelId
         )
-        .catch(
-          () => null
-        );
+        .catch(() => null);
 
     if (
-      channel?.type === ChannelType.GuildVoice &&
-      channel.parentId === TEMP_VOICE_CATEGORY_ID
+      room?.type ===
+        ChannelType.GuildVoice &&
+      room.parentId ===
+        TEMP_VOICE_CATEGORY_ID
     ) {
-      return channel;
+      return room;
     }
 
     tempVoiceOwners.delete(
@@ -5647,95 +6174,17 @@ async function getTempRoomOwnedBy(
   return null;
 }
 
-async function getControlledTempRoom(
-  interaction,
-  explicitChannelId = null
+async function createTempVoiceRoom(
+  member
 ) {
   if (
-    !interaction.guild
-  ) {
-    return null;
-  }
-
-  const member =
-    await fetchFreshMember(
-      interaction.guild,
-      interaction.user.id
-    )
-      .catch(
-        () => null
-      );
-
-  if (!member) {
-    return null;
-  }
-
-  const channelId =
-    explicitChannelId ||
-    member.voice.channelId;
-
-  if (!channelId) {
-    return null;
-  }
-
-  const ownerId =
-    getTempRoomOwnerId(
-      channelId
-    );
-
-  if (
-    ownerId !== interaction.user.id
-  ) {
-    return null;
-  }
-
-  const channel =
-    interaction.guild
-      .channels
-      .cache
-      .get(
-        channelId
-      ) ||
-    await interaction.guild
-      .channels
-      .fetch(
-        channelId
-      )
-      .catch(
-        () => null
-      );
-
-  if (
-    !channel ||
-    channel.type !== ChannelType.GuildVoice ||
-    channel.parentId !== TEMP_VOICE_CATEGORY_ID
-  ) {
-    return null;
-  }
-
-  if (
-    member.voice.channelId !== channel.id
-  ) {
-    return null;
-  }
-
-  return channel;
-}
-
-async function createTempVoiceRoom(member) {
-  if (
     !member ||
-    member.user.bot
-  ) {
-    return null;
-  }
-
-  if (
+    member.user.bot ||
     tempVoiceCreating.has(
       member.id
     )
   ) {
-    return null;
+    return;
   }
 
   tempVoiceCreating.add(
@@ -5743,50 +6192,26 @@ async function createTempVoiceRoom(member) {
   );
 
   try {
-    const guild =
-      member.guild;
-
     const existing =
       await getTempRoomOwnedBy(
-        guild,
+        member.guild,
         member.id
       );
 
     if (existing) {
       await member.voice
         .setChannel(
-          existing,
-          "חזרה לחדר הקולי האישי"
+          existing
         )
-        .catch(
-          () => {}
-        );
+        .catch(() => {});
 
-      return existing;
+      return;
     }
 
-    const category =
-      await guild.channels
-        .fetch(
-          TEMP_VOICE_CATEGORY_ID
-        )
-        .catch(
-          () => null
-        );
-
-    if (
-      !category ||
-      category.type !== ChannelType.GuildCategory
-    ) {
-      throw new Error(
-        "Temp voice category not found"
-      );
-    }
-
-    const permissionOverwrites = [
+    const permissions = [
       {
         id:
-          guild.id,
+          member.guild.id,
 
         allow: [
           PermissionFlagsBits.ViewChannel,
@@ -5815,7 +6240,7 @@ async function createTempVoiceRoom(member) {
       const roleId of
       STAFF_ACCESS_ROLE_IDS
     ) {
-      permissionOverwrites.push({
+      permissions.push({
         id:
           roleId,
 
@@ -5829,23 +6254,26 @@ async function createTempVoiceRoom(member) {
     }
 
     const room =
-      await guild.channels.create({
-        name:
-          buildTempRoomName(
-            member
-          ),
+      await member.guild
+        .channels
+        .create({
+          name:
+            buildTempRoomName(
+              member
+            ),
 
-        type:
-          ChannelType.GuildVoice,
+          type:
+            ChannelType.GuildVoice,
 
-        parent:
-          TEMP_VOICE_CATEGORY_ID,
+          parent:
+            TEMP_VOICE_CATEGORY_ID,
 
-        permissionOverwrites,
+          permissionOverwrites:
+            permissions,
 
-        reason:
-          `חדר קולי אישי של ${member.user.tag}`
-      });
+          reason:
+            `חדר אישי של ${member.user.tag}`
+        });
 
     tempVoiceOwners.set(
       room.id,
@@ -5857,12 +6285,13 @@ async function createTempVoiceRoom(member) {
     );
 
     try {
-      await member.voice.setChannel(
-        room,
-        "יצירת חדר קולי אישי"
-      );
-
-    } catch (error) {
+      await member.voice
+        .setChannel(
+          room
+        );
+    } catch (
+      error
+    ) {
       tempVoiceOwners.delete(
         room.id
       );
@@ -5871,18 +6300,11 @@ async function createTempVoiceRoom(member) {
         `TEMP_DELETE|${room.id}`
       );
 
-      await room
-        .delete(
-          "לא ניתן היה להעביר את בעל החדר"
-        )
-        .catch(
-          () => {}
-        );
+      await room.delete()
+        .catch(() => {});
 
       throw error;
     }
-
-    return room;
 
   } finally {
     tempVoiceCreating.delete(
@@ -5892,43 +6314,38 @@ async function createTempVoiceRoom(member) {
 }
 
 async function deleteTempVoiceRoom(
-  channel,
-  reason = "החדר האישי התרוקן"
+  room,
+  reason =
+    "החדר האישי התרוקן"
 ) {
-  if (!channel) {
+  if (!room) {
     return;
   }
 
-  const channelId =
-    channel.id;
-
   tempVoiceOwners.delete(
-    channelId
+    room.id
   );
 
   await logBotData(
-    `TEMP_DELETE|${channelId}`
+    `TEMP_DELETE|${room.id}`
   );
 
-  await channel
-    .delete(
-      reason
-    )
-    .catch(
-      () => {}
-    );
+  await room.delete(
+    reason
+  ).catch(() => {});
 }
 
-async function restoreTempVoiceRooms(guild) {
+async function restoreTempVoiceRooms(
+  guild
+) {
   for (
     const [
       channelId
-    ] of
-    [
+    ] of [
       ...tempVoiceOwners.entries()
     ]
   ) {
-    const channel =
+    const room =
       guild.channels.cache.get(
         channelId
       ) ||
@@ -5936,14 +6353,14 @@ async function restoreTempVoiceRooms(guild) {
         .fetch(
           channelId
         )
-        .catch(
-          () => null
-        );
+        .catch(() => null);
 
     if (
-      !channel ||
-      channel.type !== ChannelType.GuildVoice ||
-      channel.parentId !== TEMP_VOICE_CATEGORY_ID
+      !room ||
+      room.type !==
+        ChannelType.GuildVoice ||
+      room.parentId !==
+        TEMP_VOICE_CATEGORY_ID
     ) {
       tempVoiceOwners.delete(
         channelId
@@ -5957,14 +6374,85 @@ async function restoreTempVoiceRooms(guild) {
     }
 
     if (
-      channel.members.size === 0
+      room.members.size ===
+      0
     ) {
       await deleteTempVoiceRoom(
-        channel,
-        "ניקוי חדר אישי ריק אחרי הפעלה מחדש"
+        room,
+        "ניקוי חדר ריק אחרי הפעלה מחדש"
       );
     }
   }
+}
+
+async function getControlledTempRoom(
+  interaction,
+  explicitChannelId = null
+) {
+  if (
+    !interaction.guild
+  ) {
+    return null;
+  }
+
+  const member =
+    await fetchFreshMember(
+      interaction.guild,
+      interaction.user.id
+    ).catch(
+      () => null
+    );
+
+  if (!member) {
+    return null;
+  }
+
+  const channelId =
+    explicitChannelId ||
+    member.voice.channelId;
+
+  if (!channelId) {
+    return null;
+  }
+
+  if (
+    tempVoiceOwners.get(
+      channelId
+    ) !==
+    interaction.user.id
+  ) {
+    return null;
+  }
+
+  if (
+    member.voice.channelId !==
+    channelId
+  ) {
+    return null;
+  }
+
+  const room =
+    interaction.guild
+      .channels
+      .cache
+      .get(
+        channelId
+      ) ||
+    await interaction.guild
+      .channels
+      .fetch(
+        channelId
+      )
+      .catch(() => null);
+
+  if (
+    room?.type !==
+    ChannelType.GuildVoice
+  ) {
+    return null;
+  }
+
+  return room;
 }
 
 function tempUserSelectRow(
@@ -5981,19 +6469,17 @@ function tempUserSelectRow(
         .setPlaceholder(
           placeholder
         )
-        .setMinValues(
-          1
-        )
-        .setMaxValues(
-          1
-        )
+        .setMinValues(1)
+        .setMaxValues(1)
     );
 }
 
-function createTempRenameModal(channel) {
+function createTempRenameModal(
+  room
+) {
   return new ModalBuilder()
     .setCustomId(
-      `temp_rename_modal:${channel.id}`
+      `temp_rename_modal:${room.id}`
     )
     .setTitle(
       "שינוי שם החדר"
@@ -6006,7 +6492,7 @@ function createTempRenameModal(channel) {
               "room_name"
             )
             .setLabel(
-              "השם החדש של החדר"
+              "השם החדש"
             )
             .setStyle(
               TextInputStyle.Short
@@ -6014,14 +6500,11 @@ function createTempRenameModal(channel) {
             .setRequired(
               true
             )
-            .setMinLength(
-              1
-            )
             .setMaxLength(
               100
             )
             .setValue(
-              channel.name.slice(
+              room.name.slice(
                 0,
                 100
               )
@@ -6030,10 +6513,12 @@ function createTempRenameModal(channel) {
     );
 }
 
-function createTempLimitModal(channel) {
+function createTempLimitModal(
+  room
+) {
   return new ModalBuilder()
     .setCustomId(
-      `temp_limit_modal:${channel.id}`
+      `temp_limit_modal:${room.id}`
     )
     .setTitle(
       "הגבלת משתמשים"
@@ -6046,10 +6531,7 @@ function createTempLimitModal(channel) {
               "room_limit"
             )
             .setLabel(
-              "כמה משתמשים? 0 = ללא הגבלה"
-            )
-            .setPlaceholder(
-              "לדוגמה: 5"
+              "0 = ללא הגבלה"
             )
             .setStyle(
               TextInputStyle.Short
@@ -6062,7 +6544,7 @@ function createTempLimitModal(channel) {
             )
             .setValue(
               String(
-                channel.userLimit ||
+                room.userLimit ||
                 0
               )
             )
@@ -6070,7 +6552,9 @@ function createTempLimitModal(channel) {
     );
 }
 
-async function handleTempVoiceButton(interaction) {
+async function handleTempVoiceButton(
+  interaction
+) {
   const room =
     await getControlledTempRoom(
       interaction
@@ -6079,8 +6563,7 @@ async function handleTempVoiceButton(interaction) {
   if (!room) {
     return interaction.reply({
       content:
-        "❌ כדי להשתמש בפאנל, צריך להיות בתוך **החדר האישי שלך**.\n" +
-        `היכנס קודם ל-<#${TEMP_VOICE_CREATE_CHANNEL_ID}>.`,
+        "❌ צריך להיות בתוך החדר האישי שלך כדי להשתמש בפאנל.",
 
       ephemeral:
         true
@@ -6088,7 +6571,8 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_lock"
+    interaction.customId ===
+    "temp_lock"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6100,7 +6584,7 @@ async function handleTempVoiceButton(interaction) {
 
     return interaction.reply({
       content:
-        "🔒 החדר ננעל. רק משתמשים שאישרת יוכלו להיכנס.",
+        "🔒 החדר ננעל.",
 
       ephemeral:
         true
@@ -6108,7 +6592,8 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_unlock"
+    interaction.customId ===
+    "temp_unlock"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6120,7 +6605,7 @@ async function handleTempVoiceButton(interaction) {
 
     return interaction.reply({
       content:
-        "🔓 החדר פתוח עכשיו לכולם.",
+        "🔓 החדר נפתח.",
 
       ephemeral:
         true
@@ -6128,7 +6613,8 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_hide"
+    interaction.customId ===
+    "temp_hide"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6140,7 +6626,7 @@ async function handleTempVoiceButton(interaction) {
 
     return interaction.reply({
       content:
-        "🙈 החדר הוסתר ממשתמשים רגילים.",
+        "🙈 החדר הוסתר.",
 
       ephemeral:
         true
@@ -6148,7 +6634,8 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_show"
+    interaction.customId ===
+    "temp_show"
   ) {
     await room.permissionOverwrites.edit(
       interaction.guild.id,
@@ -6160,7 +6647,7 @@ async function handleTempVoiceButton(interaction) {
 
     return interaction.reply({
       content:
-        "👁️ החדר מוצג שוב לכולם.",
+        "👁️ החדר מוצג שוב.",
 
       ephemeral:
         true
@@ -6168,7 +6655,8 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_rename"
+    interaction.customId ===
+    "temp_rename"
   ) {
     return interaction.showModal(
       createTempRenameModal(
@@ -6178,7 +6666,8 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_limit"
+    interaction.customId ===
+    "temp_limit"
   ) {
     return interaction.showModal(
       createTempLimitModal(
@@ -6188,17 +6677,18 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_invite"
+    interaction.customId ===
+    "temp_invite"
   ) {
     return interaction.reply({
       content:
-        "💌 בחר את מי להזמין לחדר:",
+        "💌 בחר משתמש להזמנה:",
 
       components: [
         tempUserSelectRow(
           "invite",
           room.id,
-          "בחר משתמש להזמנה"
+          "בחר משתמש"
         )
       ],
 
@@ -6208,17 +6698,18 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_permit"
+    interaction.customId ===
+    "temp_permit"
   ) {
     return interaction.reply({
       content:
-        "✅ בחר למי לתת גישה לחדר:",
+        "✅ בחר משתמש לאישור:",
 
       components: [
         tempUserSelectRow(
           "permit",
           room.id,
-          "בחר משתמש לאישור"
+          "בחר משתמש"
         )
       ],
 
@@ -6228,17 +6719,18 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_reject"
+    interaction.customId ===
+    "temp_reject"
   ) {
     return interaction.reply({
       content:
-        "⛔ בחר את מי לחסום מהחדר:",
+        "⛔ בחר משתמש לחסימה:",
 
       components: [
         tempUserSelectRow(
           "reject",
           room.id,
-          "בחר משתמש לחסימה"
+          "בחר משתמש"
         )
       ],
 
@@ -6248,17 +6740,18 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_kick"
+    interaction.customId ===
+    "temp_kick"
   ) {
     return interaction.reply({
       content:
-        "👢 בחר את מי להוציא מהחדר:",
+        "👢 בחר משתמש להוצאה:",
 
       components: [
         tempUserSelectRow(
           "kick",
           room.id,
-          "בחר משתמש להוצאה"
+          "בחר משתמש"
         )
       ],
 
@@ -6268,17 +6761,18 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_transfer"
+    interaction.customId ===
+    "temp_transfer"
   ) {
     return interaction.reply({
       content:
-        "👑 בחר למי להעביר את הבעלות על החדר:",
+        "👑 בחר בעלים חדש:",
 
       components: [
         tempUserSelectRow(
           "transfer",
           room.id,
-          "בחר בעלים חדש"
+          "בחר משתמש"
         )
       ],
 
@@ -6288,11 +6782,12 @@ async function handleTempVoiceButton(interaction) {
   }
 
   if (
-    interaction.customId === "temp_delete"
+    interaction.customId ===
+    "temp_delete"
   ) {
     await interaction.reply({
       content:
-        "🗑️ החדר האישי נמחק.",
+        "🗑️ החדר נמחק.",
 
       ephemeral:
         true
@@ -6302,12 +6797,12 @@ async function handleTempVoiceButton(interaction) {
       room,
       `נמחק על ידי ${interaction.user.tag}`
     );
-
-    return;
   }
 }
 
-async function handleTempVoiceUserSelect(interaction) {
+async function handleTempVoiceUserSelect(
+  interaction
+) {
   const [
     prefix,
     channelId
@@ -6335,9 +6830,10 @@ async function handleTempVoiceUserSelect(interaction) {
   if (!room) {
     return interaction.update({
       content:
-        "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+        "❌ החדר לא קיים או שאינך הבעלים שלו.",
 
-      components: []
+      components:
+        []
     });
   }
 
@@ -6345,13 +6841,15 @@ async function handleTempVoiceUserSelect(interaction) {
     interaction.values[0];
 
   if (
-    targetId === interaction.user.id
+    targetId ===
+    interaction.user.id
   ) {
     return interaction.update({
       content:
-        "❌ אי אפשר לבחור את עצמך בפעולה הזאת.",
+        "❌ אי אפשר לבחור את עצמך.",
 
-      components: []
+      components:
+        []
     });
   }
 
@@ -6359,10 +6857,9 @@ async function handleTempVoiceUserSelect(interaction) {
     await fetchFreshMember(
       interaction.guild,
       targetId
-    )
-      .catch(
-        () => null
-      );
+    ).catch(
+      () => null
+    );
 
   if (
     !target ||
@@ -6370,14 +6867,16 @@ async function handleTempVoiceUserSelect(interaction) {
   ) {
     return interaction.update({
       content:
-        "❌ המשתמש לא נמצא או שהוא בוט.",
+        "❌ המשתמש לא נמצא.",
 
-      components: []
+      components:
+        []
     });
   }
 
   if (
-    action === "invite"
+    action ===
+    "invite"
   ) {
     await room.permissionOverwrites.edit(
       target.id,
@@ -6392,9 +6891,6 @@ async function handleTempVoiceUserSelect(interaction) {
           true
       }
     );
-
-    const inviteUrl =
-      `https://discord.com/channels/${interaction.guild.id}/${room.id}`;
 
     await target.user.send({
       embeds: [
@@ -6403,45 +6899,26 @@ async function handleTempVoiceUserSelect(interaction) {
             0x57F287
           )
           .setTitle(
-            "💌 הוזמנת לחדר קולי אישי"
+            "💌 הוזמנת לחדר קולי"
           )
           .setDescription(
-            `${interaction.user} הזמין/ה אותך לחדר הקולי **${room.name}** בשרת **${interaction.guild.name}**.`
-          )
-      ],
-
-      components: [
-        new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setLabel(
-                "היכנס לחדר"
-              )
-              .setEmoji(
-                "🔊"
-              )
-              .setStyle(
-                ButtonStyle.Link
-              )
-              .setURL(
-                inviteUrl
-              )
+            `${interaction.user} הזמין אותך לחדר **${room.name}**.`
           )
       ]
-    }).catch(
-      () => {}
-    );
+    }).catch(() => {});
 
     return interaction.update({
       content:
-        `✅ ${target} קיבל/ה גישה והזמנה לחדר.`,
+        `✅ ${target} קיבל הזמנה וגישה.`,
 
-      components: []
+      components:
+        []
     });
   }
 
   if (
-    action === "permit"
+    action ===
+    "permit"
   ) {
     await room.permissionOverwrites.edit(
       target.id,
@@ -6459,95 +6936,89 @@ async function handleTempVoiceUserSelect(interaction) {
 
     return interaction.update({
       content:
-        `✅ ${target} יכול/ה עכשיו להיכנס לחדר.`,
+        `✅ ${target} קיבל גישה.`,
 
-      components: []
+      components:
+        []
     });
   }
 
   if (
-    action === "reject"
+    action ===
+    "reject"
   ) {
     await room.permissionOverwrites.edit(
       target.id,
       {
         Connect:
-          false,
-
-        ViewChannel:
-          null,
-
-        Speak:
-          null
+          false
       }
     );
 
     if (
-      target.voice.channelId === room.id
+      target.voice.channelId ===
+      room.id
     ) {
       await target.voice
-        .disconnect(
-          "נחסם מהחדר האישי"
-        )
-        .catch(
-          () => {}
-        );
+        .disconnect()
+        .catch(() => {});
     }
 
     return interaction.update({
       content:
-        `⛔ ${target} נחסם/ה מכניסה לחדר.`,
+        `⛔ ${target} נחסם מהחדר.`,
 
-      components: []
+      components:
+        []
     });
   }
 
   if (
-    action === "kick"
+    action ===
+    "kick"
   ) {
     if (
-      target.voice.channelId !== room.id
+      target.voice.channelId !==
+      room.id
     ) {
       return interaction.update({
         content:
-          "❌ המשתמש הזה לא נמצא כרגע בחדר שלך.",
+          "❌ המשתמש לא נמצא בחדר.",
 
-        components: []
+        components:
+          []
       });
     }
 
     await target.voice
-      .disconnect(
-        "הוצאה מחדר קולי אישי"
-      )
-      .catch(
-        () => {}
-      );
+      .disconnect()
+      .catch(() => {});
 
     return interaction.update({
       content:
-        `👢 ${target} הוצא/ה מהחדר.`,
+        `👢 ${target} הוצא מהחדר.`,
 
-      components: []
+      components:
+        []
     });
   }
 
   if (
-    action === "transfer"
+    action ===
+    "transfer"
   ) {
     if (
-      target.voice.channelId !== room.id
+      target.voice.channelId !==
+      room.id
     ) {
       return interaction.update({
         content:
-          "❌ אפשר להעביר בעלות רק למישהו שנמצא איתך בתוך החדר.",
+          "❌ אפשר להעביר בעלות רק למישהו שנמצא בחדר.",
 
-        components: []
+        components:
+          []
       });
     }
-
-    const oldOwnerId =
-      interaction.user.id;
 
     tempVoiceOwners.set(
       room.id,
@@ -6568,98 +7039,31 @@ async function handleTempVoiceUserSelect(interaction) {
           true,
 
         Speak:
-          true,
-
-        Stream:
-          true,
-
-        UseVAD:
           true
       }
     );
-
-    await room.permissionOverwrites
-      .delete(
-        oldOwnerId
-      )
-      .catch(
-        () => {}
-      );
 
     await room
       .setName(
         buildTempRoomName(
           target
-        ),
-        "העברת בעלות על חדר אישי"
+        )
       )
-      .catch(
-        () => {}
-      );
+      .catch(() => {});
 
     return interaction.update({
       content:
-        `👑 הבעלות על החדר הועברה ל-${target}.`,
+        `👑 הבעלות הועברה ל-${target}.`,
 
-      components: []
+      components:
+        []
     });
   }
-
-  return interaction.update({
-    content:
-      "❌ הפעולה לא נמצאה.",
-
-    components: []
-  });
 }
 
-// ===================== ARCADE =====================
-
-const ARCADE_GAMES = {
-  ttt: {
-    name:
-      "איקס עיגול",
-
-    emoji:
-      "❌",
-
-    description:
-      "משחק 1 נגד 1. מזמינים יריב ומנסים ליצור שלישייה."
-  },
-
-  bomba: {
-    name:
-      "בומבה",
-
-    emoji:
-      "💣",
-
-    description:
-      "משחק קבוצתי מהיר עם נושא אקראי."
-  },
-
-  impostor: {
-    name:
-      "נחש את המתחזה",
-
-    emoji:
-      "🕵️",
-
-    description:
-      "כולם מקבלים מילה בפרטי חוץ מהמתחזה."
-  },
-
-  rps: {
-    name:
-      "אבן נייר ומספריים",
-
-    emoji:
-      "✊",
-
-    description:
-      "משחק מהיר 1 נגד 1."
-  }
-};
+// ========================================================
+// ARCADE
+// ========================================================
 
 function createArcadePanelEmbed() {
   return new EmbedBuilder()
@@ -6667,25 +7071,15 @@ function createArcadePanelEmbed() {
       0x9B59B6
     )
     .setTitle(
-      "🕹️・Roei Arcade"
+      "🕹️ Roei Arcade"
     )
     .setDescription(
-      "ברוכים הבאים לארקייד! 🎮\n" +
-      `המשחקים עצמם ייפתחו ב-<#${ARCADE_GAMES_CHANNEL_ID}>.\n\n` +
-
+      `המשחקים ייפתחו ב-<#${ARCADE_GAMES_CHANNEL_ID}>.\n\n` +
       "❌⭕ **איקס עיגול**\n" +
-      "משחק לשני שחקנים. מזמינים יריב ומתחילים לשחק על הלוח.\n\n" +
-
       "💣 **בומבה**\n" +
-      "מצטרפים למשחק קבוצתי, מקבלים נושא וצריך לענות מהר.\n\n" +
-
       "🕵️ **נחש את המתחזה**\n" +
-      "כולם מקבלים את אותה מילה בפרטי — חוץ משחקן אחד שהוא המתחזה.\n\n" +
-
-      "✊✋✌️ **אבן נייר ומספריים**\n" +
-      "משחק מהיר לשני שחקנים.\n\n" +
-
-      "👇 **בחרו משחק מהתפריט למטה.**"
+      "✊✋✌️ **אבן נייר ומספריים**\n\n" +
+      "👇 בחרו משחק מהתפריט."
     )
     .setFooter({
       text:
@@ -6701,15 +7095,12 @@ function createArcadeMenu() {
           "arcade_game_select"
         )
         .setPlaceholder(
-          "בחרו משחק..."
+          "בחר משחק..."
         )
         .addOptions(
           new StringSelectMenuOptionBuilder()
             .setLabel(
               "איקס עיגול"
-            )
-            .setDescription(
-              "משחק 1 נגד 1"
             )
             .setEmoji(
               "❌"
@@ -6722,9 +7113,6 @@ function createArcadeMenu() {
             .setLabel(
               "בומבה"
             )
-            .setDescription(
-              "משחק קבוצתי"
-            )
             .setEmoji(
               "💣"
             )
@@ -6736,9 +7124,6 @@ function createArcadeMenu() {
             .setLabel(
               "נחש את המתחזה"
             )
-            .setDescription(
-              "מי לא קיבל את המילה?"
-            )
             .setEmoji(
               "🕵️"
             )
@@ -6749,9 +7134,6 @@ function createArcadeMenu() {
           new StringSelectMenuOptionBuilder()
             .setLabel(
               "אבן נייר ומספריים"
-            )
-            .setDescription(
-              "משחק 1 נגד 1"
             )
             .setEmoji(
               "✊"
@@ -6769,38 +7151,29 @@ async function setupArcadePanel() {
       .fetch(
         ARCADE_PANEL_CHANNEL_ID
       )
-      .catch(
-        () => null
-      );
+      .catch(() => null);
 
   if (
     !channel?.isTextBased()
   ) {
-    console.log(
-      "⚠️ חדר פאנל ה-Arcade לא נמצא."
-    );
-
     return;
   }
 
   const messages =
-    await channel.messages
-      .fetch({
-        limit: 100
-      })
-      .catch(
-        () => null
-      );
-
-  if (!messages) {
-    return;
-  }
+    await channel.messages.fetch({
+      limit:
+        100
+    });
 
   const old =
     messages.find(
       message =>
-        message.author.id === client.user.id &&
-        message.embeds[0]?.footer?.text === "arcade-panel-v1"
+        message.author.id ===
+          client.user.id &&
+        message.embeds[0]
+          ?.footer
+          ?.text ===
+          "arcade-panel-v1"
     );
 
   const payload = {
@@ -6816,19 +7189,17 @@ async function setupArcadePanel() {
   if (old) {
     await old.edit(
       payload
-    ).catch(
-      () => {}
     );
   } else {
     await channel.send(
       payload
-    ).catch(
-      () => {}
     );
   }
 }
 
-function randomItem(array) {
+function randomItem(
+  array
+) {
   return array[
     crypto.randomInt(
       array.length
@@ -6836,9 +7207,9 @@ function randomItem(array) {
   ];
 }
 
-// ===================== TIC TAC TOE =====================
-
-function createTttChallengeRow(gameId) {
+function createTttChallengeRow(
+  gameId
+) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -6871,7 +7242,9 @@ function createTttChallengeRow(gameId) {
     );
 }
 
-function getTttWinner(board) {
+function getTttWinner(
+  board
+) {
   const wins = [
     [0, 1, 2],
     [3, 4, 5],
@@ -6892,8 +7265,10 @@ function getTttWinner(board) {
   ) {
     if (
       board[a] &&
-      board[a] === board[b] &&
-      board[a] === board[c]
+      board[a] ===
+        board[b] &&
+      board[a] ===
+        board[c]
     ) {
       return board[a];
     }
@@ -6902,8 +7277,11 @@ function getTttWinner(board) {
   return null;
 }
 
-function createTttBoardRows(game) {
-  const rows = [];
+function createTttBoardRows(
+  game
+) {
+  const rows =
+    [];
 
   for (
     let rowIndex = 0;
@@ -6956,29 +7334,33 @@ function createTttBoardRows(game) {
   return rows;
 }
 
-function createTttEmbed(game) {
-  let status;
+function createTttEmbed(
+  game
+) {
+  let status =
+    "";
 
   if (
     game.winner
   ) {
     const winnerId =
-      game.winner === "❌"
+      game.winner ===
+        "❌"
         ? game.playerX
         : game.playerO;
 
     status =
-      `🏆 **המנצח:** <@${winnerId}> ${game.winner}`;
+      `🏆 המנצח: <@${winnerId}>`;
 
   } else if (
     game.draw
   ) {
     status =
-      "🤝 **תיקו!**";
+      "🤝 תיקו!";
 
   } else {
     status =
-      `🎯 **התור של:** <@${game.turn}>`;
+      `🎯 התור של <@${game.turn}>`;
   }
 
   return new EmbedBuilder()
@@ -6992,16 +7374,12 @@ function createTttEmbed(game) {
       `❌ <@${game.playerX}>\n` +
       `⭕ <@${game.playerO}>\n\n` +
       status
-    )
-    .setFooter({
-      text:
-        `ttt:${game.id}`
-    });
+    );
 }
 
-// ===================== RPS =====================
-
-function createRpsChallengeRow(gameId) {
+function createRpsChallengeRow(
+  gameId
+) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -7034,7 +7412,9 @@ function createRpsChallengeRow(gameId) {
     );
 }
 
-function createRpsChoiceRow(gameId) {
+function createRpsChoiceRow(
+  gameId
+) {
   return new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
@@ -7081,7 +7461,9 @@ function createRpsChoiceRow(gameId) {
     );
 }
 
-function rpsEmoji(choice) {
+function rpsEmoji(
+  choice
+) {
   if (
     choice === "rock"
   ) {
@@ -7127,8 +7509,6 @@ function getRpsWinner(
   return "second";
 }
 
-// ===================== IMPOSTOR =====================
-
 const IMPOSTOR_WORDS = [
   "פיצה",
   "פורטנייט",
@@ -7152,7 +7532,9 @@ const IMPOSTOR_WORDS = [
   "פארק"
 ];
 
-function createImpostorLobbyRows(gameId) {
+function createImpostorLobbyRows(
+  gameId
+) {
   return [
     new ActionRowBuilder()
       .addComponents(
@@ -7215,17 +7597,20 @@ function createImpostorLobbyRows(gameId) {
   ];
 }
 
-function createImpostorLobbyEmbed(game) {
+function createImpostorLobbyEmbed(
+  game
+) {
   const players =
-    [...game.players]
+    [
+      ...game.players
+    ]
       .map(
         id =>
           `<@${id}>`
       )
       .join(
         "\n"
-      ) ||
-    "אין שחקנים";
+      );
 
   return new EmbedBuilder()
     .setColor(
@@ -7238,16 +7623,9 @@ function createImpostorLobbyEmbed(game) {
       `👑 **מארח:** <@${game.hostId}>\n\n` +
       `👥 **שחקנים (${game.players.size}):**\n${players}\n\n` +
       "צריך לפחות **3 שחקנים**.\n" +
-      "כשהמארח לוחץ **התחל**, כולם יקבלו הודעה פרטית.\n" +
-      "כולם יקבלו אותה מילה — חוץ מהמתחזה."
-    )
-    .setFooter({
-      text:
-        `impostor:${game.id}`
-    });
+      "כולם יקבלו אותה מילה ב-DM — חוץ מהמתחזה."
+    );
 }
-
-// ===================== BOMBA =====================
 
 const BOMBA_TOPICS = [
   "מדינות",
@@ -7261,13 +7639,15 @@ const BOMBA_TOPICS = [
   "סרטים",
   "סדרות",
   "דברים שיש בבית",
-  "דברים שלוקחים לבית ספר",
-  "דברים שיש במטבח",
+  "דברים לבית ספר",
+  "דברים במטבח",
   "מקצועות",
   "צבעים"
 ];
 
-function createBombaLobbyRows(gameId) {
+function createBombaLobbyRows(
+  gameId
+) {
   return [
     new ActionRowBuilder()
       .addComponents(
@@ -7330,17 +7710,20 @@ function createBombaLobbyRows(gameId) {
   ];
 }
 
-function createBombaLobbyEmbed(game) {
+function createBombaLobbyEmbed(
+  game
+) {
   const players =
-    [...game.players]
+    [
+      ...game.players
+    ]
       .map(
         id =>
           `<@${id}>`
       )
       .join(
         "\n"
-      ) ||
-    "אין שחקנים";
+      );
 
   return new EmbedBuilder()
     .setColor(
@@ -7352,22 +7735,19 @@ function createBombaLobbyEmbed(game) {
     .setDescription(
       `👑 **מארח:** <@${game.hostId}>\n\n` +
       `👥 **שחקנים (${game.players.size}):**\n${players}\n\n` +
-      "צריך לפחות **2 שחקנים**.\n" +
-      "אחרי שמתחילים, הבוט נותן **נושא אקראי**.\n" +
-      "עונים מהר בצ'אט לפי הנושא."
-    )
-    .setFooter({
-      text:
-        `bomba:${game.id}`
-    });
+      "צריך לפחות **2 שחקנים**."
+    );
 }
 
-// ===================== YOUTUBE =====================
+// ========================================================
+// YOUTUBE NOTIFICATIONS
+// ========================================================
 
-function decodeXml(text) {
+function decodeXml(
+  text
+) {
   return String(
-    text ||
-    ""
+    text || ""
   )
     .replace(
       /&amp;/g,
@@ -7391,8 +7771,11 @@ function decodeXml(text) {
     );
 }
 
-function parseYouTubeFeed(xml) {
-  const entries = [];
+function parseYouTubeFeed(
+  xml
+) {
+  const entries =
+    [];
 
   const regex =
     /<entry>([\s\S]*?)<\/entry>/g;
@@ -7493,17 +7876,20 @@ function extractJsonObjectAfter(
       if (
         escaped
       ) {
-        escaped = false;
+        escaped =
+          false;
 
       } else if (
         char === "\\"
       ) {
-        escaped = true;
+        escaped =
+          true;
 
       } else if (
         char === '"'
       ) {
-        inString = false;
+        inString =
+          false;
       }
 
       continue;
@@ -7512,7 +7898,9 @@ function extractJsonObjectAfter(
     if (
       char === '"'
     ) {
-      inString = true;
+      inString =
+        true;
+
       continue;
     }
 
@@ -7538,7 +7926,6 @@ function extractJsonObjectAfter(
             i + 1
           )
         );
-
       } catch {
         return null;
       }
@@ -7593,9 +7980,7 @@ async function resolveYouTubeChannelId() {
         pattern
       )?.[1];
 
-    if (
-      found
-    ) {
+    if (found) {
       resolvedYouTubeChannelId =
         found;
 
@@ -7640,7 +8025,9 @@ async function getYouTubeFeedEntries() {
   );
 }
 
-async function getYouTubeVideoMeta(videoId) {
+async function getYouTubeVideoMeta(
+  videoId
+) {
   const fallback = {
     title:
       null,
@@ -7652,9 +8039,6 @@ async function getYouTubeVideoMeta(videoId) {
       false,
 
     endTimestamp:
-      null,
-
-    startTimestamp:
       null,
 
     isShortsEligible:
@@ -7689,8 +8073,7 @@ async function getYouTubeVideoMeta(videoId) {
       null;
 
     for (
-      const marker of
-      [
+      const marker of [
         "var ytInitialPlayerResponse = ",
         "ytInitialPlayerResponse = ",
         '"ytInitialPlayerResponse":'
@@ -7714,7 +8097,8 @@ async function getYouTubeVideoMeta(videoId) {
       {};
 
     const micro =
-      player?.microformat
+      player
+        ?.microformat
         ?.playerMicroformatRenderer ||
       {};
 
@@ -7722,112 +8106,48 @@ async function getYouTubeVideoMeta(videoId) {
       micro.liveBroadcastDetails ||
       {};
 
-    const rawTitle =
-      details.title ||
-      micro.title?.simpleText ||
-      html.match(
-        /<meta property="og:title" content="([^"]+)"/i
-      )?.[1] ||
-      null;
-
-    const startTimestamp =
-      live.startTimestamp ||
-      html.match(
-        /"startTimestamp":"([^"]+)"/
-      )?.[1] ||
-      null;
-
-    const endTimestamp =
-      live.endTimestamp ||
-      html.match(
-        /"endTimestamp":"([^"]+)"/
-      )?.[1] ||
-      null;
-
-    const isLiveNow =
-      live.isLiveNow === true ||
-      /"isLiveNow":true/.test(
-        html
-      );
-
-    const isLiveContent =
-      details.isLiveContent === true ||
-      /"isLiveContent":true/.test(
-        html
-      ) ||
-      isLiveNow;
-
-    const canonical =
-      html.match(
-        /<link rel="canonical" href="([^"]+)"/i
-      )?.[1] ||
-      "";
-
-    const isShortsEligible =
-      details.isShortsEligible === true ||
-      micro.isShortsEligible === true ||
-      /"isShortsEligible":true/.test(
-        html
-      ) ||
-      /youtube\.com\/shorts\//i.test(
-        canonical
-      );
-
-    const thumbnails =
-      details.thumbnail
-        ?.thumbnails ||
-      micro.thumbnail
-        ?.thumbnails ||
-      [];
-
-    const thumbnail =
-      thumbnails.length
-        ? thumbnails[
-            thumbnails.length -
-            1
-          ].url
-        : fallback.thumbnail;
-
     return {
       title:
-        rawTitle
-          ? decodeXml(
-              rawTitle
-            )
-          : null,
+        details.title ||
+        micro.title?.simpleText ||
+        null,
 
-      isLiveNow,
-      isLiveContent,
-      endTimestamp,
-      startTimestamp,
-      isShortsEligible,
-      thumbnail
+      isLiveNow:
+        live.isLiveNow ===
+          true ||
+        /"isLiveNow":true/.test(
+          html
+        ),
+
+      isLiveContent:
+        details.isLiveContent ===
+          true ||
+        /"isLiveContent":true/.test(
+          html
+        ),
+
+      endTimestamp:
+        live.endTimestamp ||
+        null,
+
+      isShortsEligible:
+        details.isShortsEligible ===
+          true ||
+        /"isShortsEligible":true/.test(
+          html
+        ),
+
+      thumbnail:
+        details.thumbnail
+          ?.thumbnails
+          ?.at(-1)
+          ?.url ||
+        fallback.thumbnail
     };
 
-  } catch (
-    error
-  ) {
-    console.log(
-      `⚠️ YouTube metadata fallback ${videoId}:`,
-      error.message
-    );
-
+  } catch {
     return fallback;
   }
-}
-
-function youtubeWatchUrl(videoId) {
-  return (
-    "https://www.youtube.com/watch?v=" +
-    videoId
-  );
-}
-
-function youtubeShortUrl(videoId) {
-  return (
-    "https://www.youtube.com/shorts/" +
-    videoId
-  );
 }
 
 async function sendYouTubeAnnouncement(
@@ -7840,9 +8160,7 @@ async function sendYouTubeAnnouncement(
       .fetch(
         YOUTUBE_NOTIFY_CHANNEL_ID
       )
-      .catch(
-        () => null
-      );
+      .catch(() => null);
 
   if (
     !channel?.isTextBased()
@@ -7851,137 +8169,43 @@ async function sendYouTubeAnnouncement(
   }
 
   const title =
-    meta?.title ||
+    meta.title ||
     entry.title;
 
-  const thumbnail =
-    meta?.thumbnail ||
-    `https://i.ytimg.com/vi/${entry.videoId}/hqdefault.jpg`;
-
-  let content =
-    null;
-
-  let embed;
-  let button;
-
-  if (
-    type === "live"
-  ) {
-    content =
-      "@everyone 🔴 **אנחנו בלייב עכשיו!**";
-
-    embed =
-      new EmbedBuilder()
-        .setColor(
-          0xED4245
-        )
-        .setTitle(
-          "🔴 אנחנו בלייב עכשיו!"
-        )
-        .setDescription(
-          `📺 **${title}**\n\n` +
-          "🎙️ **הלייב התחיל — בואו עכשיו!**\n" +
-          "👥 כולם מוזמנים להצטרף\n" +
-          "🔥 אל תפספסו!"
-        )
-        .setImage(
-          thumbnail
-        )
-        .setTimestamp();
-
-    button =
-      new ButtonBuilder()
-        .setLabel(
-          "היכנסו ללייב"
-        )
-        .setEmoji(
-          "🔴"
-        )
-        .setStyle(
-          ButtonStyle.Link
-        )
-        .setURL(
-          youtubeWatchUrl(
-            entry.videoId
-          )
-        );
-
-  } else if (
+  const url =
     type === "short"
-  ) {
-    embed =
-      new EmbedBuilder()
-        .setColor(
-          0x9B59B6
-        )
-        .setTitle(
-          "📱 SHORT חדש עלה! 🔥"
-        )
-        .setDescription(
-          `**${title}**\n\n` +
-          "⚡ קצר, מהיר ושווה צפייה\n" +
-          "❤️ תנו לייק אם אהבתם!"
-        )
-        .setImage(
-          thumbnail
-        )
-        .setTimestamp();
+      ? `https://www.youtube.com/shorts/${entry.videoId}`
+      : `https://www.youtube.com/watch?v=${entry.videoId}`;
 
-    button =
-      new ButtonBuilder()
-        .setLabel(
-          "צפו ב-Short"
-        )
-        .setEmoji(
-          "▶️"
-        )
-        .setStyle(
-          ButtonStyle.Link
-        )
-        .setURL(
-          youtubeShortUrl(
-            entry.videoId
-          )
-        );
-
-  } else {
-    embed =
-      new EmbedBuilder()
-        .setColor(
-          0x3498DB
-        )
-        .setTitle(
-          "🎬 סרטון חדש עלה לערוץ!"
-        )
-        .setDescription(
-          `📺 **${title}**\n\n` +
-          "🔥 שווה צפייה — אל תשכחו לייק וסאב!"
-        )
-        .setImage(
-          thumbnail
-        )
-        .setTimestamp();
-
-    button =
-      new ButtonBuilder()
-        .setLabel(
-          "צפו בסרטון"
-        )
-        .setEmoji(
-          "▶️"
-        )
-        .setStyle(
-          ButtonStyle.Link
-        )
-        .setURL(
-          youtubeWatchUrl(
-            entry.videoId
-          )
-        );
-  }
+  const embed =
+    new EmbedBuilder()
+      .setColor(
+        type === "live"
+          ? 0xED4245
+          : type === "short"
+            ? 0x9B59B6
+            : 0x3498DB
+      )
+      .setTitle(
+        type === "live"
+          ? "🔴 אנחנו בלייב עכשיו!"
+          : type === "short"
+            ? "📱 SHORT חדש עלה!"
+            : "🎬 סרטון חדש עלה!"
+      )
+      .setDescription(
+        `**${title}**`
+      )
+      .setImage(
+        meta.thumbnail
+      )
+      .setTimestamp();
 
   return channel.send({
-    content,
+    content:
+      type === "live"
+        ? "@everyone 🔴 **אנחנו בלייב עכשיו!**"
+        : null,
 
     embeds: [
       embed
@@ -7990,7 +8214,21 @@ async function sendYouTubeAnnouncement(
     components: [
       new ActionRowBuilder()
         .addComponents(
-          button
+          new ButtonBuilder()
+            .setLabel(
+              type === "live"
+                ? "היכנסו ללייב"
+                : "צפו עכשיו"
+            )
+            .setEmoji(
+              "▶️"
+            )
+            .setStyle(
+              ButtonStyle.Link
+            )
+            .setURL(
+              url
+            )
         )
     ],
 
@@ -8002,128 +8240,11 @@ async function sendYouTubeAnnouncement(
             ]
           }
         : {
-            parse: []
+            parse:
+              []
           }
   }).catch(
     () => null
-  );
-}
-
-async function markYouTubeLiveEnded(
-  videoId,
-  state,
-  meta
-) {
-  if (
-    !state ||
-    state.ended
-  ) {
-    return;
-  }
-
-  if (
-    !state.messageId ||
-    !state.channelId
-  ) {
-    state.ended =
-      true;
-
-    await logBotData(
-      `YT_ENDED|${videoId}`
-    );
-
-    return;
-  }
-
-  const channel =
-    await client.channels
-      .fetch(
-        state.channelId
-      )
-      .catch(
-        () => null
-      );
-
-  if (
-    !channel?.isTextBased()
-  ) {
-    return;
-  }
-
-  const message =
-    await channel.messages
-      .fetch(
-        state.messageId
-      )
-      .catch(
-        () => null
-      );
-
-  if (!message) {
-    return;
-  }
-
-  const embed =
-    message.embeds[0]
-      ? EmbedBuilder.from(
-          message.embeds[0]
-        )
-      : new EmbedBuilder();
-
-  embed
-    .setColor(
-      0x747F8D
-    )
-    .setTitle(
-      "⚫ 「 הלייב נגמר 」"
-    )
-    .setDescription(
-      `📺 **${meta?.title || "הלייב"}**\n\n` +
-      "השידור הסתיים, אבל הקישור נשאר כדי שאפשר יהיה לצפות בשידור החוזר. 👇"
-    )
-    .setTimestamp();
-
-  await message.edit({
-    content:
-      null,
-
-    embeds: [
-      embed
-    ],
-
-    components: [
-      new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setLabel(
-              "צפו בשידור החוזר"
-            )
-            .setEmoji(
-              "▶️"
-            )
-            .setStyle(
-              ButtonStyle.Link
-            )
-            .setURL(
-              youtubeWatchUrl(
-                videoId
-              )
-            )
-        )
-    ],
-
-    allowedMentions: {
-      parse: []
-    }
-  }).catch(
-    () => {}
-  );
-
-  state.ended =
-    true;
-
-  await logBotData(
-    `YT_ENDED|${videoId}`
   );
 }
 
@@ -8154,57 +8275,6 @@ async function pollYouTube() {
         const entry of
         entries
       ) {
-        const meta =
-          await getYouTubeVideoMeta(
-            entry.videoId
-          );
-
-        if (
-          meta?.isLiveNow
-        ) {
-          const sent =
-            await sendYouTubeAnnouncement(
-              entry,
-              meta,
-              "live"
-            );
-
-          youtubeSeen.set(
-            entry.videoId,
-            {
-              videoId:
-                entry.videoId,
-
-              type:
-                "live",
-
-              messageId:
-                sent?.id ||
-                null,
-
-              channelId:
-                sent?.channel?.id ||
-                YOUTUBE_NOTIFY_CHANNEL_ID,
-
-              ended:
-                false
-            }
-          );
-
-          await logBotData(
-            `YT_SEEN|${entry.videoId}|live|${sent?.id || "-"}|${sent?.channel?.id || YOUTUBE_NOTIFY_CHANNEL_ID}`
-          );
-
-          continue;
-        }
-
-        if (
-          meta?.isLiveContent &&
-          !meta.endTimestamp
-        ) {
-          continue;
-        }
-
         youtubeSeen.set(
           entry.videoId,
           {
@@ -8213,12 +8283,6 @@ async function pollYouTube() {
 
             type:
               "ignored",
-
-            messageId:
-              null,
-
-            channelId:
-              null,
 
             ended:
               true
@@ -8259,46 +8323,6 @@ async function pollYouTube() {
           entry.videoId
         );
 
-      if (
-        meta.isLiveContent &&
-        !meta.isLiveNow &&
-        !meta.endTimestamp
-      ) {
-        continue;
-      }
-
-      if (
-        meta.isLiveContent &&
-        !meta.isLiveNow &&
-        meta.endTimestamp
-      ) {
-        youtubeSeen.set(
-          entry.videoId,
-          {
-            videoId:
-              entry.videoId,
-
-            type:
-              "ignored",
-
-            messageId:
-              null,
-
-            channelId:
-              null,
-
-            ended:
-              true
-          }
-        );
-
-        await logBotData(
-          `YT_SEEN|${entry.videoId}|ignored|-|-`
-        );
-
-        continue;
-      }
-
       const type =
         meta.isLiveNow
           ? "live"
@@ -8313,7 +8337,9 @@ async function pollYouTube() {
           type
         );
 
-      if (!sent) {
+      if (
+        !sent
+      ) {
         continue;
       }
 
@@ -8341,42 +8367,11 @@ async function pollYouTube() {
       );
     }
 
-    for (
-      const [
-        videoId,
-        state
-      ] of
-      youtubeSeen.entries()
-    ) {
-      if (
-        state.type !== "live" ||
-        state.ended
-      ) {
-        continue;
-      }
-
-      const meta =
-        await getYouTubeVideoMeta(
-          videoId
-        );
-
-      if (
-        !meta.isLiveNow &&
-        meta.endTimestamp
-      ) {
-        await markYouTubeLiveEnded(
-          videoId,
-          state,
-          meta
-        );
-      }
-    }
-
   } catch (
     error
   ) {
     console.error(
-      "❌ בדיקת YouTube נכשלה:",
+      "❌ בדיקת YouTube:",
       error.message
     );
 
@@ -8386,12 +8381,15 @@ async function pollYouTube() {
   }
 }
 
-// ===================== CLEAR =====================
+// ========================================================
+// CLEAR
+// ========================================================
 
 async function deleteChannelMessages(
   channel,
   requestedAmount,
-  protectedMessageIds = new Set()
+  protectedIds =
+    new Set()
 ) {
   let deleted = 0;
 
@@ -8406,18 +8404,10 @@ async function deleteChannelMessages(
   while (
     remaining > 0
   ) {
-    const fetchLimit =
-      remaining === Infinity
-        ? 100
-        : Math.min(
-            100,
-            remaining
-          );
-
     const fetched =
       await channel.messages.fetch({
         limit:
-          fetchLimit,
+          100,
 
         ...(before
           ? {
@@ -8427,82 +8417,27 @@ async function deleteChannelMessages(
       });
 
     if (
-      fetched.size === 0
+      !fetched.size
     ) {
       break;
     }
 
-    const now =
-      Date.now();
-
-    const fourteenDays =
-      14 *
-      24 *
-      60 *
-      60 *
-      1000;
-
-    const candidates =
-      fetched.filter(
-        message =>
-          !protectedMessageIds.has(
-            message.id
-          )
-      );
-
-    const recent =
-      candidates.filter(
-        message =>
-          now -
-            message.createdTimestamp <
-            fourteenDays -
-              60_000
-      );
-
-    const old =
-      candidates.filter(
-        message =>
-          !recent.has(
-            message.id
-          )
-      );
-
-    if (
-      recent.size > 0
-    ) {
-      const removed =
-        await channel
-          .bulkDelete(
-            recent,
-            true
-          )
-          .catch(
-            () => null
-          );
-
-      if (
-        removed
-      ) {
-        deleted +=
-          removed.size;
-
-        if (
-          remaining !== Infinity
-        ) {
-          remaining -=
-            removed.size;
-        }
-      }
-    }
-
     for (
       const message of
-      old.values()
+      fetched.values()
     ) {
       if (
         remaining <= 0
       ) {
         break;
+      }
+
+      if (
+        protectedIds.has(
+          message.id
+        )
+      ) {
+        continue;
       }
 
       try {
@@ -8511,7 +8446,8 @@ async function deleteChannelMessages(
         deleted++;
 
         if (
-          remaining !== Infinity
+          remaining !==
+          Infinity
         ) {
           remaining--;
         }
@@ -8520,7 +8456,7 @@ async function deleteChannelMessages(
           resolve =>
             setTimeout(
               resolve,
-              400
+              250
             )
         );
 
@@ -8532,8 +8468,7 @@ async function deleteChannelMessages(
 
     if (
       !before ||
-      fetched.size <
-        fetchLimit
+      fetched.size < 100
     ) {
       break;
     }
@@ -8541,69 +8476,112 @@ async function deleteChannelMessages(
 
   return deleted;
 }
-// ===================== MAIN BOT COMMANDS =====================
+
+// ========================================================
+// MAIN SLASH COMMANDS
+// ========================================================
 
 const staffManageCommand =
   new SlashCommandBuilder()
-    .setName("staffmanage")
-    .setDescription("פתיחת פאנל ניהול הצוות");
+    .setName(
+      "staffmanage"
+    )
+    .setDescription(
+      "פתיחת פאנל ניהול הצוות"
+    );
 
 const giveawayCommand =
   new SlashCommandBuilder()
-    .setName("giveaway")
-    .setDescription("פתיחת הגרלה חדשה")
-    .addStringOption(
-      option =>
-        option
-          .setName("prize")
-          .setDescription("מה הפרס בהגרלה?")
-          .setRequired(true)
-          .setMaxLength(200)
+    .setName(
+      "giveaway"
+    )
+    .setDescription(
+      "פתיחת הגרלה חדשה"
     )
     .addStringOption(
       option =>
         option
-          .setName("duration")
-          .setDescription("זמן: למשל 30s, 10m, 2h, 1d")
-          .setRequired(true)
-          .setMaxLength(20)
+          .setName(
+            "prize"
+          )
+          .setDescription(
+            "מה הפרס?"
+          )
+          .setRequired(
+            true
+          )
+    )
+    .addStringOption(
+      option =>
+        option
+          .setName(
+            "duration"
+          )
+          .setDescription(
+            "לדוגמה 10m / 2h / 1d"
+          )
+          .setRequired(
+            true
+          )
     )
     .addIntegerOption(
       option =>
         option
-          .setName("winners")
-          .setDescription("כמה זוכים? ברירת מחדל: 1")
-          .setRequired(false)
-          .setMinValue(1)
-          .setMaxValue(10)
+          .setName(
+            "winners"
+          )
+          .setDescription(
+            "כמה זוכים?"
+          )
+          .setMinValue(
+            1
+          )
+          .setMaxValue(
+            10
+          )
     );
 
 const clearCommand =
   new SlashCommandBuilder()
-    .setName("clear")
-    .setDescription("מחיקת הודעות מהחדר")
+    .setName(
+      "clear"
+    )
+    .setDescription(
+      "מחיקת הודעות מהחדר"
+    )
     .addIntegerOption(
       option =>
         option
-          .setName("amount")
-          .setDescription("כמה הודעות למחוק? 0 = כל ההודעות בחדר")
-          .setRequired(true)
-          .setMinValue(0)
+          .setName(
+            "amount"
+          )
+          .setDescription(
+            "0 = כל ההודעות בחדר"
+          )
+          .setRequired(
+            true
+          )
+          .setMinValue(
+            0
+          )
     );
 
-// ===================== MAIN READY =====================
+// ========================================================
+// MAIN READY
+// ========================================================
 
 client.once(
-  "ready",
-  async () => {
+  Events.ClientReady,
+  async readyClient => {
     console.log(
-      `✅ הבוט הראשי מחובר בתור ${client.user.tag}`
+      `✅ הבוט הראשי מחובר בתור ${readyClient.user.tag}`
     );
 
     try {
       const rest =
         new REST({
-          version: "10"
+          version:
+            "10"
         }).setToken(
           TOKEN
         );
@@ -8626,9 +8604,11 @@ client.once(
         "✅ פקודות הבוט הראשי נרשמו"
       );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
-        "❌ שגיאה ברישום פקודות הבוט הראשי:",
+        "❌ רישום פקודות הבוט הראשי:",
         error
       );
     }
@@ -8645,34 +8625,13 @@ client.once(
 
       await loadPersistentBotData();
 
-    } catch (error) {
-      console.error(
-        "❌ שגיאה בחדר הנתונים:",
-        error
-      );
-    }
+      await loadApplicationState();
 
-    await loadApplicationState()
-      .catch(
-        error =>
-          console.error(
-            "❌ טעינת בקשות צוות:",
-            error
-          )
-      );
-
-    try {
-      const guild =
-        await client.guilds.fetch(
-          GUILD_ID
-        );
-
-      const members =
-        await guild.members.fetch();
+      await guild.members.fetch();
 
       for (
         const member of
-        members.values()
+        guild.members.cache.values()
       ) {
         if (
           member.user.bot
@@ -8680,7 +8639,7 @@ client.once(
           continue;
         }
 
-        const currentName =
+        const name =
           member.nickname ||
           member.user.globalName ||
           member.user.username;
@@ -8696,84 +8655,62 @@ client.once(
 
         } else if (
           hasAnyPrefix(
-            currentName
+            name
           )
         ) {
           await handleUnauthorizedPrefix(
             member,
-            currentName
+            name
           );
         }
       }
-
-    } catch (error) {
-      console.error(
-        "❌ סנכרון ניקניים נכשל:",
-        error.message
-      );
-    }
-
-    await setupTicketPanel()
-      .catch(
-        console.error
-      );
-
-    await setupSuggestionsPanel()
-      .catch(
-        console.error
-      );
-
-    await setupSocialsPanel()
-      .catch(
-        console.error
-      );
-
-    await setupPartnerPanel()
-      .catch(
-        console.error
-      );
-
-    await setupTempVoicePanel()
-      .catch(
-        console.error
-      );
-
-    await setupArcadePanel()
-      .catch(
-        console.error
-      );
-
-    try {
-      const guild =
-        await client.guilds.fetch(
-          GUILD_ID
-        );
 
       await restoreTempVoiceRooms(
         guild
       );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
-        "❌ שחזור חדרים אישיים נכשל:",
+        "❌ טעינת נתוני הבוט:",
         error
       );
     }
 
+    await setupTicketPanel()
+      .catch(console.error);
+
+    await setupSuggestionsPanel()
+      .catch(console.error);
+
+    await setupSocialsPanel()
+      .catch(console.error);
+
+    await setupPartnerPanel()
+      .catch(console.error);
+
+    await setupTempVoicePanel()
+      .catch(console.error);
+
+    await setupArcadePanel()
+      .catch(console.error);
+
     await pollYouTube();
 
     setInterval(
-      () =>
+      () => {
         pollYouTube()
-          .catch(
-            () => {}
-          ),
+          .catch(() => {});
+      },
       YOUTUBE_CHECK_INTERVAL_MS
     );
   }
 );
 
-// ===================== VOICE EVENTS =====================
+// ========================================================
+// MAIN EVENTS
+// ========================================================
 
 client.on(
   "voiceStateUpdate",
@@ -8809,7 +8746,7 @@ client.on(
           oldState.channelId
         )
       ) {
-        const oldChannel =
+        const room =
           oldState.guild
             .channels
             .cache
@@ -8818,19 +8755,19 @@ client.on(
             );
 
         if (
-          oldChannel?.type ===
+          room?.type ===
             ChannelType.GuildVoice &&
-          oldChannel.members.size ===
-            0
+          room.members.size === 0
         ) {
           await deleteTempVoiceRoom(
-            oldChannel,
-            "החדר האישי התרוקן"
+            room
           );
         }
       }
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "❌ voiceStateUpdate:",
         error
@@ -8856,13 +8793,9 @@ client.on(
 
     await logBotData(
       `TEMP_DELETE|${channel.id}`
-    ).catch(
-      () => {}
     );
   }
 );
-
-// ===================== MEMBER EVENTS =====================
 
 client.on(
   "guildMemberAdd",
@@ -8877,30 +8810,9 @@ client.on(
       member
     );
 
-    const name =
-      member.nickname ||
-      member.user.globalName ||
-      member.user.username;
-
-    if (
-      getDesiredPrefix(
-        member
-      )
-    ) {
-      await applyPreferredNickname(
-        member
-      );
-
-    } else if (
-      hasAnyPrefix(
-        name
-      )
-    ) {
-      await handleUnauthorizedPrefix(
-        member,
-        name
-      );
-    }
+    await applyPreferredNickname(
+      member
+    );
   }
 );
 
@@ -8917,40 +8829,26 @@ client.on(
     }
 
     try {
-      const oldStaff =
+      const oldRole =
         getHighestLadderRoleId(
           oldMember
         );
 
-      const newStaff =
+      const newRole =
         getHighestLadderRoleId(
           newMember
         );
 
-      const oldPartner =
+      const partnerChanged =
         oldMember.roles.cache.has(
           PARTNER_ROLE_ID
-        );
-
-      const newPartner =
+        ) !==
         newMember.roles.cache.has(
           PARTNER_ROLE_ID
         );
 
-      const staffChanged =
-        oldStaff !==
-        newStaff;
-
-      const partnerChanged =
-        oldPartner !==
-        newPartner;
-
-      const nicknameChanged =
-        oldMember.nickname !==
-        newMember.nickname;
-
       if (
-        staffChanged ||
+        oldRole !== newRole ||
         partnerChanged
       ) {
         await applyPreferredNickname(
@@ -8958,12 +8856,12 @@ client.on(
         );
 
         if (
-          staffChanged
+          oldRole !== newRole
         ) {
           await sendStaffChangeDM(
             newMember,
-            oldStaff,
-            newStaff
+            oldRole,
+            newRole
           );
         }
 
@@ -8971,58 +8869,55 @@ client.on(
       }
 
       if (
-        !nicknameChanged
+        oldMember.nickname !==
+        newMember.nickname
       ) {
-        return;
-      }
-
-      const currentName =
-        newMember.nickname ||
-        newMember.user.globalName ||
-        newMember.user.username;
-
-      if (
-        newStaff
-      ) {
-        const punished =
-          await handleFakePromotion(
-            newMember,
-            currentName
-          );
+        const name =
+          newMember.nickname ||
+          newMember.user.globalName ||
+          newMember.user.username;
 
         if (
-          !punished
+          newRole
+        ) {
+          const fake =
+            await handleFakePromotion(
+              newMember,
+              name
+            );
+
+          if (
+            !fake
+          ) {
+            await applyPreferredNickname(
+              newMember
+            );
+          }
+
+        } else if (
+          getDesiredPrefix(
+            newMember
+          )
         ) {
           await applyPreferredNickname(
             newMember
           );
+
+        } else if (
+          hasAnyPrefix(
+            name
+          )
+        ) {
+          await handleUnauthorizedPrefix(
+            newMember,
+            name
+          );
         }
-
-        return;
       }
 
-      if (
-        newPartner
-      ) {
-        await applyPreferredNickname(
-          newMember
-        );
-
-        return;
-      }
-
-      if (
-        hasAnyPrefix(
-          currentName
-        )
-      ) {
-        await handleUnauthorizedPrefix(
-          newMember,
-          currentName
-        );
-      }
-
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "❌ guildMemberUpdate:",
         error
@@ -9031,49 +8926,36 @@ client.on(
   }
 );
 
-// ===================== INTERACTIONS =====================
+// ========================================================
+// MAIN INTERACTIONS
+// ========================================================
 
 client.on(
   "interactionCreate",
   async interaction => {
     try {
 
-      // ===================== /CLEAR =====================
+      // ===================== CLEAR =====================
 
       if (
         interaction.isChatInputCommand() &&
-        interaction.commandName === "clear"
+        interaction.commandName ===
+          "clear"
       ) {
         const member =
           await fetchFreshMember(
             interaction.guild,
             interaction.user.id
-          )
-            .catch(
-              () => null
-            );
+          );
 
         if (
-          !member ||
           !hasClearAccess(
             member
           )
         ) {
           return interaction.reply({
             content:
-              "❌ רק **Team ומעלה** יכולים להשתמש בפקודה הזאת.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        if (
-          !interaction.channel?.isTextBased()
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אי אפשר למחוק הודעות בחדר הזה.",
+              "❌ רק Team ומעלה יכולים להשתמש בפקודה.",
 
             ephemeral:
               true
@@ -9089,7 +8971,7 @@ client.on(
 
         await interaction.deferReply();
 
-        const replyMessage =
+        const reply =
           await interaction
             .fetchReply()
             .catch(
@@ -9100,97 +8982,59 @@ client.on(
           new Set();
 
         if (
-          replyMessage?.id
+          reply?.id
         ) {
           protectedIds.add(
-            replyMessage.id
+            reply.id
           );
         }
 
-        try {
-          const deleted =
-            await deleteChannelMessages(
-              interaction.channel,
-              amount,
-              protectedIds
-            );
-
-          await interaction.editReply({
-            content:
-              null,
-
-            embeds: [
-              new EmbedBuilder()
-                .setColor(
-                  0x800020
-                )
-                .setTitle(
-                  "🧹 ניקוי הודעות"
-                )
-                .setDescription(
-                  amount === 0
-                    ? `✅ נמחקו **${deleted} הודעות** מהחדר.`
-                    : `✅ נמחקו **${deleted} מתוך ${amount} הודעות**.`
-                )
-                .setFooter({
-                  text:
-                    "ההודעה הזאת תימחק בעוד 10 שניות"
-                })
-                .setTimestamp()
-            ]
-          });
-
-          setTimeout(
-            () => {
-              interaction
-                .deleteReply()
-                .catch(
-                  () => {}
-                );
-            },
-            10_000
+        const deleted =
+          await deleteChannelMessages(
+            interaction.channel,
+            amount,
+            protectedIds
           );
 
-        } catch (error) {
-          console.error(
-            "❌ /clear:",
-            error
-          );
+        await interaction.editReply({
+          content:
+            null,
 
-          await interaction.editReply({
-            content:
-              null,
+          embeds: [
+            new EmbedBuilder()
+              .setColor(
+                0x800020
+              )
+              .setTitle(
+                "🧹 ניקוי הודעות"
+              )
+              .setDescription(
+                amount === 0
+                  ? `✅ נמחקו **${deleted} הודעות**.`
+                  : `✅ נמחקו **${deleted} מתוך ${amount} הודעות**.`
+              )
+              .setFooter({
+                text:
+                  "ההודעה תימחק בעוד 10 שניות"
+              })
+          ]
+        });
 
-            embeds: [
-              new EmbedBuilder()
-                .setColor(
-                  0x800020
-                )
-                .setTitle(
-                  "❌ מחיקת ההודעות נכשלה"
-                )
-                .setDescription(
-                  "בדוק שלבוט יש הרשאת **Manage Messages** בחדר."
-                )
-            ]
-          });
-
-          setTimeout(
-            () => {
-              interaction
-                .deleteReply()
-                .catch(
-                  () => {}
-                );
-            },
-            10_000
-          );
-        }
+        setTimeout(
+          () => {
+            interaction
+              .deleteReply()
+              .catch(
+                () => {}
+              );
+          },
+          10_000
+        );
 
         return;
       }
 
-      // ===================== TEMP VOICE BUTTONS =====================
+      // ===================== TEMP VOICE =====================
 
       if (
         interaction.isButton() &&
@@ -9236,20 +9080,20 @@ client.on(
           "temp_rename_modal:"
         )
       ) {
-        const channelId =
+        const roomId =
           interaction.customId
             .split(":")[1];
 
         const room =
           await getControlledTempRoom(
             interaction,
-            channelId
+            roomId
           );
 
         if (!room) {
           return interaction.reply({
             content:
-              "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+              "❌ החדר לא נמצא.",
 
             ephemeral:
               true
@@ -9261,34 +9105,19 @@ client.on(
             .getTextInputValue(
               "room_name"
             )
-            .replace(
-              /[\r\n]/g,
-              " "
-            )
             .trim()
             .slice(
               0,
               100
             );
 
-        if (!name) {
-          return interaction.reply({
-            content:
-              "❌ צריך לכתוב שם לחדר.",
-
-            ephemeral:
-              true
-          });
-        }
-
         await room.setName(
-          name,
-          `שינוי שם על ידי ${interaction.user.tag}`
+          name
         );
 
         return interaction.reply({
           content:
-            `✏️ שם החדר שונה ל-**${name}**.`,
+            `✅ שם החדר שונה ל-**${name}**.`,
 
           ephemeral:
             true
@@ -9301,20 +9130,20 @@ client.on(
           "temp_limit_modal:"
         )
       ) {
-        const channelId =
+        const roomId =
           interaction.customId
             .split(":")[1];
 
         const room =
           await getControlledTempRoom(
             interaction,
-            channelId
+            roomId
           );
 
         if (!room) {
           return interaction.reply({
             content:
-              "❌ החדר כבר לא קיים, או שאינך הבעלים שלו.",
+              "❌ החדר לא נמצא.",
 
             ephemeral:
               true
@@ -9334,9 +9163,6 @@ client.on(
           );
 
         if (
-          !/^\d{1,2}$/.test(
-            raw
-          ) ||
           !Number.isInteger(
             limit
           ) ||
@@ -9345,7 +9171,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ צריך לכתוב מספר בין **0 ל-99**. 0 = בלי הגבלה.",
+              "❌ צריך מספר בין 0 ל-99.",
 
             ephemeral:
               true
@@ -9353,22 +9179,21 @@ client.on(
         }
 
         await room.setUserLimit(
-          limit,
-          `שינוי הגבלה על ידי ${interaction.user.tag}`
+          limit
         );
 
         return interaction.reply({
           content:
             limit === 0
-              ? "👥 הוסרה הגבלת המשתמשים מהחדר."
-              : `👥 החדר הוגבל ל-**${limit}** משתמשים.`,
+              ? "✅ הוסרה ההגבלה."
+              : `✅ ההגבלה שונתה ל-${limit}.`,
 
           ephemeral:
             true
         });
       }
 
-      // ===================== OWNER NICKNAME EDIT =====================
+      // ===================== OWNER NICKNAME =====================
 
       if (
         interaction.isButton() &&
@@ -9382,7 +9207,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך הרשאה.",
+              "❌ אין הרשאה.",
 
             ephemeral:
               true
@@ -9413,10 +9238,7 @@ client.on(
                       "new_nickname"
                     )
                     .setLabel(
-                      "איזה ניקניים לשים?"
-                    )
-                    .setPlaceholder(
-                      "לדוגמה: Roei"
+                      "הניקניים החדש"
                     )
                     .setStyle(
                       TextInputStyle.Short
@@ -9442,13 +9264,7 @@ client.on(
           interaction.user.id !==
           OWNER_USER_ID
         ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך הרשאה.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         const [
@@ -9459,61 +9275,32 @@ client.on(
           interaction.customId
             .split(":");
 
+        const guild =
+          await client.guilds
+            .fetch(
+              guildId
+            );
+
+        const member =
+          await fetchFreshMember(
+            guild,
+            memberId
+          );
+
         const nickname =
           interaction.fields
             .getTextInputValue(
               "new_nickname"
             )
-            .trim()
-            .slice(
-              0,
-              32
-            );
+            .trim();
 
-        const guild =
-          await client.guilds
-            .fetch(
-              guildId
-            )
-            .catch(
-              () => null
-            );
-
-        const member =
-          guild
-            ? await fetchFreshMember(
-                guild,
-                memberId
-              )
-                .catch(
-                  () => null
-                )
-            : null;
-
-        if (
-          !member?.manageable
-        ) {
-          return interaction.reply({
-            content:
-              "❌ לא הצלחתי לשנות את הניקניים.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        await member
-          .setNickname(
-            nickname,
-            "שינוי ידני על ידי הבעלים"
-          )
-          .catch(
-            () => {}
-          );
+        await member.setNickname(
+          nickname
+        );
 
         return interaction.reply({
           content:
-            `✅ הניקניים שונה ל-\`${nickname}\`.`,
+            "✅ הניקניים שונה.",
 
           ephemeral:
             true
@@ -9531,20 +9318,16 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             interaction.user.id
-          )
-            .catch(
-              () => null
-            );
+          );
 
         if (
-          !member ||
           !hasStaffAccess(
             member
           )
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה לפתוח הגרלה.",
+              "❌ אין לך גישה.",
 
             ephemeral:
               true
@@ -9556,10 +9339,9 @@ client.on(
             .getString(
               "prize",
               true
-            )
-            .trim();
+            );
 
-        const durationMs =
+        const duration =
           parseGiveawayDuration(
             interaction.options
               .getString(
@@ -9568,61 +9350,50 @@ client.on(
               )
           );
 
-        const winnerCount =
+        const winners =
           interaction.options
             .getInteger(
               "winners"
             ) ||
           1;
 
-        if (
-          !durationMs
-        ) {
+        if (!duration) {
           return interaction.reply({
             content:
-              "❌ זמן לא תקין.\n" +
-              "דוגמאות: `30s`, `10m`, `2h`, `1d`.\n" +
-              "מינימום 10 שניות, מקסימום 30 יום.",
+              "❌ זמן לא תקין. לדוגמה: `10m`, `2h`, `1d`.",
 
             ephemeral:
               true
           });
         }
 
-        await interaction.deferReply({
-          ephemeral:
-            true
-        });
-
         const giveaway = {
           messageId:
             null,
 
           channelId:
-            interaction.channel.id,
+            interaction.channelId,
 
           guildId:
-            interaction.guild.id,
+            interaction.guildId,
 
           hostId:
             interaction.user.id,
 
           prize,
 
-          winnerCount,
+          winnerCount:
+            winners,
 
           endsAt:
             Date.now() +
-            durationMs,
+            duration,
 
           participants:
             new Set(),
 
           guildIcon:
-            interaction.guild.iconURL({
-              size:
-                256
-            }),
+            interaction.guild.iconURL(),
 
           ended:
             false,
@@ -9631,48 +9402,38 @@ client.on(
             null
         };
 
-        try {
-          const message =
-            await interaction.channel.send({
-              embeds: [
-                createGiveawayEmbed(
-                  giveaway
-                )
-              ],
+        const message =
+          await interaction.channel.send({
+            embeds: [
+              createGiveawayEmbed(
+                giveaway
+              )
+            ],
 
-              components: [
-                createGiveawayButtons()
-              ]
-            });
+            components: [
+              createGiveawayButtons()
+            ]
+          });
 
-          giveaway.messageId =
-            message.id;
+        giveaway.messageId =
+          message.id;
 
-          activeGiveaways.set(
-            message.id,
-            giveaway
-          );
+        activeGiveaways.set(
+          message.id,
+          giveaway
+        );
 
-          scheduleGiveaway(
-            giveaway
-          );
+        scheduleGiveaway(
+          giveaway
+        );
 
-          return interaction.editReply(
-            `✅ ההגרלה נפתחה: ${message.url}`
-          );
+        return interaction.reply({
+          content:
+            `✅ ההגרלה נפתחה: ${message.url}`,
 
-        } catch (
-          error
-        ) {
-          console.error(
-            "❌ Giveaway create:",
-            error
-          );
-
-          return interaction.editReply(
-            "❌ הייתה בעיה בפתיחת ההגרלה."
-          );
-        }
+          ephemeral:
+            true
+        });
       }
 
       if (
@@ -9688,37 +9449,12 @@ client.on(
         if (!giveaway) {
           return interaction.reply({
             content:
-              "❌ ההגרלה הזאת כבר לא פעילה.",
+              "❌ ההגרלה לא פעילה.",
 
             ephemeral:
               true
           });
         }
-
-        if (
-          giveaway.ended ||
-          Date.now() >=
-            giveaway.endsAt
-        ) {
-          await endGiveaway(
-            giveaway
-          );
-
-          return interaction.reply({
-            content:
-              "❌ ההגרלה כבר הסתיימה.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        await interaction.deferReply({
-          ephemeral:
-            true
-        });
-
-        let joined;
 
         if (
           giveaway.participants.has(
@@ -9728,17 +9464,10 @@ client.on(
           giveaway.participants.delete(
             interaction.user.id
           );
-
-          joined =
-            false;
-
         } else {
           giveaway.participants.add(
             interaction.user.id
           );
-
-          joined =
-            true;
         }
 
         await interaction.message.edit({
@@ -9751,15 +9480,19 @@ client.on(
           components: [
             createGiveawayButtons()
           ]
-        }).catch(
-          () => {}
-        );
+        });
 
-        return interaction.editReply(
-          joined
-            ? "✅ נכנסת להגרלה! בהצלחה 🎉"
-            : "↩️ יצאת מההגרלה."
-        );
+        return interaction.reply({
+          content:
+            giveaway.participants.has(
+              interaction.user.id
+            )
+              ? "✅ נכנסת להגרלה!"
+              : "↩️ יצאת מההגרלה.",
+
+          ephemeral:
+            true
+        });
       }
 
       if (
@@ -9771,20 +9504,16 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             interaction.user.id
-          )
-            .catch(
-              () => null
-            );
+          );
 
         if (
-          !member ||
           !hasStaffAccess(
             member
           )
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה לסגור הגרלה.",
+              "❌ אין הרשאה.",
 
             ephemeral:
               true
@@ -9796,13 +9525,10 @@ client.on(
             interaction.message.id
           );
 
-        if (
-          !giveaway ||
-          giveaway.ended
-        ) {
+        if (!giveaway) {
           return interaction.reply({
             content:
-              "ℹ️ ההגרלה כבר לא פעילה.",
+              "❌ ההגרלה לא פעילה.",
 
             ephemeral:
               true
@@ -9820,7 +9546,7 @@ client.on(
         );
 
         return interaction.editReply(
-          "✅ ההגרלה נסגרה והזוכה נבחר."
+          "✅ ההגרלה נסגרה."
         );
       }
 
@@ -9837,7 +9563,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה לפאנל הזה.",
+              "❌ רק הבעלים יכול להשתמש בזה.",
 
             ephemeral:
               true
@@ -9846,7 +9572,7 @@ client.on(
 
         return interaction.reply({
           content:
-            "🛡️ **ניהול צוות**\nבחר משתמש:",
+            "🛡️ בחר משתמש:",
 
           components: [
             new ActionRowBuilder()
@@ -9856,14 +9582,10 @@ client.on(
                     "manage_select_user"
                   )
                   .setPlaceholder(
-                    "בחר משתמש לניהול"
+                    "בחר משתמש"
                   )
-                  .setMinValues(
-                    1
-                  )
-                  .setMaxValues(
-                    1
-                  )
+                  .setMinValues(1)
+                  .setMaxValues(1)
               )
           ],
 
@@ -9877,38 +9599,11 @@ client.on(
         interaction.customId ===
           "manage_select_user"
       ) {
-        if (
-          interaction.user.id !==
-          OWNER_USER_ID
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך גישה לפאנל הזה.",
-
-            ephemeral:
-              true
-          });
-        }
-
         const member =
           await fetchFreshMember(
             interaction.guild,
             interaction.values[0]
-          )
-            .catch(
-              () => null
-            );
-
-        if (!member) {
-          return interaction.update({
-            content:
-              "❌ לא מצאתי את המשתמש.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
+          );
 
         return interaction.update({
           content:
@@ -9928,8 +9623,6 @@ client.on(
         });
       }
 
-      // ===================== MANAGE ADD =====================
-
       if (
         interaction.isButton() &&
         interaction.customId.startsWith(
@@ -9942,7 +9635,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הבעלים יכול לעשות את זה.",
 
             ephemeral:
               true
@@ -9957,39 +9650,11 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             targetId
-          )
-            .catch(
-              () => null
-            );
-
-        if (!member) {
-          return interaction.update({
-            content:
-              "❌ המשתמש לא נמצא.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
-
-        if (
-          getHighestLadderRoleId(
-            member
-          )
-        ) {
-          await interaction.deferUpdate();
-
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "ℹ️ המשתמש כבר בצוות."
           );
-        }
 
         return interaction.update({
           content:
-            "➕ **באיזו דרגה להוסיף?**",
+            "➕ באיזו דרגה להוסיף?",
 
           embeds: [
             await buildManagementEmbed(
@@ -10035,7 +9700,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הבעלים יכול לעשות את זה.",
 
             ephemeral:
               true
@@ -10045,7 +9710,7 @@ client.on(
         const [
           ,
           targetId,
-          targetRoleId
+          roleId
         ] =
           interaction.customId
             .split(":");
@@ -10056,52 +9721,10 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             targetId
-          )
-            .catch(
-              () => null
-            );
-
-        if (!member) {
-          return interaction.editReply({
-            content:
-              "❌ המשתמש לא נמצא.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
-
-        if (
-          getHighestLadderRoleId(
-            member
-          )
-        ) {
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "ℹ️ המשתמש כבר בצוות."
           );
-        }
-
-        if (
-          ![
-            ROLE_HELPER,
-            ROLE_STAFF,
-            ROLE_TEAM
-          ].includes(
-            targetRoleId
-          )
-        ) {
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "❌ דרגה לא תקינה."
-          );
-        }
 
         await member.roles.add(
-          targetRoleId
+          roleId
         );
 
         const fresh =
@@ -10125,26 +9748,18 @@ client.on(
             interaction.user,
 
           title:
-            "➕ הוספה ידנית לצוות",
-
-          fromRoleId:
-            null,
+            "➕ הוספה לצוות",
 
           toRoleId:
-            targetRoleId
+            roleId
         });
 
         return refreshManagementPanel(
           interaction,
           targetId,
-          `✅ נוסף לצוות בתור **${await getRoleName(
-            interaction.guild,
-            targetRoleId
-          )}**.`
+          "✅ המשתמש נוסף לצוות."
         );
       }
-
-      // ===================== MANAGE PROMOTE =====================
 
       if (
         interaction.isButton() &&
@@ -10158,7 +9773,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הבעלים יכול לעשות את זה.",
 
             ephemeral:
               true
@@ -10173,21 +9788,7 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             targetId
-          )
-            .catch(
-              () => null
-            );
-
-        if (!member) {
-          return interaction.update({
-            content:
-              "❌ המשתמש לא נמצא.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
+          );
 
         const roleId =
           getHighestLadderRoleId(
@@ -10202,18 +9803,18 @@ client.on(
         if (
           !targets.length
         ) {
-          await interaction.deferUpdate();
+          return interaction.reply({
+            content:
+              "🏆 אין דרגה גבוהה יותר.",
 
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "🏆 אין קידום נוסף."
-          );
+            ephemeral:
+              true
+          });
         }
 
         return interaction.update({
           content:
-            "⬆️ **לאיזו דרגה לקדם?**",
+            "⬆️ בחר דרגה:",
 
           embeds: [
             await buildManagementEmbed(
@@ -10248,7 +9849,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הבעלים יכול לעשות את זה.",
 
             ephemeral:
               true
@@ -10258,7 +9859,7 @@ client.on(
         const [
           ,
           targetId,
-          targetRoleId
+          roleId
         ] =
           interaction.customId
             .split(":");
@@ -10269,44 +9870,25 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             targetId
-          )
-            .catch(
-              () => null
-            );
+          );
 
-        if (!member) {
-          return interaction.editReply({
-            content:
-              "❌ המשתמש לא נמצא.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
-
-        const beforeRoleId =
+        const oldRole =
           getHighestLadderRoleId(
             member
           );
 
-        if (
-          !getPromotionTargets(
-            beforeRoleId
-          ).includes(
-            targetRoleId
-          )
-        ) {
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "❌ הקידום כבר לא מתאים."
-          );
-        }
-
         await member.roles.add(
-          targetRoleId
+          roleId
         );
+
+        if (
+          oldRole &&
+          oldRole !== roleId
+        ) {
+          await member.roles.remove(
+            oldRole
+          ).catch(() => {});
+        }
 
         const fresh =
           await fetchFreshMember(
@@ -10329,26 +9911,21 @@ client.on(
             interaction.user,
 
           title:
-            "⬆️ קידום צוות ידני",
+            "⬆️ קידום צוות",
 
           fromRoleId:
-            beforeRoleId,
+            oldRole,
 
           toRoleId:
-            targetRoleId
+            roleId
         });
 
         return refreshManagementPanel(
           interaction,
           targetId,
-          `✅ קודם/ה ל-**${await getRoleName(
-            interaction.guild,
-            targetRoleId
-          )}**.`
+          "✅ הקידום בוצע."
         );
       }
-
-      // ===================== MANAGE DEMOTE =====================
 
       if (
         interaction.isButton() &&
@@ -10362,7 +9939,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הבעלים יכול לעשות את זה.",
 
             ephemeral:
               true
@@ -10379,61 +9956,39 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             targetId
-          )
-            .catch(
-              () => null
-            );
+          );
 
-        if (!member) {
-          return interaction.editReply({
-            content:
-              "❌ המשתמש לא נמצא.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
-
-        const currentRoleId =
+        const currentRole =
           getHighestLadderRoleId(
             member
           );
 
-        if (!currentRoleId) {
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "❌ המשתמש לא בצוות."
-          );
-        }
-
-        const currentIndex =
+        const index =
           LADDER_ROLE_IDS.indexOf(
-            currentRoleId
+            currentRole
           );
 
         if (
-          currentIndex <= 0
+          index <= 0
         ) {
           return refreshManagementPanel(
             interaction,
             targetId,
-            "ℹ️ Helper היא הדרגה הנמוכה ביותר. כדי להוציא מהצוות השתמש ב-**הורדה מהצוות**."
+            "ℹ️ Helper היא הדרגה הנמוכה ביותר."
           );
         }
 
-        const previousRoleId =
+        const previousRole =
           LADDER_ROLE_IDS[
-            currentIndex - 1
+            index - 1
           ];
 
         await member.roles.add(
-          previousRoleId
+          previousRole
         );
 
         await member.roles.remove(
-          currentRoleId
+          currentRole
         );
 
         const fresh =
@@ -10460,23 +10015,18 @@ client.on(
             "⬇️ הורדת דרגה",
 
           fromRoleId:
-            currentRoleId,
+            currentRole,
 
           toRoleId:
-            previousRoleId
+            previousRole
         });
 
         return refreshManagementPanel(
           interaction,
           targetId,
-          `✅ הורד/ה ל-**${await getRoleName(
-            interaction.guild,
-            previousRoleId
-          )}**.`
+          "✅ הדרגה הורדה."
         );
       }
-
-      // ===================== MANAGE REMOVE =====================
 
       if (
         interaction.isButton() &&
@@ -10490,7 +10040,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הבעלים יכול לעשות את זה.",
 
             ephemeral:
               true
@@ -10507,48 +10057,28 @@ client.on(
           await fetchFreshMember(
             interaction.guild,
             targetId
-          )
-            .catch(
-              () => null
-            );
+          );
 
-        if (!member) {
-          return interaction.editReply({
-            content:
-              "❌ המשתמש לא נמצא.",
-
-            embeds: [],
-
-            components: []
-          });
-        }
-
-        const beforeRoleId =
+        const oldRole =
           getHighestLadderRoleId(
             member
           );
 
-        const rolesToRemove =
+        const roles =
           LADDER_ROLE_IDS.filter(
-            roleId =>
+            id =>
               member.roles.cache.has(
-                roleId
+                id
               )
           );
 
         if (
-          !rolesToRemove.length
+          roles.length
         ) {
-          return refreshManagementPanel(
-            interaction,
-            targetId,
-            "ℹ️ למשתמש אין רולי צוות."
+          await member.roles.remove(
+            roles
           );
         }
-
-        await member.roles.remove(
-          rolesToRemove
-        );
 
         const fresh =
           await fetchFreshMember(
@@ -10571,10 +10101,10 @@ client.on(
             interaction.user,
 
           title:
-            "❌ הורדה מהצוות",
+            "❌ הסרה מהצוות",
 
           fromRoleId:
-            beforeRoleId,
+            oldRole,
 
           toRoleId:
             null
@@ -10587,7 +10117,7 @@ client.on(
         );
       }
 
-      // ===================== PARTNER APPLY =====================
+      // ===================== PARTNER =====================
 
       if (
         interaction.isButton() &&
@@ -10601,7 +10131,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "⏳ כבר יש לך בקשת Partner שממתינה לטיפול.",
+              "⏳ כבר יש לך בקשה שממתינה.",
 
             ephemeral:
               true
@@ -10618,7 +10148,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              `⏳ אפשר להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`,
+              `⏳ אפשר להגיש שוב <t:${Math.floor(expiry / 1000)}:R>.`,
 
             ephemeral:
               true
@@ -10635,20 +10165,6 @@ client.on(
         interaction.customId ===
           "partner_modal"
       ) {
-        if (
-          partnerPendingByUser.has(
-            interaction.user.id
-          )
-        ) {
-          return interaction.reply({
-            content:
-              "⏳ כבר יש לך בקשת Partner שממתינה לטיפול.",
-
-            ephemeral:
-              true
-          });
-        }
-
         const inviteUrl =
           interaction.fields
             .getTextInputValue(
@@ -10671,24 +10187,18 @@ client.on(
             .trim();
 
         if (
-          !/^https?:\/\/(?:www\.)?(?:discord\.gg|discord\.com\/invite)\//i
-            .test(
-              inviteUrl
-            )
+          !/^https?:\/\/(?:www\.)?(?:discord\.gg|discord\.com\/invite)\//i.test(
+            inviteUrl
+          )
         ) {
           return interaction.reply({
             content:
-              "❌ צריך קישור הזמנה תקין של Discord.",
+              "❌ קישור Discord לא תקין.",
 
             ephemeral:
               true
           });
         }
-
-        await interaction.deferReply({
-          ephemeral:
-            true
-        });
 
         const requestId =
           `${interaction.user.id}-${Date.now()}`;
@@ -10739,28 +10249,39 @@ client.on(
           state
         );
 
-        const sent =
-          await sendPartnerRequestToOwner(
-            state
-          );
-
-        if (!sent) {
-          partnerStates.delete(
-            requestId
-          );
-
-          partnerPendingByUser.delete(
-            interaction.user.id
-          );
-
-          return interaction.editReply(
-            "❌ לא הצלחתי לשלוח את הבקשה לבעלים."
-          );
-        }
-
-        return interaction.editReply(
-          "✅ בקשת ה-Partner נשלחה לבדיקה!"
+        await sendPartnerRequestToOwner(
+          state
         );
+
+        return interaction.reply({
+          content:
+            "✅ הבקשה נשלחה לבדיקה.",
+
+          ephemeral:
+            true
+        });
+      }
+
+      if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(
+          "partner_"
+        ) &&
+        interaction.customId !==
+          "partner_apply"
+      ) {
+        if (
+          interaction.user.id !==
+          OWNER_USER_ID
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק הבעלים יכול לטפל בבקשות Partner.",
+
+            ephemeral:
+              true
+          });
+        }
       }
 
       if (
@@ -10769,35 +10290,13 @@ client.on(
           "partner_approve:"
         )
       ) {
-        if (
-          interaction.user.id !==
-          OWNER_USER_ID
-        ) {
-          return interaction.reply({
-            content:
-              "❌ רק הבעלים יכול לטפל בבקשה הזאת."
-          });
-        }
-
         const requestId =
           interaction.customId
             .split(":")[1];
 
-        const state =
-          partnerStates.get(
-            requestId
-          );
-
-        if (!state) {
-          return interaction.reply({
-            content:
-              "❌ לא מצאתי את הבקשה."
-          });
-        }
-
         return interaction.reply({
           content:
-            "✅ **האם הוא כבר פרסם את השרת שלך?**",
+            "האם הוא כבר פרסם את השרת שלך?",
 
           components: [
             createPartnerApprovalConfirmRow(
@@ -10813,16 +10312,6 @@ client.on(
           "partner_confirm_no:"
         )
       ) {
-        if (
-          interaction.user.id !==
-          OWNER_USER_ID
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך גישה."
-          });
-        }
-
         const requestId =
           interaction.customId
             .split(":")[1];
@@ -10833,9 +10322,12 @@ client.on(
           );
 
         if (!state) {
-          return interaction.reply({
+          return interaction.update({
             content:
-              "❌ לא מצאתי את הבקשה."
+              "❌ הבקשה לא נמצאה.",
+
+            components:
+              []
           });
         }
 
@@ -10852,9 +10344,10 @@ client.on(
 
         return interaction.update({
           content:
-            "⏳ הבקשה נשארה ממתינה. אחרי שהוא מפרסם, לחץ שוב על אישור.",
+            "⏳ ממתינים שהוא יפרסם.",
 
-          components: []
+          components:
+            []
         });
       }
 
@@ -10864,16 +10357,6 @@ client.on(
           "partner_confirm_yes:"
         )
       ) {
-        if (
-          interaction.user.id !==
-          OWNER_USER_ID
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך גישה."
-          });
-        }
-
         const requestId =
           interaction.customId
             .split(":")[1];
@@ -10884,46 +10367,28 @@ client.on(
           );
 
         if (!state) {
-          return interaction.reply({
+          return interaction.update({
             content:
-              "❌ לא מצאתי את הבקשה."
+              "❌ הבקשה לא נמצאה.",
+
+            components:
+              []
           });
         }
-
-        if (
-          processingPartners.has(
-            requestId
-          )
-        ) {
-          return interaction.reply({
-            content:
-              "⏳ הבקשה כבר בטיפול."
-          });
-        }
-
-        processingPartners.add(
-          requestId
-        );
 
         await interaction.deferUpdate();
 
-        try {
-          await finalizePartnerApproval(
-            state
-          );
+        await finalizePartnerApproval(
+          state
+        );
 
-          return interaction.editReply({
-            content:
-              "✅ ה-Partner אושר ופורסם.",
+        return interaction.editReply({
+          content:
+            "✅ ה-Partner אושר.",
 
-            components: []
-          });
-
-        } finally {
-          processingPartners.delete(
-            requestId
-          );
-        }
+          components:
+            []
+        });
       }
 
       if (
@@ -10932,16 +10397,6 @@ client.on(
           "partner_reject:"
         )
       ) {
-        if (
-          interaction.user.id !==
-          OWNER_USER_ID
-        ) {
-          return interaction.reply({
-            content:
-              "❌ רק הבעלים יכול לדחות."
-          });
-        }
-
         const requestId =
           interaction.customId
             .split(":")[1];
@@ -10963,10 +10418,7 @@ client.on(
           interaction.user.id !==
           OWNER_USER_ID
         ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך גישה."
-          });
+          return;
         }
 
         const requestId =
@@ -10981,7 +10433,10 @@ client.on(
         if (!state) {
           return interaction.reply({
             content:
-              "❌ הבקשה לא נמצאה."
+              "❌ הבקשה לא נמצאה.",
+
+            ephemeral:
+              true
           });
         }
 
@@ -10989,18 +10444,15 @@ client.on(
           interaction.fields
             .getTextInputValue(
               "reason"
-            )
-            .trim();
-
-        await interaction.deferReply();
+            );
 
         await rejectPartnerRequest(
           state,
           reason
         );
 
-        return interaction.editReply(
-          "❌ הבקשה נדחתה."
+        return interaction.reply(
+          "✅ הבקשה נדחתה."
         );
       }
 
@@ -11010,16 +10462,6 @@ client.on(
           "partner_edit:"
         )
       ) {
-        if (
-          interaction.user.id !==
-          OWNER_USER_ID
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך גישה."
-          });
-        }
-
         const requestId =
           interaction.customId
             .split(":")[1];
@@ -11032,7 +10474,10 @@ client.on(
         if (!state) {
           return interaction.reply({
             content:
-              "❌ הבקשה לא נמצאה."
+              "❌ הבקשה לא נמצאה.",
+
+            ephemeral:
+              true
           });
         }
 
@@ -11053,10 +10498,7 @@ client.on(
           interaction.user.id !==
           OWNER_USER_ID
         ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך גישה."
-          });
+          return;
         }
 
         const requestId =
@@ -11071,7 +10513,10 @@ client.on(
         if (!state) {
           return interaction.reply({
             content:
-              "❌ הבקשה לא נמצאה."
+              "❌ הבקשה לא נמצאה.",
+
+            ephemeral:
+              true
           });
         }
 
@@ -11079,8 +10524,7 @@ client.on(
           interaction.fields
             .getTextInputValue(
               "promo_text"
-            )
-            .trim();
+            );
 
         await savePartnerField(
           requestId,
@@ -11092,10 +10536,9 @@ client.on(
           state
         );
 
-        return interaction.reply({
-          content:
-            "✅ הכיתוב עודכן."
-        });
+        return interaction.reply(
+          "✅ הכיתוב עודכן."
+        );
       }
 
       // ===================== SUGGESTIONS =====================
@@ -11108,27 +10551,11 @@ client.on(
         const type =
           interaction.values[0];
 
-        await interaction.showModal(
+        return interaction.showModal(
           createSuggestionModal(
             type
           )
         );
-
-        await interaction.message
-          .edit({
-            embeds: [
-              createSuggestionsPanelEmbed()
-            ],
-
-            components: [
-              createSuggestionsPanelMenu()
-            ]
-          })
-          .catch(
-            () => {}
-          );
-
-        return;
       }
 
       if (
@@ -11146,44 +10573,16 @@ client.on(
             type
           ];
 
-        if (!config) {
-          return interaction.reply({
-            content:
-              "❌ סוג ההצעה לא נמצא.",
-
-            ephemeral:
-              true
-          });
-        }
-
         const idea =
           interaction.fields
             .getTextInputValue(
               "idea"
-            )
-            .trim();
-
-        await interaction.deferReply({
-          ephemeral:
-            true
-        });
-
-        const destination =
-          await client.channels
-            .fetch(
-              config.channelId
-            )
-            .catch(
-              () => null
             );
 
-        if (
-          !destination?.isTextBased()
-        ) {
-          return interaction.editReply(
-            "❌ חדר ההצעות לא נמצא."
+        const channel =
+          await client.channels.fetch(
+            config.channelId
           );
-        }
 
         const state = {
           messageId:
@@ -11214,7 +10613,7 @@ client.on(
         };
 
         const message =
-          await destination.send({
+          await channel.send({
             embeds: [
               createSuggestionEmbed(
                 type,
@@ -11243,16 +10642,22 @@ client.on(
           `SUGG_CREATE|${message.id}|${interaction.user.id}|${type}|${config.channelId}`
         );
 
-        return interaction.editReply(
-          `✅ הרעיון נשלח! ${message.url}`
-        );
+        return interaction.reply({
+          content:
+            `✅ הרעיון נשלח: ${message.url}`,
+
+          ephemeral:
+            true
+        });
       }
 
       if (
         interaction.isButton() &&
         (
-          interaction.customId === "suggestion_vote_up" ||
-          interaction.customId === "suggestion_vote_down"
+          interaction.customId ===
+            "suggestion_vote_up" ||
+          interaction.customId ===
+            "suggestion_vote_down"
         )
       ) {
         const state =
@@ -11260,13 +10665,10 @@ client.on(
             interaction.message
           );
 
-        if (
-          !state ||
-          state.status !== "open"
-        ) {
+        if (!state) {
           return interaction.reply({
             content:
-              "❌ ההצעה לא פתוחה להצבעה.",
+              "❌ לא מצאתי את ההצעה.",
 
             ephemeral:
               true
@@ -11279,7 +10681,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אי אפשר להצביע להצעה של עצמך.",
+              "❌ אי אפשר להצביע לעצמך.",
 
             ephemeral:
               true
@@ -11287,7 +10689,8 @@ client.on(
         }
 
         const choice =
-          interaction.customId === "suggestion_vote_up"
+          interaction.customId ===
+            "suggestion_vote_up"
             ? "up"
             : "down";
 
@@ -11297,7 +10700,8 @@ client.on(
           );
 
         if (
-          previous === choice
+          previous ===
+          choice
         ) {
           state.votes.delete(
             interaction.user.id
@@ -11353,11 +10757,7 @@ client.on(
         }
 
         return interaction.editReply(
-          previous === choice
-            ? "↩️ ההצבעה בוטלה."
-            : choice === "up"
-              ? "👍 הצבעת בעד."
-              : "👎 הצבעת נגד."
+          "✅ ההצבעה עודכנה."
         );
       }
 
@@ -11379,7 +10779,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין לך גישה.",
+              "❌ רק הצוות יכול לפתוח את האפשרויות האלה.",
 
             ephemeral:
               true
@@ -11388,7 +10788,7 @@ client.on(
 
         return interaction.reply({
           content:
-            "🛡️ בחר פעולה:",
+            "🛡️ אפשרויות צוות:",
 
           components: [
             createSuggestionStaffRow(
@@ -11409,13 +10809,51 @@ client.on(
           "suggestion_forward:"
         )
       ) {
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
+
+        if (
+          !hasStaffAccess(
+            member
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין הרשאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
         const messageId =
           interaction.customId
             .split(":")[1];
 
+        const original =
+          await interaction.channel
+            .messages
+            .fetch(
+              messageId
+            )
+            .catch(() => null);
+
+        if (!original) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא נמצאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
         const state =
-          suggestionStates.get(
-            messageId
+          hydrateSuggestion(
+            original
           );
 
         if (!state) {
@@ -11428,19 +10866,9 @@ client.on(
           });
         }
 
-        const channel =
-          await client.channels.fetch(
-            state.channelId
-          );
-
-        const message =
-          await channel.messages.fetch(
-            messageId
-          );
-
         const sent =
           await sendSuggestionForwardDM(
-            message,
+            original,
             state,
             interaction.user
           );
@@ -11463,13 +10891,13 @@ client.on(
         );
 
         await updateSuggestionMessage(
-          message,
+          original,
           state
         );
 
         return interaction.reply({
           content:
-            "✅ נשלח לבעלים.",
+            "✅ ההצעה נשלחה לבעלים.",
 
           ephemeral:
             true
@@ -11482,13 +10910,51 @@ client.on(
           "suggestion_close:"
         )
       ) {
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
+
+        if (
+          !hasStaffAccess(
+            member
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ אין הרשאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
         const messageId =
           interaction.customId
             .split(":")[1];
 
+        const original =
+          await interaction.channel
+            .messages
+            .fetch(
+              messageId
+            )
+            .catch(() => null);
+
+        if (!original) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא נמצאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
         const state =
-          suggestionStates.get(
-            messageId
+          hydrateSuggestion(
+            original
           );
 
         if (!state) {
@@ -11511,18 +10977,8 @@ client.on(
           `SUGG_STATUS|${messageId}|closed|${interaction.user.id}`
         );
 
-        const channel =
-          await client.channels.fetch(
-            state.channelId
-          );
-
-        const message =
-          await channel.messages.fetch(
-            messageId
-          );
-
         await updateSuggestionMessage(
-          message,
+          original,
           state
         );
 
@@ -11534,7 +10990,7 @@ client.on(
 
         return interaction.reply({
           content:
-            "🔒 ההצעה נסגרה.",
+            "✅ ההצעה נסגרה.",
 
           ephemeral:
             true
@@ -11553,7 +11009,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ רק הבעלים יכול לאשר.",
+              "❌ רק הבעלים יכול לאשר הצעה.",
 
             ephemeral:
               true
@@ -11564,9 +11020,27 @@ client.on(
           interaction.customId
             .split(":")[1];
 
+        const original =
+          await interaction.channel
+            .messages
+            .fetch(
+              messageId
+            )
+            .catch(() => null);
+
+        if (!original) {
+          return interaction.reply({
+            content:
+              "❌ ההצעה לא נמצאה.",
+
+            ephemeral:
+              true
+          });
+        }
+
         const state =
-          suggestionStates.get(
-            messageId
+          hydrateSuggestion(
+            original
           );
 
         if (!state) {
@@ -11589,18 +11063,8 @@ client.on(
           `SUGG_STATUS|${messageId}|approved|${interaction.user.id}`
         );
 
-        const channel =
-          await client.channels.fetch(
-            state.channelId
-          );
-
-        const message =
-          await channel.messages.fetch(
-            messageId
-          );
-
         await updateSuggestionMessage(
-          message,
+          original,
           state
         );
 
@@ -11611,14 +11075,14 @@ client.on(
 
         return interaction.reply({
           content:
-            "✅ ההצעה אושרה.",
+            "✅ ההצעה אושרה ונמצאת בטיפול.",
 
           ephemeral:
             true
         });
       }
 
-      // ===================== TICKET MENU =====================
+      // ===================== TICKETS =====================
 
       if (
         interaction.isStringSelectMenu() &&
@@ -11642,39 +11106,10 @@ client.on(
               member
             );
 
-          if (
-            roleId === ROLE_TOP
-          ) {
-            return interaction.reply({
-              content:
-                "🏆 כבר הגעת לדרגה הגבוהה ביותר.",
-
-              ephemeral:
-                true
-            });
-          }
-
           const appType =
             roleId
               ? "promotion"
               : "initial";
-
-          if (
-            pendingApplications.has(
-              applicationKey(
-                appType,
-                interaction.user.id
-              )
-            )
-          ) {
-            return interaction.reply({
-              content:
-                "⏳ כבר יש לך בקשה שממתינה לטיפול.",
-
-              ephemeral:
-                true
-            });
-          }
 
           if (
             appType === "initial"
@@ -11689,7 +11124,7 @@ client.on(
             ) {
               return interaction.reply({
                 content:
-                  `⏳ ניתן להגיש שוב <t:${Math.floor(expiry / 1000)}:R>.`,
+                  `⏳ אפשר להגיש בקשה חדשה <t:${Math.floor(expiry / 1000)}:R>.`,
 
                 ephemeral:
                   true
@@ -11697,23 +11132,31 @@ client.on(
             }
           }
 
-          await interaction.showModal(
+          const key =
+            applicationKey(
+              appType,
+              interaction.user.id
+            );
+
+          if (
+            pendingApplications.has(
+              key
+            )
+          ) {
+            return interaction.reply({
+              content:
+                "⏳ כבר יש לך בקשה שממתינה לבדיקה.",
+
+              ephemeral:
+                true
+            });
+          }
+
+          return interaction.showModal(
             createStaffApplicationModal(
               appType
             )
           );
-
-          await interaction.message
-            .edit({
-              components: [
-                createTicketMenu()
-              ]
-            })
-            .catch(
-              () => {}
-            );
-
-          return;
         }
 
         await interaction.deferReply({
@@ -11721,17 +11164,13 @@ client.on(
             true
         });
 
-        await interaction.guild
-          .channels
-          .fetch();
-
         const existing =
           interaction.guild
             .channels
             .cache
             .find(
-              channel =>
-                channel.topic
+              ch =>
+                ch.topic
                   ?.includes(
                     `ticket-owner:${interaction.user.id}`
                   )
@@ -11741,49 +11180,18 @@ client.on(
           existing
         ) {
           return interaction.editReply(
-            `❌ כבר יש לך טיקט פתוח: ${existing}`
+            `❌ כבר יש לך טיקט: ${existing}`
           );
         }
 
-        const ticketType =
+        const config =
           ticketTypes[
             type
           ];
 
-        if (!ticketType) {
-          return interaction.editReply(
-            "❌ סוג הטיקט לא נמצא."
-          );
-        }
-
-        let validCategoryId =
-          null;
-
-        if (
-          CATEGORY_ID
-        ) {
-          const category =
-            await interaction.guild
-              .channels
-              .fetch(
-                CATEGORY_ID
-              )
-              .catch(
-                () => null
-              );
-
-          if (
-            category?.type ===
-              ChannelType.GuildCategory
-          ) {
-            validCategoryId =
-              category.id;
-          }
-        }
-
-        const channelData = {
+        const data = {
           name:
-            `${ticketType.channelName}-${interaction.user.id.slice(-5)}`,
+            `${config.channelName}-${interaction.user.id.slice(-5)}`,
 
           type:
             ChannelType.GuildText,
@@ -11799,17 +11207,17 @@ client.on(
         };
 
         if (
-          validCategoryId
+          CATEGORY_ID
         ) {
-          channelData.parent =
-            validCategoryId;
+          data.parent =
+            CATEGORY_ID;
         }
 
         const channel =
           await interaction.guild
             .channels
             .create(
-              channelData
+              data
             );
 
         await channel.send({
@@ -11825,16 +11233,7 @@ client.on(
 
           components: [
             createCloseTicketRow()
-          ],
-
-          allowedMentions: {
-            users: [
-              interaction.user.id
-            ],
-
-            roles:
-              STAFF_ACCESS_ROLE_IDS
-          }
+          ]
         });
 
         return interaction.editReply(
@@ -11860,7 +11259,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ רק צוות מורשה יכול לסגור טיקט.",
+              "❌ אין הרשאה.",
 
             ephemeral:
               true
@@ -11875,9 +11274,7 @@ client.on(
           () => {
             interaction.channel
               .delete()
-              .catch(
-                () => {}
-              );
+              .catch(() => {});
           },
           3000
         );
@@ -11885,7 +11282,7 @@ client.on(
         return;
       }
 
-      // ===================== STAFF APPLICATION SUBMIT =====================
+      // ===================== STAFF APPLICATIONS =====================
 
       if (
         interaction.isModalSubmit() &&
@@ -11893,25 +11290,9 @@ client.on(
           "staff_application_modal:"
         )
       ) {
-        await interaction.deferReply({
-          ephemeral:
-            true
-        });
-
         const type =
           interaction.customId
             .split(":")[1];
-
-        const member =
-          await fetchFreshMember(
-            interaction.guild,
-            interaction.user.id
-          );
-
-        const currentRoleId =
-          getHighestLadderRoleId(
-            member
-          );
 
         const key =
           applicationKey(
@@ -11924,9 +11305,13 @@ client.on(
             key
           )
         ) {
-          return interaction.editReply(
-            "⏳ כבר קיימת בקשה שלך."
-          );
+          return interaction.reply({
+            content:
+              "⏳ כבר יש לך בקשה שממתינה.",
+
+            ephemeral:
+              true
+          });
         }
 
         const channel =
@@ -11934,23 +11319,27 @@ client.on(
             STAFF_APPLICATION_CHANNEL_ID
           );
 
-        const currentName =
-          currentRoleId
-            ? await getRoleName(
-                interaction.guild,
-                currentRoleId
-              )
-            : null;
+        const member =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
+
+        const currentRole =
+          getHighestLadderRoleId(
+            member
+          );
 
         const embed =
           new EmbedBuilder()
-            .setTitle(
-              type === "promotion"
-                ? "⬆️ בקשת קידום חדשה בצוות"
-                : "🛡️ בקשה חדשה להצטרפות לצוות"
+            .setColor(
+              0x5865F2
             )
-            .setDescription(
-              `${interaction.user} שלח/ה בקשה חדשה.`
+            .setTitle(
+              type ===
+                "promotion"
+                ? "⬆️ בקשת קידום"
+                : "🛡️ בקשת הצטרפות לצוות"
             )
             .addFields(
               {
@@ -11958,18 +11347,18 @@ client.on(
                   "👤 משתמש",
 
                 value:
-                  `${interaction.user}\n\`${interaction.user.id}\``
+                  `${interaction.user}`
               },
 
               ...(
-                type === "promotion"
+                currentRole
                   ? [
                       {
                         name:
                           "🎖️ דרגה נוכחית",
 
                         value:
-                          `${currentName}\n<@&${currentRoleId}>`
+                          `<@&${currentRole}>`
                       }
                     ]
                   : []
@@ -11980,10 +11369,12 @@ client.on(
                   "🎂 גיל",
 
                 value:
-                  interaction.fields
-                    .getTextInputValue(
-                      "age"
-                    )
+                  safeText(
+                    interaction.fields
+                      .getTextInputValue(
+                        "age"
+                      )
+                  )
               },
 
               {
@@ -11991,10 +11382,12 @@ client.on(
                   "⚠️ סיטואציה",
 
                 value:
-                  interaction.fields
-                    .getTextInputValue(
-                      "situation"
-                    )
+                  safeText(
+                    interaction.fields
+                      .getTextInputValue(
+                        "situation"
+                      )
+                  )
               },
 
               {
@@ -12002,10 +11395,12 @@ client.on(
                   "📛 שם",
 
                 value:
-                  interaction.fields
-                    .getTextInputValue(
-                      "name"
-                    )
+                  safeText(
+                    interaction.fields
+                      .getTextInputValue(
+                        "name"
+                      )
+                  )
               },
 
               {
@@ -12013,10 +11408,12 @@ client.on(
                   "🛡️ ניסיון",
 
                 value:
-                  interaction.fields
-                    .getTextInputValue(
-                      "experience"
-                    )
+                  safeText(
+                    interaction.fields
+                      .getTextInputValue(
+                        "experience"
+                      )
+                  )
               },
 
               {
@@ -12024,11 +11421,13 @@ client.on(
                   "📝 הערות",
 
                 value:
-                  interaction.fields
-                    .getTextInputValue(
-                      "notes"
-                    ) ||
-                  "לא נכתבו הערות"
+                  safeText(
+                    interaction.fields
+                      .getTextInputValue(
+                        "notes"
+                      ) ||
+                    "אין"
+                  )
               },
 
               {
@@ -12036,7 +11435,7 @@ client.on(
                   "📋 סטטוס",
 
                 value:
-                  "⏳ **בבדיקה**"
+                  "⏳ בבדיקה"
               }
             )
             .setFooter({
@@ -12046,8 +11445,7 @@ client.on(
                   type,
                   "pending"
                 )
-            })
-            .setTimestamp();
+            });
 
         await channel.send({
           content:
@@ -12067,9 +11465,6 @@ client.on(
                   .setLabel(
                     "לאשר"
                   )
-                  .setEmoji(
-                    "✅"
-                  )
                   .setStyle(
                     ButtonStyle.Success
                   ),
@@ -12080,9 +11475,6 @@ client.on(
                   )
                   .setLabel(
                     "לא לאשר"
-                  )
-                  .setEmoji(
-                    "❌"
                   )
                   .setStyle(
                     ButtonStyle.Danger
@@ -12101,12 +11493,49 @@ client.on(
           "pending"
         );
 
-        return interaction.editReply(
-          "✅ הבקשה נשלחה."
-        );
+        return interaction.reply({
+          content:
+            "✅ הבקשה נשלחה.",
+
+          ephemeral:
+            true
+        });
       }
 
-      // ===================== STAFF APP APPROVE =====================
+      if (
+        interaction.isButton() &&
+        (
+          interaction.customId.startsWith(
+            "app_approve:"
+          ) ||
+          interaction.customId.startsWith(
+            "app_reject:"
+          ) ||
+          interaction.customId.startsWith(
+            "app_assign:"
+          )
+        )
+      ) {
+        const reviewer =
+          await fetchFreshMember(
+            interaction.guild,
+            interaction.user.id
+          );
+
+        if (
+          !hasStaffAccess(
+            reviewer
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק הצוות יכול לטפל בבקשות.",
+
+            ephemeral:
+              true
+          });
+        }
+      }
 
       if (
         interaction.isButton() &&
@@ -12122,113 +11551,51 @@ client.on(
           interaction.customId
             .split(":");
 
-        if (
-          interaction.user.id ===
-          applicantId
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אי אפשר לטפל בבקשה של עצמך.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        const reviewer =
-          await fetchFreshMember(
-            interaction.guild,
-            interaction.user.id
-          );
-
-        if (
-          !hasStaffAccess(
-            reviewer
-          )
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין לך הרשאה.",
-
-            ephemeral:
-              true
-          });
-        }
-
         const applicant =
           await fetchFreshMember(
             interaction.guild,
             applicantId
           );
 
-        const currentRoleId =
+        const currentRole =
           getHighestLadderRoleId(
             applicant
           );
 
-        let targets;
-        let labels = {};
-
-        if (
+        const targets =
           type === "initial"
-        ) {
-          targets = [
-            ROLE_HELPER
-          ];
-
-          labels = {
-            [ROLE_HELPER]:
-              "Helper"
-          };
-
-        } else {
-          targets =
-            getPromotionTargets(
-              currentRoleId
-            );
-
-          labels =
-            getPromotionLabels(
-              currentRoleId
-            );
-        }
+            ? [
+                ROLE_HELPER
+              ]
+            : getPromotionTargets(
+                currentRole
+              );
 
         if (
           !targets.length
         ) {
           return interaction.reply({
             content:
-              "🏆 אין דרגה גבוהה יותר.",
+              "❌ אין דרגת קידום זמינה למשתמש הזה.",
 
             ephemeral:
               true
           });
         }
 
-        const embed =
-          EmbedBuilder.from(
-            interaction.message
-              .embeds[0]
-          );
-
-        setStatusField(
-          embed,
-          "✅ **אושר עקרונית — בחרו דרגה**"
-        );
-
-        embed.setFooter({
-          text:
-            buildApplicationFooter(
-              applicantId,
-              type,
-              "awaiting_role"
-            )
-        });
+        const labels =
+          type === "initial"
+            ? {
+                [ROLE_HELPER]:
+                  "Helper"
+              }
+            : getPromotionLabels(
+                currentRole
+              );
 
         return interaction.update({
-          embeds: [
-            embed
-          ],
+          embeds:
+            interaction.message.embeds,
 
           components: [
             await createRoleChoiceRow(
@@ -12255,26 +11622,6 @@ client.on(
         ] =
           interaction.customId
             .split(":");
-
-        const reviewer =
-          await fetchFreshMember(
-            interaction.guild,
-            interaction.user.id
-          );
-
-        if (
-          !hasStaffAccess(
-            reviewer
-          )
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין הרשאה.",
-
-            ephemeral:
-              true
-          });
-        }
 
         const rejectedAt =
           Date.now();
@@ -12304,13 +11651,12 @@ client.on(
 
         const embed =
           EmbedBuilder.from(
-            interaction.message
-              .embeds[0]
+            interaction.message.embeds[0]
           );
 
         setStatusField(
           embed,
-          `❌ **לא אושר**\nטופל על ידי ${interaction.user}`
+          `❌ נדחה על ידי ${interaction.user}`
         );
 
         embed.setFooter({
@@ -12330,7 +11676,7 @@ client.on(
 
           components: [
             createHandledRow(
-              reviewer.displayName
+              interaction.member.displayName
             )
           ]
         });
@@ -12346,30 +11692,10 @@ client.on(
           ,
           type,
           applicantId,
-          targetRoleId
+          roleId
         ] =
           interaction.customId
             .split(":");
-
-        const reviewer =
-          await fetchFreshMember(
-            interaction.guild,
-            interaction.user.id
-          );
-
-        if (
-          !hasStaffAccess(
-            reviewer
-          )
-        ) {
-          return interaction.reply({
-            content:
-              "❌ אין הרשאה.",
-
-            ephemeral:
-              true
-          });
-        }
 
         await interaction.deferUpdate();
 
@@ -12379,28 +11705,24 @@ client.on(
             applicantId
           );
 
-        const beforeRoleId =
+        const beforeRole =
           getHighestLadderRoleId(
             applicant
           );
 
-        if (
-          type === "initial" &&
-          targetRoleId !==
-            ROLE_HELPER
-        ) {
-          return interaction.followUp({
-            content:
-              "❌ בקבלה ראשונה הדרגה היא Helper.",
-
-            ephemeral:
-              true
-          });
-        }
-
         await applicant.roles.add(
-          targetRoleId
+          roleId
         );
+
+        if (
+          type === "promotion" &&
+          beforeRole &&
+          beforeRole !== roleId
+        ) {
+          await applicant.roles.remove(
+            beforeRole
+          ).catch(() => {});
+        }
 
         const fresh =
           await fetchFreshMember(
@@ -12431,31 +11753,24 @@ client.on(
 
           title:
             type === "initial"
-              ? "✅ צירוף חדש לצוות"
+              ? "✅ צירוף לצוות"
               : "⬆️ קידום צוות",
 
           fromRoleId:
-            beforeRoleId,
+            beforeRole,
 
           toRoleId:
-            targetRoleId
+            roleId
         });
-
-        const roleName =
-          await getRoleName(
-            interaction.guild,
-            targetRoleId
-          );
 
         const embed =
           EmbedBuilder.from(
-            interaction.message
-              .embeds[0]
+            interaction.message.embeds[0]
           );
 
         setStatusField(
           embed,
-          `✅ **אושר**\n🎖️ דרגה: **${roleName}**\nטופל על ידי ${interaction.user}`
+          `✅ אושר על ידי ${interaction.user}\n🎖️ דרגה: <@&${roleId}>`
         );
 
         embed.setFooter({
@@ -12474,7 +11789,7 @@ client.on(
 
           components: [
             createHandledRow(
-              reviewer.displayName
+              interaction.member.displayName
             )
           ]
         });
@@ -12487,54 +11802,34 @@ client.on(
         interaction.customId ===
           "arcade_game_select"
       ) {
-        const gameType =
+        const type =
           interaction.values[0];
 
         const destination =
-          await client.channels
-            .fetch(
-              ARCADE_GAMES_CHANNEL_ID
-            )
-            .catch(
-              () => null
-            );
+          await client.channels.fetch(
+            ARCADE_GAMES_CHANNEL_ID
+          );
 
         if (
-          !destination?.isTextBased()
+          type === "ttt" ||
+          type === "rps"
         ) {
           return interaction.reply({
             content:
-              "❌ חדר המשחקים לא נמצא.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        if (
-          gameType === "ttt" ||
-          gameType === "rps"
-        ) {
-          return interaction.reply({
-            content:
-              "🎮 בחר את היריב:",
+              "🎮 בחר יריב:",
 
             components: [
               new ActionRowBuilder()
                 .addComponents(
                   new UserSelectMenuBuilder()
                     .setCustomId(
-                      `arcade_target_select:${gameType}`
+                      `arcade_target_select:${type}`
                     )
                     .setPlaceholder(
-                      "בחר שחקן..."
+                      "בחר שחקן"
                     )
-                    .setMinValues(
-                      1
-                    )
-                    .setMaxValues(
-                      1
-                    )
+                    .setMinValues(1)
+                    .setMaxValues(1)
                 )
             ],
 
@@ -12551,7 +11846,7 @@ client.on(
           );
 
         if (
-          gameType === "impostor"
+          type === "impostor"
         ) {
           const game = {
             id:
@@ -12566,23 +11861,16 @@ client.on(
               ]),
 
             started:
-              false,
-
-            impostorId:
-              null,
-
-            word:
-              null,
-
-            messageId:
-              null
+              false
           };
+
+          arcadeImpostorGames.set(
+            gameId,
+            game
+          );
 
           const message =
             await destination.send({
-              content:
-                `🕵️ משחק חדש נפתח על ידי ${interaction.user}!`,
-
               embeds: [
                 createImpostorLobbyEmbed(
                   game
@@ -12595,14 +11883,6 @@ client.on(
                 )
             });
 
-          game.messageId =
-            message.id;
-
-          arcadeImpostorGames.set(
-            gameId,
-            game
-          );
-
           return interaction.reply({
             content:
               `✅ המשחק נפתח: ${message.url}`,
@@ -12613,7 +11893,7 @@ client.on(
         }
 
         if (
-          gameType === "bomba"
+          type === "bomba"
         ) {
           const game = {
             id:
@@ -12630,18 +11910,17 @@ client.on(
             started:
               false,
 
-            messageId:
-              null,
-
             timer:
               null
           };
 
+          arcadeBombaGames.set(
+            gameId,
+            game
+          );
+
           const message =
             await destination.send({
-              content:
-                `💣 משחק בומבה נפתח על ידי ${interaction.user}!`,
-
               embeds: [
                 createBombaLobbyEmbed(
                   game
@@ -12654,14 +11933,6 @@ client.on(
                 )
             });
 
-          game.messageId =
-            message.id;
-
-          arcadeBombaGames.set(
-            gameId,
-            game
-          );
-
           return interaction.reply({
             content:
               `✅ המשחק נפתח: ${message.url}`,
@@ -12672,15 +11943,13 @@ client.on(
         }
       }
 
-      // ===================== ARCADE TARGET =====================
-
       if (
         interaction.isUserSelectMenu() &&
         interaction.customId.startsWith(
           "arcade_target_select:"
         )
       ) {
-        const gameType =
+        const type =
           interaction.customId
             .split(":")[1];
 
@@ -12695,24 +11964,8 @@ client.on(
             content:
               "❌ אי אפשר לבחור את עצמך.",
 
-            components: []
-          });
-        }
-
-        const target =
-          await fetchFreshMember(
-            interaction.guild,
-            targetId
-          );
-
-        if (
-          target.user.bot
-        ) {
-          return interaction.update({
-            content:
-              "❌ אי אפשר להזמין בוט.",
-
-            components: []
+            components:
+              []
           });
         }
 
@@ -12729,7 +11982,7 @@ client.on(
           );
 
         if (
-          gameType === "ttt"
+          type === "ttt"
         ) {
           const game = {
             id:
@@ -12747,9 +12000,7 @@ client.on(
               targetId,
 
             board:
-              Array(
-                9
-              ).fill(
+              Array(9).fill(
                 null
               ),
 
@@ -12777,7 +12028,7 @@ client.on(
           const message =
             await destination.send({
               content:
-                `${target}, ${interaction.user} הזמין אותך לאיקס עיגול!`,
+                `<@${targetId}> הוזמנת לאיקס עיגול על ידי ${interaction.user}!`,
 
               components: [
                 createTttChallengeRow(
@@ -12790,12 +12041,13 @@ client.on(
             content:
               `✅ ההזמנה נשלחה: ${message.url}`,
 
-            components: []
+            components:
+              []
           });
         }
 
         if (
-          gameType === "rps"
+          type === "rps"
         ) {
           const game = {
             id:
@@ -12811,13 +12063,10 @@ client.on(
               targetId
             ],
 
-            accepted:
-              false,
-
             choices:
               new Map(),
 
-            finished:
+            accepted:
               false
           };
 
@@ -12829,7 +12078,7 @@ client.on(
           const message =
             await destination.send({
               content:
-                `${target}, ${interaction.user} הזמין אותך לאבן נייר ומספריים!`,
+                `<@${targetId}> הוזמנת לאבן נייר ומספריים!`,
 
               components: [
                 createRpsChallengeRow(
@@ -12842,7 +12091,8 @@ client.on(
             content:
               `✅ ההזמנה נשלחה: ${message.url}`,
 
-            components: []
+            components:
+              []
           });
         }
       }
@@ -12855,34 +12105,23 @@ client.on(
           "ttt_accept:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeTttGames.get(
-            gameId
+            id
           );
 
         if (
-          !game
-        ) {
-          return interaction.reply({
-            content:
-              "❌ המשחק לא קיים.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        if (
+          !game ||
           interaction.user.id !==
-          game.targetId
+            game.targetId
         ) {
           return interaction.reply({
             content:
-              "❌ רק מי שהוזמן יכול לאשר.",
+              "❌ אי אפשר לאשר את המשחק.",
 
             ephemeral:
               true
@@ -12900,9 +12139,6 @@ client.on(
             : game.playerO;
 
         return interaction.update({
-          content:
-            `🎮 <@${game.playerX}> נגד <@${game.playerO}>`,
-
           embeds: [
             createTttEmbed(
               game
@@ -12922,21 +12158,46 @@ client.on(
           "ttt_cancel:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
+        const game =
+          arcadeTttGames.get(
+            id
+          );
+
+        if (
+          !game ||
+          ![
+            game.challengerId,
+            game.targetId
+          ].includes(
+            interaction.user.id
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק שחקני המשחק יכולים לבטל.",
+
+            ephemeral:
+              true
+          });
+        }
+
         arcadeTttGames.delete(
-          gameId
+          id
         );
 
         return interaction.update({
           content:
             "❌ המשחק בוטל.",
 
-          embeds: [],
+          components:
+            [],
 
-          components: []
+          embeds:
+            []
         });
       }
 
@@ -12948,37 +12209,25 @@ client.on(
       ) {
         const [
           ,
-          gameId,
-          indexRaw
+          id,
+          raw
         ] =
           interaction.customId
             .split(":");
 
         const game =
           arcadeTttGames.get(
-            gameId
+            id
           );
 
         if (
           !game ||
-          game.finished
-        ) {
-          return interaction.reply({
-            content:
-              "❌ המשחק הסתיים.",
-
-            ephemeral:
-              true
-          });
-        }
-
-        if (
           interaction.user.id !==
-          game.turn
+            game.turn
         ) {
           return interaction.reply({
             content:
-              "⏳ זה לא התור שלך.",
+              "❌ זה לא התור שלך.",
 
             ephemeral:
               true
@@ -12987,7 +12236,7 @@ client.on(
 
         const index =
           Number(
-            indexRaw
+            raw
           );
 
         if (
@@ -13045,7 +12294,7 @@ client.on(
               : game.playerX;
         }
 
-        return interaction.update({
+        await interaction.update({
           embeds: [
             createTttEmbed(
               game
@@ -13057,6 +12306,16 @@ client.on(
               game
             )
         });
+
+        if (
+          game.finished
+        ) {
+          arcadeTttGames.delete(
+            id
+          );
+        }
+
+        return;
       }
 
       // ===================== RPS =====================
@@ -13067,13 +12326,13 @@ client.on(
           "rps_accept:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeRpsGames.get(
-            gameId
+            id
           );
 
         if (
@@ -13082,7 +12341,7 @@ client.on(
         ) {
           return interaction.reply({
             content:
-              "❌ רק מי שהוזמן יכול לאשר.",
+              "❌ רק המוזמן יכול לאשר.",
 
             ephemeral:
               true
@@ -13094,21 +12353,11 @@ client.on(
 
         return interaction.update({
           content:
-            `✊✋✌️ <@${game.challengerId}> נגד <@${game.targetId}>`,
-
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                "✊✋✌️ אבן נייר ומספריים"
-              )
-              .setDescription(
-                "כל אחד בוחר בסתר."
-              )
-          ],
+            "✊✋✌️ המשחק התחיל!",
 
           components: [
             createRpsChoiceRow(
-              gameId
+              id
             )
           ]
         });
@@ -13120,21 +12369,40 @@ client.on(
           "rps_cancel:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
+        const game =
+          arcadeRpsGames.get(
+            id
+          );
+
+        if (
+          !game ||
+          !game.players.includes(
+            interaction.user.id
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ רק שחקני המשחק יכולים לבטל.",
+
+            ephemeral:
+              true
+          });
+        }
+
         arcadeRpsGames.delete(
-          gameId
+          id
         );
 
         return interaction.update({
           content:
             "❌ המשחק בוטל.",
 
-          embeds: [],
-
-          components: []
+          components:
+            []
         });
       }
 
@@ -13146,7 +12414,7 @@ client.on(
       ) {
         const [
           ,
-          gameId,
+          id,
           choice
         ] =
           interaction.customId
@@ -13154,22 +12422,15 @@ client.on(
 
         const game =
           arcadeRpsGames.get(
-            gameId
+            id
           );
 
         if (
-          !game ||
-          !game.players.includes(
+          !game?.players.includes(
             interaction.user.id
           )
         ) {
-          return interaction.reply({
-            content:
-              "❌ אתה לא במשחק הזה.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         game.choices.set(
@@ -13179,7 +12440,7 @@ client.on(
 
         await interaction.reply({
           content:
-            `✅ בחרת ${rpsEmoji(choice)}.`,
+            `✅ בחרת ${rpsEmoji(choice)}`,
 
           ephemeral:
             true
@@ -13213,42 +12474,36 @@ client.on(
             second
           );
 
-        let text;
+        let resultText =
+          "🤝 תיקו!";
 
         if (
-          result === "draw"
+          result === "first"
         ) {
-          text =
-            "🤝 **תיקו!**";
-
-        } else {
-          const winnerId =
-            result === "first"
-              ? firstId
-              : secondId;
-
-          text =
-            `🏆 המנצח: <@${winnerId}>`;
+          resultText =
+            `🏆 <@${firstId}> ניצח!`;
         }
 
-        game.finished =
-          true;
+        if (
+          result === "second"
+        ) {
+          resultText =
+            `🏆 <@${secondId}> ניצח!`;
+        }
 
         await interaction.message.edit({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                "✊✋✌️ תוצאה"
-              )
-              .setDescription(
-                `<@${firstId}> ${rpsEmoji(first)}\n` +
-                `<@${secondId}> ${rpsEmoji(second)}\n\n` +
-                text
-              )
-          ],
+          content:
+            `<@${firstId}> ${rpsEmoji(first)}\n` +
+            `<@${secondId}> ${rpsEmoji(second)}\n\n` +
+            resultText,
 
-          components: []
+          components:
+            []
         });
+
+        arcadeRpsGames.delete(
+          id
+        );
 
         return;
       }
@@ -13261,26 +12516,20 @@ client.on(
           "impostor_join:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeImpostorGames.get(
-            gameId
+            id
           );
 
         if (
           !game ||
           game.started
         ) {
-          return interaction.reply({
-            content:
-              "❌ המשחק כבר התחיל.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         game.players.add(
@@ -13296,7 +12545,7 @@ client.on(
 
           components:
             createImpostorLobbyRows(
-              gameId
+              id
             )
         });
       }
@@ -13307,18 +12556,24 @@ client.on(
           "impostor_leave:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeImpostorGames.get(
-            gameId
+            id
           );
 
         if (
+          !game
+        ) {
+          return;
+        }
+
+        if (
           interaction.user.id ===
-          game?.hostId
+          game.hostId
         ) {
           return interaction.reply({
             content:
@@ -13329,7 +12584,7 @@ client.on(
           });
         }
 
-        game?.players.delete(
+        game.players.delete(
           interaction.user.id
         );
 
@@ -13342,7 +12597,7 @@ client.on(
 
           components:
             createImpostorLobbyRows(
-              gameId
+              id
             )
         });
       }
@@ -13353,13 +12608,13 @@ client.on(
           "impostor_cancel:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeImpostorGames.get(
-            gameId
+            id
           );
 
         if (
@@ -13376,16 +12631,18 @@ client.on(
         }
 
         arcadeImpostorGames.delete(
-          gameId
+          id
         );
 
         return interaction.update({
           content:
-            "🗑️ המשחק בוטל.",
+            "❌ המשחק בוטל.",
 
-          embeds: [],
+          embeds:
+            [],
 
-          components: []
+          components:
+            []
         });
       }
 
@@ -13395,26 +12652,20 @@ client.on(
           "impostor_start:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeImpostorGames.get(
-            gameId
+            id
           );
 
         if (
           interaction.user.id !==
           game?.hostId
         ) {
-          return interaction.reply({
-            content:
-              "❌ רק המארח יכול להתחיל.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         if (
@@ -13433,7 +12684,9 @@ client.on(
           true;
 
         const players =
-          [...game.players];
+          [
+            ...game.players
+          ];
 
         game.impostorId =
           randomItem(
@@ -13444,9 +12697,6 @@ client.on(
           randomItem(
             IMPOSTOR_WORDS
           );
-
-        let failed =
-          0;
 
         for (
           const playerId of
@@ -13462,83 +12712,40 @@ client.on(
               );
 
           if (!user) {
-            failed++;
             continue;
           }
 
-          try {
-            if (
-              playerId ===
-              game.impostorId
-            ) {
-              await user.send({
-                embeds: [
-                  new EmbedBuilder()
-                    .setColor(
-                      0xED4245
-                    )
-                    .setTitle(
-                      "🕵️ אתה המתחזה!"
-                    )
-                    .setDescription(
-                      "לא קיבלת מילה. נסה להעמיד פנים שאתה יודע אותה 🤫"
-                    )
-                ]
-              });
+          if (
+            playerId ===
+            game.impostorId
+          ) {
+            await user.send(
+              "🕵️ **אתה המתחזה!** לא קיבלת מילה."
+            ).catch(() => {});
 
-            } else {
-              await user.send({
-                embeds: [
-                  new EmbedBuilder()
-                    .setColor(
-                      0x57F287
-                    )
-                    .setTitle(
-                      "🔐 המילה שלך"
-                    )
-                    .setDescription(
-                      `# ${game.word}\n\nאל תגלה את המילה ישירות.`
-                    )
-                ]
-              });
-            }
-
-          } catch {
-            failed++;
+          } else {
+            await user.send(
+              `🔐 המילה שלך היא: **${game.word}**`
+            ).catch(() => {});
           }
         }
 
         return interaction.update({
           content:
-            "🕵️ המשחק התחיל!",
+            "🕵️ המשחק התחיל! בדקו DM.",
 
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                "🕵️ נחש את המתחזה"
-              )
-              .setDescription(
-                "📩 בדקו DM והתחילו לתת רמזים." +
-                (
-                  failed
-                    ? `\n⚠️ ${failed} לא הצליחו לקבל DM.`
-                    : ""
-                )
-              )
-          ],
+          embeds:
+            [],
 
           components: [
             new ActionRowBuilder()
               .addComponents(
                 new ButtonBuilder()
                   .setCustomId(
-                    `impostor_reveal:${gameId}`
+                    `impostor_reveal:${id}`
                   )
                   .setLabel(
                     "חשוף את המתחזה"
-                  )
-                  .setEmoji(
-                    "👀"
                   )
                   .setStyle(
                     ButtonStyle.Danger
@@ -13554,48 +12761,32 @@ client.on(
           "impostor_reveal:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeImpostorGames.get(
-            gameId
+            id
           );
 
         if (
           interaction.user.id !==
           game?.hostId
         ) {
-          return interaction.reply({
-            content:
-              "❌ רק המארח יכול לחשוף.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         arcadeImpostorGames.delete(
-          gameId
+          id
         );
 
         return interaction.update({
-          embeds: [
-            new EmbedBuilder()
-              .setColor(
-                0xED4245
-              )
-              .setTitle(
-                "🕵️ המתחזה היה..."
-              )
-              .setDescription(
-                `# <@${game.impostorId}>\n\n` +
-                `המילה הייתה: **${game.word}**`
-              )
-          ],
+          content:
+            `🕵️ המתחזה היה <@${game.impostorId}>!\n🔐 המילה הייתה **${game.word}**`,
 
-          components: []
+          components:
+            []
         });
       }
 
@@ -13607,26 +12798,20 @@ client.on(
           "bomba_join:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeBombaGames.get(
-            gameId
+            id
           );
 
         if (
           !game ||
           game.started
         ) {
-          return interaction.reply({
-            content:
-              "❌ המשחק כבר התחיל.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         game.players.add(
@@ -13642,7 +12827,7 @@ client.on(
 
           components:
             createBombaLobbyRows(
-              gameId
+              id
             )
         });
       }
@@ -13653,18 +12838,24 @@ client.on(
           "bomba_leave:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeBombaGames.get(
-            gameId
+            id
           );
 
         if (
+          !game
+        ) {
+          return;
+        }
+
+        if (
           interaction.user.id ===
-          game?.hostId
+          game.hostId
         ) {
           return interaction.reply({
             content:
@@ -13675,7 +12866,7 @@ client.on(
           });
         }
 
-        game?.players.delete(
+        game.players.delete(
           interaction.user.id
         );
 
@@ -13688,7 +12879,7 @@ client.on(
 
           components:
             createBombaLobbyRows(
-              gameId
+              id
             )
         });
       }
@@ -13699,13 +12890,13 @@ client.on(
           "bomba_cancel:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeBombaGames.get(
-            gameId
+            id
           );
 
         if (
@@ -13730,16 +12921,18 @@ client.on(
         }
 
         arcadeBombaGames.delete(
-          gameId
+          id
         );
 
         return interaction.update({
           content:
-            "🗑️ המשחק בוטל.",
+            "❌ המשחק בוטל.",
 
-          embeds: [],
+          embeds:
+            [],
 
-          components: []
+          components:
+            []
         });
       }
 
@@ -13749,26 +12942,20 @@ client.on(
           "bomba_start:"
         )
       ) {
-        const gameId =
+        const id =
           interaction.customId
             .split(":")[1];
 
         const game =
           arcadeBombaGames.get(
-            gameId
+            id
           );
 
         if (
           interaction.user.id !==
           game?.hostId
         ) {
-          return interaction.reply({
-            content:
-              "❌ רק המארח יכול להתחיל.",
-
-            ephemeral:
-              true
-          });
+          return;
         }
 
         if (
@@ -13791,91 +12978,52 @@ client.on(
             BOMBA_TOPICS
           );
 
-        const players =
-          [...game.players];
-
         const unlucky =
           randomItem(
-            players
-          );
-
-        const explosionDelay =
-          crypto.randomInt(
-            15_000,
-            31_000
+            [
+              ...game.players
+            ]
           );
 
         await interaction.update({
           content:
-            "💣 **הבומבה התחילה!**",
+            `💣 המשחק התחיל!\n📚 הנושא: **${topic}**\nתענו מהר בצ'אט...`,
 
-          embeds: [
-            new EmbedBuilder()
-              .setColor(
-                0xED4245
-              )
-              .setTitle(
-                "💣 בומבה!"
-              )
-              .setDescription(
-                `📚 **הנושא:** # ${topic}\n\n` +
-                "תענו מהר תשובות שמתאימות לנושא!\n" +
-                "⏱️ אף אחד לא יודע מתי הבומבה תתפוצץ..."
-              )
-          ],
+          embeds:
+            [],
 
-          components: []
+          components:
+            []
         });
 
         game.timer =
           setTimeout(
             async () => {
-              if (
-                !arcadeBombaGames.has(
-                  gameId
-                )
-              ) {
-                return;
-              }
-
-              await interaction.message
-                .edit({
-                  content:
-                    "💥💥💥 **בווווום!** 💥💥💥",
-
-                  embeds: [
-                    new EmbedBuilder()
-                      .setColor(
-                        0x000000
-                      )
-                      .setTitle(
-                        "💥 הבומבה התפוצצה!"
-                      )
-                      .setDescription(
-                        `💣 היא התפוצצה על <@${unlucky}>!\n\n` +
-                        `📚 הנושא היה **${topic}**`
-                      )
-                  ],
-
-                  components: []
-                })
-                .catch(
-                  () => {}
-                );
+              await interaction.message.edit({
+                content:
+                  `💥 **בווום!** הבומבה התפוצצה על <@${unlucky}>!\n📚 הנושא היה **${topic}**`
+              }).catch(
+                () => {}
+              );
 
               arcadeBombaGames.delete(
-                gameId
+                id
               );
             },
-            explosionDelay
+            crypto.randomInt(
+              15_000,
+              31_000
+            )
           );
 
         return;
       }
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
-        "❌ interactionCreate main bot:",
+        "❌ Main interaction error:",
         error
       );
 
@@ -13886,28 +13034,26 @@ client.on(
         ) {
           await interaction.followUp({
             content:
-              "❌ קרתה שגיאה בזמן ביצוע הפעולה.",
+              "❌ קרתה שגיאה.",
 
             ephemeral:
               true
           });
-
         } else {
           await interaction.reply({
             content:
-              "❌ קרתה שגיאה בזמן ביצוע הפעולה.",
+              "❌ קרתה שגיאה.",
 
             ephemeral:
               true
           });
         }
-
       } catch {}
     }
   }
 );
 // ========================================================
-//                    ROEI MUSIC BOT
+// ROEI MUSIC BOT — SOUNDCLOUD ONLY
 // ========================================================
 
 const musicPlayer =
@@ -13918,230 +13064,412 @@ const musicPlayer =
 let musicExtractorReady =
   false;
 
-// ===================== MUSIC COMMANDS =====================
+// ========================================================
+// MUSIC COMMANDS
+// ========================================================
 
 const musicPlayCommand =
   new SlashCommandBuilder()
-    .setName("play")
-    .setDescription("השמעת מוזיקה")
+    .setName(
+      "play"
+    )
+    .setDescription(
+      "השמעת מוזיקה"
+    )
+
     .addSubcommand(
       sub =>
         sub
-          .setName("song")
-          .setDescription("הפעל שיר")
+          .setName(
+            "song"
+          )
+          .setDescription(
+            "הפעל שיר"
+          )
           .addStringOption(
             option =>
               option
-                .setName("query")
-                .setDescription("שם השיר או קישור YouTube")
-                .setRequired(true)
-                .setMaxLength(500)
+                .setName(
+                  "query"
+                )
+                .setDescription(
+                  "שם שיר, קישור SoundCloud או קישור YouTube"
+                )
+                .setRequired(
+                  true
+                )
+                .setMaxLength(
+                  500
+                )
           )
     )
+
     .addSubcommand(
       sub =>
         sub
-          .setName("playlist")
-          .setDescription("הפעל פלייליסט אישי שלך")
+          .setName(
+            "playlist"
+          )
+          .setDescription(
+            "הפעל פלייליסט אישי"
+          )
           .addStringOption(
             option =>
               option
-                .setName("name")
-                .setDescription("שם הפלייליסט")
-                .setRequired(true)
-                .setMaxLength(60)
+                .setName(
+                  "name"
+                )
+                .setDescription(
+                  "שם הפלייליסט"
+                )
+                .setRequired(
+                  true
+                )
+                .setMaxLength(
+                  60
+                )
           )
     );
 
 const musicPlaylistCommand =
   new SlashCommandBuilder()
-    .setName("playlist")
-    .setDescription("ניהול הפלייליסטים האישיים שלך")
+    .setName(
+      "playlist"
+    )
+    .setDescription(
+      "ניהול הפלייליסטים האישיים שלך"
+    )
 
     .addSubcommand(
       sub =>
         sub
-          .setName("create")
-          .setDescription("צור פלייליסט חדש")
+          .setName(
+            "create"
+          )
+          .setDescription(
+            "צור פלייליסט חדש"
+          )
           .addStringOption(
             option =>
               option
-                .setName("name")
-                .setDescription("שם הפלייליסט")
-                .setRequired(true)
-                .setMaxLength(60)
+                .setName(
+                  "name"
+                )
+                .setDescription(
+                  "שם הפלייליסט"
+                )
+                .setRequired(
+                  true
+                )
+                .setMaxLength(
+                  60
+                )
           )
     )
 
     .addSubcommand(
       sub =>
         sub
-          .setName("add")
-          .setDescription("הוסף שיר לפלייליסט")
-          .addStringOption(
-            option =>
-              option
-                .setName("name")
-                .setDescription("שם הפלייליסט")
-                .setRequired(true)
-                .setMaxLength(60)
+          .setName(
+            "add"
+          )
+          .setDescription(
+            "הוסף שיר לפלייליסט"
           )
           .addStringOption(
             option =>
               option
-                .setName("song")
-                .setDescription("שם השיר או קישור")
-                .setRequired(true)
-                .setMaxLength(500)
+                .setName(
+                  "name"
+                )
+                .setDescription(
+                  "שם הפלייליסט"
+                )
+                .setRequired(
+                  true
+                )
+                .setMaxLength(
+                  60
+                )
           )
-    )
-
-    .addSubcommand(
-      sub =>
-        sub
-          .setName("list")
-          .setDescription("הצג את הפלייליסטים שלך")
-    )
-
-    .addSubcommand(
-      sub =>
-        sub
-          .setName("show")
-          .setDescription("הצג את השירים בפלייליסט")
           .addStringOption(
             option =>
               option
-                .setName("name")
-                .setDescription("שם הפלייליסט")
-                .setRequired(true)
-                .setMaxLength(60)
+                .setName(
+                  "song"
+                )
+                .setDescription(
+                  "שם שיר, SoundCloud או YouTube"
+                )
+                .setRequired(
+                  true
+                )
+                .setMaxLength(
+                  500
+                )
           )
     )
 
     .addSubcommand(
       sub =>
         sub
-          .setName("remove")
-          .setDescription("הסר שיר מפלייליסט")
+          .setName(
+            "list"
+          )
+          .setDescription(
+            "הצג את הפלייליסטים שלך"
+          )
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName(
+            "show"
+          )
+          .setDescription(
+            "הצג את השירים בפלייליסט"
+          )
           .addStringOption(
             option =>
               option
-                .setName("name")
-                .setDescription("שם הפלייליסט")
-                .setRequired(true)
-                .setMaxLength(60)
+                .setName(
+                  "name"
+                )
+                .setDescription(
+                  "שם הפלייליסט"
+                )
+                .setRequired(
+                  true
+                )
+          )
+    )
+
+    .addSubcommand(
+      sub =>
+        sub
+          .setName(
+            "remove"
+          )
+          .setDescription(
+            "הסר שיר מפלייליסט"
+          )
+          .addStringOption(
+            option =>
+              option
+                .setName(
+                  "name"
+                )
+                .setDescription(
+                  "שם הפלייליסט"
+                )
+                .setRequired(
+                  true
+                )
           )
           .addIntegerOption(
             option =>
               option
-                .setName("position")
-                .setDescription("מספר השיר בפלייליסט")
-                .setRequired(true)
-                .setMinValue(1)
+                .setName(
+                  "position"
+                )
+                .setDescription(
+                  "מספר השיר"
+                )
+                .setRequired(
+                  true
+                )
+                .setMinValue(
+                  1
+                )
           )
     )
 
     .addSubcommand(
       sub =>
         sub
-          .setName("delete")
-          .setDescription("מחק פלייליסט")
+          .setName(
+            "delete"
+          )
+          .setDescription(
+            "מחק פלייליסט"
+          )
           .addStringOption(
             option =>
               option
-                .setName("name")
-                .setDescription("שם הפלייליסט")
-                .setRequired(true)
-                .setMaxLength(60)
+                .setName(
+                  "name"
+                )
+                .setDescription(
+                  "שם הפלייליסט"
+                )
+                .setRequired(
+                  true
+                )
           )
     );
 
 const musicPauseCommand =
   new SlashCommandBuilder()
-    .setName("pause")
-    .setDescription("עצור זמנית את המוזיקה");
+    .setName(
+      "pause"
+    )
+    .setDescription(
+      "עצור זמנית את המוזיקה"
+    );
 
 const musicResumeCommand =
   new SlashCommandBuilder()
-    .setName("resume")
-    .setDescription("המשך את המוזיקה");
+    .setName(
+      "resume"
+    )
+    .setDescription(
+      "המשך את המוזיקה"
+    );
 
 const musicSkipCommand =
   new SlashCommandBuilder()
-    .setName("skip")
-    .setDescription("דלג לשיר הבא");
+    .setName(
+      "skip"
+    )
+    .setDescription(
+      "דלג לשיר הבא"
+    );
 
 const musicStopCommand =
   new SlashCommandBuilder()
-    .setName("stop")
-    .setDescription("עצור את המוזיקה ונקה את התור");
+    .setName(
+      "stop"
+    )
+    .setDescription(
+      "עצור ונקה את כל התור"
+    );
 
 const musicQueueCommand =
   new SlashCommandBuilder()
-    .setName("queue")
-    .setDescription("הצג את תור המוזיקה");
+    .setName(
+      "queue"
+    )
+    .setDescription(
+      "הצג את תור המוזיקה"
+    );
 
 const musicNowPlayingCommand =
   new SlashCommandBuilder()
-    .setName("nowplaying")
-    .setDescription("הצג מה מתנגן עכשיו");
+    .setName(
+      "nowplaying"
+    )
+    .setDescription(
+      "הצג מה מתנגן עכשיו"
+    );
 
 const musicVolumeCommand =
   new SlashCommandBuilder()
-    .setName("volume")
-    .setDescription("שנה את עוצמת המוזיקה")
+    .setName(
+      "volume"
+    )
+    .setDescription(
+      "שנה את עוצמת המוזיקה"
+    )
     .addIntegerOption(
       option =>
         option
-          .setName("amount")
-          .setDescription("עוצמה בין 1 ל-100")
-          .setRequired(true)
-          .setMinValue(1)
-          .setMaxValue(100)
+          .setName(
+            "amount"
+          )
+          .setDescription(
+            "עוצמה בין 1 ל-100"
+          )
+          .setRequired(
+            true
+          )
+          .setMinValue(
+            1
+          )
+          .setMaxValue(
+            100
+          )
     );
 
 const musicShuffleCommand =
   new SlashCommandBuilder()
-    .setName("shuffle")
-    .setDescription("ערבב את השירים שבתור");
+    .setName(
+      "shuffle"
+    )
+    .setDescription(
+      "ערבב את השירים שבתור"
+    );
 
 const musicLoopCommand =
   new SlashCommandBuilder()
-    .setName("loop")
-    .setDescription("בחר מצב חזרה")
+    .setName(
+      "loop"
+    )
+    .setDescription(
+      "בחר מצב חזרה"
+    )
     .addStringOption(
       option =>
         option
-          .setName("mode")
-          .setDescription("מצב החזרה")
-          .setRequired(true)
+          .setName(
+            "mode"
+          )
+          .setDescription(
+            "מצב החזרה"
+          )
+          .setRequired(
+            true
+          )
           .addChoices(
             {
-              name: "כבוי",
-              value: "off"
+              name:
+                "כבוי",
+
+              value:
+                "off"
             },
+
             {
-              name: "חזרה על השיר",
-              value: "track"
+              name:
+                "חזרה על השיר",
+
+              value:
+                "track"
             },
+
             {
-              name: "חזרה על כל התור",
-              value: "queue"
+              name:
+                "חזרה על כל התור",
+
+              value:
+                "queue"
             }
           )
     );
 
 const musicRemoveCommand =
   new SlashCommandBuilder()
-    .setName("remove")
-    .setDescription("הסר שיר מתור המוזיקה")
+    .setName(
+      "remove"
+    )
+    .setDescription(
+      "הסר שיר מהתור"
+    )
     .addIntegerOption(
       option =>
         option
-          .setName("position")
-          .setDescription("המיקום של השיר בתור")
-          .setRequired(true)
-          .setMinValue(1)
+          .setName(
+            "position"
+          )
+          .setDescription(
+            "מספר השיר בתור"
+          )
+          .setRequired(
+            true
+          )
+          .setMinValue(
+            1
+          )
     );
 
 const musicCommands = [
@@ -14159,7 +13487,34 @@ const musicCommands = [
   musicRemoveCommand
 ];
 
-// ===================== MUSIC HELPERS =====================
+// ========================================================
+// MUSIC EXTRACTOR
+// ========================================================
+
+async function ensureMusicExtractor() {
+  if (
+    musicExtractorReady
+  ) {
+    return;
+  }
+
+  await musicPlayer
+    .extractors
+    .register(
+      SoundCloudExtractor
+    );
+
+  musicExtractorReady =
+    true;
+
+  console.log(
+    "✅ SoundCloud Music Extractor נטען"
+  );
+}
+
+// ========================================================
+// MUSIC HELPERS
+// ========================================================
 
 async function fetchMusicMember(
   guild,
@@ -14167,8 +13522,11 @@ async function fetchMusicMember(
 ) {
   return guild.members
     .fetch({
-      user: userId,
-      force: true
+      user:
+        userId,
+
+      force:
+        true
     })
     .catch(
       () => null
@@ -14176,7 +13534,8 @@ async function fetchMusicMember(
 }
 
 function getMusicQueue(
-  guildId = GUILD_ID
+  guildId =
+    GUILD_ID
 ) {
   return (
     musicPlayer.nodes.get(
@@ -14186,24 +13545,369 @@ function getMusicQueue(
   );
 }
 
-async function ensureMusicExtractor() {
+function isYouTubeUrl(
+  input
+) {
+  try {
+    const url =
+      new URL(
+        input
+      );
+
+    const host =
+      url.hostname
+        .toLowerCase()
+        .replace(
+          /^www\./,
+          ""
+        );
+
+    return (
+      host ===
+        "youtube.com" ||
+      host ===
+        "m.youtube.com" ||
+      host ===
+        "music.youtube.com" ||
+      host ===
+        "youtu.be"
+    );
+
+  } catch {
+    return false;
+  }
+}
+
+function isSoundCloudUrl(
+  input
+) {
+  try {
+    const url =
+      new URL(
+        input
+      );
+
+    const host =
+      url.hostname
+        .toLowerCase()
+        .replace(
+          /^www\./,
+          ""
+        );
+
+    return (
+      host ===
+        "soundcloud.com" ||
+      host.endsWith(
+        ".soundcloud.com"
+      )
+    );
+
+  } catch {
+    return false;
+  }
+}
+
+// ========================================================
+// YOUTUBE LINK -> TITLE ONLY
+// אנחנו לא משמיעים את YouTube.
+// רק לוקחים את שם הסרטון ומחפשים אותו ב-SoundCloud.
+// ========================================================
+
+async function getYouTubeTitle(
+  youtubeUrl
+) {
+  try {
+    const response =
+      await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0"
+          }
+        }
+      );
+
+    if (
+      response.ok
+    ) {
+      const data =
+        await response.json();
+
+      if (
+        data?.title
+      ) {
+        return String(
+          data.title
+        ).trim();
+      }
+    }
+  } catch {}
+
+  // fallback — ננסה לקרוא רק את הכותרת מהעמוד
+
+  try {
+    const response =
+      await fetch(
+        youtubeUrl,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0"
+          }
+        }
+      );
+
+    if (
+      !response.ok
+    ) {
+      return null;
+    }
+
+    const html =
+      await response.text();
+
+    const ogMatch =
+      html.match(
+        /<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i
+      );
+
+    if (
+      ogMatch?.[1]
+    ) {
+      return decodeXml(
+        ogMatch[1]
+      );
+    }
+
+    const titleMatch =
+      html.match(
+        /<title>([^<]+)<\/title>/i
+      );
+
+    if (
+      titleMatch?.[1]
+    ) {
+      return decodeXml(
+        titleMatch[1]
+      )
+        .replace(
+          /\s*-\s*YouTube\s*$/i,
+          ""
+        )
+        .trim();
+    }
+
+  } catch {}
+
+  return null;
+}
+
+function cleanSearchTitle(
+  title
+) {
+  return String(
+    title ||
+    ""
+  )
+    .replace(
+      /\[(official|lyrics?|audio|video|music video)[^\]]*\]/gi,
+      " "
+    )
+    .replace(
+      /\((official|lyrics?|audio|video|music video)[^)]*\)/gi,
+      " "
+    )
+    .replace(
+      /\bofficial\s+(music\s+)?video\b/gi,
+      " "
+    )
+    .replace(
+      /\bofficial\s+audio\b/gi,
+      " "
+    )
+    .replace(
+      /\blyrics?\b/gi,
+      " "
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+}
+
+async function searchSoundCloud(
+  query,
+  requestedBy
+) {
+  await ensureMusicExtractor();
+
+  const result =
+    await musicPlayer.search(
+      query,
+      {
+        requestedBy,
+
+        searchEngine:
+          `ext:${SoundCloudExtractor.identifier}`
+      }
+    );
+
+  return result;
+}
+
+async function resolveMusicInput(
+  input,
+  requestedBy
+) {
+  const query =
+    String(
+      input ||
+      ""
+    ).trim();
+
   if (
-    musicExtractorReady
+    !query
   ) {
-    return;
+    throw new Error(
+      "EMPTY_QUERY"
+    );
   }
 
-  await musicPlayer.extractors.register(
-    YouTubeDlpExtractor,
-    {}
-  );
+  // ===================== YOUTUBE LINK =====================
 
-  musicExtractorReady =
-    true;
+  if (
+    isYouTubeUrl(
+      query
+    )
+  ) {
+    console.log(
+      `🔗 YouTube link received: ${query}`
+    );
 
-  console.log(
-    "✅ Music YouTube extractor נטען"
-  );
+    const youtubeTitle =
+      await getYouTubeTitle(
+        query
+      );
+
+    if (
+      !youtubeTitle
+    ) {
+      throw new Error(
+        "YOUTUBE_TITLE_NOT_FOUND"
+      );
+    }
+
+    const searchTitle =
+      cleanSearchTitle(
+        youtubeTitle
+      );
+
+    console.log(
+      `🔎 YouTube title -> SoundCloud: ${searchTitle}`
+    );
+
+    const result =
+      await searchSoundCloud(
+        searchTitle,
+        requestedBy
+      );
+
+    const track =
+      result.tracks[0];
+
+    if (
+      !track
+    ) {
+      throw new Error(
+        "SOUNDCLOUD_MATCH_NOT_FOUND"
+      );
+    }
+
+    return {
+      track,
+
+      originalQuery:
+        query,
+
+      youtubeTitle,
+
+      convertedFromYouTube:
+        true
+    };
+  }
+
+  // ===================== SOUNDCLOUD LINK =====================
+
+  if (
+    isSoundCloudUrl(
+      query
+    )
+  ) {
+    const result =
+      await searchSoundCloud(
+        query,
+        requestedBy
+      );
+
+    const track =
+      result.tracks[0];
+
+    if (
+      !track
+    ) {
+      throw new Error(
+        "SOUNDCLOUD_TRACK_NOT_FOUND"
+      );
+    }
+
+    return {
+      track,
+
+      originalQuery:
+        query,
+
+      youtubeTitle:
+        null,
+
+      convertedFromYouTube:
+        false
+    };
+  }
+
+  // ===================== NORMAL SONG NAME =====================
+
+  const result =
+    await searchSoundCloud(
+      query,
+      requestedBy
+    );
+
+  const track =
+    result.tracks[0];
+
+  if (
+    !track
+  ) {
+    throw new Error(
+      "SOUNDCLOUD_TRACK_NOT_FOUND"
+    );
+  }
+
+  return {
+    track,
+
+    originalQuery:
+      query,
+
+    youtubeTitle:
+      null,
+
+    convertedFromYouTube:
+      false
+  };
 }
 
 async function getMusicVoiceChannel() {
@@ -14216,9 +13920,11 @@ async function getMusicVoiceChannel() {
         () => null
       );
 
-  if (!guild) {
+  if (
+    !guild
+  ) {
     throw new Error(
-      "Music guild not found"
+      "MUSIC_GUILD_NOT_FOUND"
     );
   }
 
@@ -14237,7 +13943,7 @@ async function getMusicVoiceChannel() {
       ChannelType.GuildVoice
   ) {
     throw new Error(
-      "Music voice channel not found"
+      "MUSIC_VOICE_CHANNEL_NOT_FOUND"
     );
   }
 
@@ -14275,11 +13981,20 @@ async function ensureMusicConnection() {
           leaveOnEmpty:
             false,
 
+          leaveOnEmptyCooldown:
+            0,
+
           leaveOnEnd:
             false,
 
+          leaveOnEndCooldown:
+            0,
+
           leaveOnStop:
             false,
+
+          leaveOnStopCooldown:
+            0,
 
           pauseOnEmpty:
             false,
@@ -14291,7 +14006,10 @@ async function ensureMusicConnection() {
             50,
 
           bufferingTimeout:
-            20000
+            30_000,
+
+          connectionTimeout:
+            30_000
         }
       );
   }
@@ -14300,15 +14018,29 @@ async function ensureMusicConnection() {
     voiceChannel
   );
 
+  const me =
+    guild.members.me ||
+    await guild.members
+      .fetch(
+        musicClient.user.id
+      )
+      .catch(
+        () => null
+      );
+
   if (
     !queue.connection ||
-    queue.channel?.id !==
+    me?.voice?.channelId !==
       voiceChannel.id
   ) {
     await queue.connect(
       voiceChannel,
       {
-        deaf: true
+        deaf:
+          true,
+
+        timeout:
+          30_000
       }
     );
   }
@@ -14320,12 +14052,10 @@ async function ensureMusicConnection() {
   };
 }
 
-async function playMusicQuery(
-  query,
+async function playResolvedTrack(
+  track,
   requestedBy
 ) {
-  await ensureMusicExtractor();
-
   const {
     voiceChannel
   } =
@@ -14333,7 +14063,7 @@ async function playMusicQuery(
 
   return musicPlayer.play(
     voiceChannel,
-    query,
+    track,
     {
       requestedBy,
 
@@ -14360,10 +14090,36 @@ async function playMusicQuery(
           50,
 
         bufferingTimeout:
-          20000
+          30_000,
+
+        connectionTimeout:
+          30_000
       }
     }
   );
+}
+
+async function resolveAndPlay(
+  input,
+  requestedBy
+) {
+  const resolved =
+    await resolveMusicInput(
+      input,
+      requestedBy
+    );
+
+  const result =
+    await playResolvedTrack(
+      resolved.track,
+      requestedBy
+    );
+
+  return {
+    ...resolved,
+
+    result
+  };
 }
 
 async function getMusicTextChannel() {
@@ -14378,7 +14134,8 @@ async function getMusicTextChannel() {
 
   if (
     !channel ||
-    !channel.isSendable()
+    typeof channel.send !==
+      "function"
   ) {
     return null;
   }
@@ -14411,7 +14168,9 @@ function musicNoPermissionReply(
   });
 }
 
-function getTrackTitle(track) {
+function getTrackTitle(
+  track
+) {
   return (
     track?.cleanTitle ||
     track?.title ||
@@ -14419,7 +14178,9 @@ function getTrackTitle(track) {
   );
 }
 
-function getTrackUrl(track) {
+function getTrackUrl(
+  track
+) {
   return (
     track?.url ||
     null
@@ -14448,7 +14209,9 @@ function formatTrackLine(
       ? `**${number}.** `
       : "";
 
-  if (url) {
+  if (
+    url
+  ) {
     return (
       `${prefix}[${title}](${url})`
     );
@@ -14459,7 +14222,54 @@ function formatTrackLine(
   );
 }
 
-// ===================== MUSIC EVENTS =====================
+function getFriendlyMusicError(
+  error
+) {
+  const message =
+    String(
+      error?.message ||
+      error ||
+      ""
+    );
+
+  if (
+    message.includes(
+      "YOUTUBE_TITLE_NOT_FOUND"
+    )
+  ) {
+    return (
+      "❌ לא הצלחתי לזהות את שם הסרטון מהקישור של YouTube."
+    );
+  }
+
+  if (
+    message.includes(
+      "SOUNDCLOUD_MATCH_NOT_FOUND"
+    )
+  ) {
+    return (
+      "❌ זיהיתי את הסרטון ב-YouTube, אבל לא מצאתי גרסה מתאימה ב-SoundCloud."
+    );
+  }
+
+  if (
+    message.includes(
+      "SOUNDCLOUD_TRACK_NOT_FOUND"
+    )
+  ) {
+    return (
+      "❌ לא מצאתי את השיר ב-SoundCloud."
+    );
+  }
+
+  return (
+    "❌ לא הצלחתי להפעיל את השיר."
+  );
+}
+
+// ========================================================
+// MUSIC EVENTS
+// ========================================================
 
 musicPlayer.events.on(
   "playerStart",
@@ -14467,11 +14277,17 @@ musicPlayer.events.on(
     queue,
     track
   ) => {
+    console.log(
+      `▶️ Music started: ${track.title}`
+    );
+
     try {
       const channel =
         await getMusicTextChannel();
 
-      if (!channel) {
+      if (
+        !channel
+      ) {
         return;
       }
 
@@ -14512,6 +14328,17 @@ musicPlayer.events.on(
 
               inline:
                 true
+            },
+
+            {
+              name:
+                "☁️ מקור",
+
+              value:
+                "SoundCloud",
+
+              inline:
+                true
             }
           )
           .setTimestamp();
@@ -14536,7 +14363,7 @@ musicPlayer.events.on(
       error
     ) {
       console.error(
-        "❌ playerStart:",
+        "❌ playerStart message:",
         error
       );
     }
@@ -14572,7 +14399,11 @@ musicPlayer.events.on(
 
 musicPlayer.events.on(
   "disconnect",
-  () => {
+  queue => {
+    console.log(
+      "⚠️ Music disconnected — reconnecting..."
+    );
+
     setTimeout(
       () => {
         ensureMusicConnection()
@@ -14589,13 +14420,15 @@ musicPlayer.events.on(
   }
 );
 
-// ===================== MUSIC READY =====================
+// ========================================================
+// MUSIC READY
+// ========================================================
 
 musicClient.once(
-  "ready",
-  async () => {
+  Events.ClientReady,
+  async readyClient => {
     console.log(
-      `🎵 Roei Music Bot מחובר בתור ${musicClient.user.tag}`
+      `🎵 Roei Music Bot מחובר בתור ${readyClient.user.tag}`
     );
 
     try {
@@ -14605,7 +14438,7 @@ musicClient.once(
       error
     ) {
       console.error(
-        "❌ טעינת Music Extractor:",
+        "❌ SoundCloud Extractor:",
         error
       );
     }
@@ -14665,8 +14498,9 @@ musicClient.once(
   }
 );
 
-// אם מנתקים את בוט המוזיקה מהחדר,
-// הוא מנסה לחזור אוטומטית.
+// ========================================================
+// MUSIC 24/7
+// ========================================================
 
 musicClient.on(
   "voiceStateUpdate",
@@ -14692,7 +14526,11 @@ musicClient.on(
       () => {
         ensureMusicConnection()
           .catch(
-            () => {}
+            error =>
+              console.error(
+                "❌ Music 24/7 reconnect:",
+                error.message
+              )
           );
       },
       2500
@@ -14700,7 +14538,9 @@ musicClient.on(
   }
 );
 
-// ===================== MUSIC INTERACTIONS =====================
+// ========================================================
+// MUSIC INTERACTIONS
+// ========================================================
 
 musicClient.on(
   "interactionCreate",
@@ -14726,10 +14566,12 @@ musicClient.on(
       const guild =
         interaction.guild;
 
-      if (!guild) {
+      if (
+        !guild
+      ) {
         return interaction.reply({
           content:
-            "❌ לא הצלחתי למצוא את השרת.",
+            "❌ לא מצאתי את השרת.",
 
           ephemeral:
             true
@@ -14742,10 +14584,12 @@ musicClient.on(
           interaction.user.id
         );
 
-      if (!member) {
+      if (
+        !member
+      ) {
         return interaction.reply({
           content:
-            "❌ לא הצלחתי למצוא אותך בשרת.",
+            "❌ לא מצאתי אותך בשרת.",
 
           ephemeral:
             true
@@ -14753,8 +14597,7 @@ musicClient.on(
       }
 
       // ==================================================
-      // PLAYLIST
-      // כל אחד יכול ליצור ולנהל פלייליסטים אישיים.
+      // PLAYLIST — כל אחד
       // ==================================================
 
       if (
@@ -14765,10 +14608,11 @@ musicClient.on(
           interaction.options
             .getSubcommand();
 
-        // ---------- CREATE ----------
+        // ===================== CREATE =====================
 
         if (
-          sub === "create"
+          sub ===
+          "create"
         ) {
           const name =
             interaction.options
@@ -14809,7 +14653,9 @@ musicClient.on(
               name
             );
 
-          if (!playlist) {
+          if (
+            !playlist
+          ) {
             return interaction.reply({
               content:
                 "❌ שם הפלייליסט לא תקין.",
@@ -14834,7 +14680,7 @@ musicClient.on(
                 )
                 .setDescription(
                   `🎵 **${playlist.name}**\n\n` +
-                  "כדי להוסיף שיר השתמש ב-`/playlist add`."
+                  "הוסף שירים עם `/playlist add`."
                 )
             ],
 
@@ -14843,10 +14689,11 @@ musicClient.on(
           });
         }
 
-        // ---------- ADD ----------
+        // ===================== ADD =====================
 
         if (
-          sub === "add"
+          sub ===
+          "add"
         ) {
           const name =
             interaction.options
@@ -14869,7 +14716,9 @@ musicClient.on(
               name
             );
 
-          if (!playlist) {
+          if (
+            !playlist
+          ) {
             return interaction.reply({
               content:
                 `❌ לא מצאתי פלייליסט בשם **${name}**.`,
@@ -14885,7 +14734,7 @@ musicClient.on(
           ) {
             return interaction.reply({
               content:
-                "❌ אפשר לשמור עד 100 שירים בכל פלייליסט.",
+                "❌ אפשר לשמור עד 100 שירים בפלייליסט.",
 
               ephemeral:
                 true
@@ -14898,29 +14747,22 @@ musicClient.on(
           });
 
           try {
-            await ensureMusicExtractor();
-
-            const search =
-              await musicPlayer.search(
+            const resolved =
+              await resolveMusicInput(
                 song,
-                {
-                  requestedBy:
-                    interaction.user
-                }
+                interaction.user
               );
-
-            const track =
-              search.tracks[0];
-
-            if (!track) {
-              return interaction.editReply(
-                "❌ לא מצאתי את השיר."
-              );
-            }
 
             const storedSong =
-              track.url ||
-              song;
+              resolved.track.url;
+
+            if (
+              !storedSong
+            ) {
+              return interaction.editReply(
+                "❌ לא הצלחתי לשמור את השיר."
+              );
+            }
 
             playlist.songs.push(
               storedSong
@@ -14930,9 +14772,21 @@ musicClient.on(
               `MUSIC_PL_ADD|${interaction.user.id}|${encodeSmall(playlist.name)}|${encodeSmall(storedSong)}`
             );
 
+            let extra =
+              "";
+
+            if (
+              resolved.convertedFromYouTube
+            ) {
+              extra =
+                `\n🔗 YouTube: **${safeText(resolved.youtubeTitle, 100)}**` +
+                "\n☁️ נשמרה הגרסה שמצאתי ב-SoundCloud.";
+            }
+
             return interaction.editReply(
-              `✅ **${getTrackTitle(track)}** נוסף ל-**${playlist.name}**.\n` +
-              `🎵 יש עכשיו **${playlist.songs.length} שירים** בפלייליסט.`
+              `✅ **${getTrackTitle(resolved.track)}** נוסף ל-**${playlist.name}**.` +
+              extra +
+              `\n🎵 יש עכשיו **${playlist.songs.length} שירים**.`
             );
 
           } catch (
@@ -14944,15 +14798,18 @@ musicClient.on(
             );
 
             return interaction.editReply(
-              "❌ לא הצלחתי למצוא את השיר הזה."
+              getFriendlyMusicError(
+                error
+              )
             );
           }
         }
 
-        // ---------- LIST ----------
+        // ===================== LIST =====================
 
         if (
-          sub === "list"
+          sub ===
+          "list"
         ) {
           const map =
             getUserPlaylistMap(
@@ -14966,15 +14823,17 @@ musicClient.on(
           ) {
             return interaction.reply({
               content:
-                "🎵 עדיין אין לך פלייליסטים.\nצור אחד עם `/playlist create`.",
+                "🎵 עדיין אין לך פלייליסטים.\nהשתמש ב-`/playlist create`.",
 
               ephemeral:
                 true
             });
           }
 
-          const lines =
-            [...map.values()]
+          const text =
+            [
+              ...map.values()
+            ]
               .map(
                 (
                   playlist,
@@ -14996,7 +14855,7 @@ musicClient.on(
                   "🎵 הפלייליסטים שלך"
                 )
                 .setDescription(
-                  lines
+                  text
                 )
             ],
 
@@ -15005,10 +14864,11 @@ musicClient.on(
           });
         }
 
-        // ---------- SHOW ----------
+        // ===================== SHOW =====================
 
         if (
-          sub === "show"
+          sub ===
+          "show"
         ) {
           const name =
             interaction.options
@@ -15023,7 +14883,9 @@ musicClient.on(
               name
             );
 
-          if (!playlist) {
+          if (
+            !playlist
+          ) {
             return interaction.reply({
               content:
                 `❌ לא מצאתי פלייליסט בשם **${name}**.`,
@@ -15034,7 +14896,7 @@ musicClient.on(
           }
 
           if (
-            playlist.songs.length === 0
+            !playlist.songs.length
           ) {
             return interaction.reply({
               content:
@@ -15074,7 +14936,8 @@ musicClient.on(
                 .setDescription(
                   shown +
                   (
-                    playlist.songs.length > 25
+                    playlist.songs.length >
+                    25
                       ? `\n\n...ועוד **${playlist.songs.length - 25}** שירים`
                       : ""
                   )
@@ -15090,10 +14953,11 @@ musicClient.on(
           });
         }
 
-        // ---------- REMOVE ----------
+        // ===================== REMOVE =====================
 
         if (
-          sub === "remove"
+          sub ===
+          "remove"
         ) {
           const name =
             interaction.options
@@ -15115,10 +14979,12 @@ musicClient.on(
               name
             );
 
-          if (!playlist) {
+          if (
+            !playlist
+          ) {
             return interaction.reply({
               content:
-                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+                "❌ הפלייליסט לא נמצא.",
 
               ephemeral:
                 true
@@ -15126,7 +14992,8 @@ musicClient.on(
           }
 
           const index =
-            position - 1;
+            position -
+            1;
 
           if (
             index < 0 ||
@@ -15135,18 +15002,17 @@ musicClient.on(
           ) {
             return interaction.reply({
               content:
-                `❌ בפלייליסט יש **${playlist.songs.length} שירים**.`,
+                `❌ יש בפלייליסט רק **${playlist.songs.length} שירים**.`,
 
               ephemeral:
                 true
             });
           }
 
-          const removed =
-            playlist.songs.splice(
-              index,
-              1
-            )[0];
+          playlist.songs.splice(
+            index,
+            1
+          );
 
           await logBotData(
             `MUSIC_PL_REMOVE|${interaction.user.id}|${encodeSmall(playlist.name)}|${index}`
@@ -15154,18 +15020,18 @@ musicClient.on(
 
           return interaction.reply({
             content:
-              `🗑️ שיר מספר **${position}** הוסר מ-**${playlist.name}**.\n` +
-              `\`${safeText(removed, 150)}\``,
+              `🗑️ שיר מספר **${position}** הוסר מ-**${playlist.name}**.`,
 
             ephemeral:
               true
           });
         }
 
-        // ---------- DELETE ----------
+        // ===================== DELETE =====================
 
         if (
-          sub === "delete"
+          sub ===
+          "delete"
         ) {
           const name =
             interaction.options
@@ -15192,7 +15058,7 @@ musicClient.on(
           ) {
             return interaction.reply({
               content:
-                `❌ לא מצאתי פלייליסט בשם **${name}**.`,
+                "❌ הפלייליסט לא נמצא.",
 
               ephemeral:
                 true
@@ -15222,7 +15088,7 @@ musicClient.on(
       }
 
       // ==================================================
-      // PLAY — Stuff ומעלה
+      // PLAY — STUFF ומעלה
       // ==================================================
 
       if (
@@ -15244,10 +15110,11 @@ musicClient.on(
           interaction.options
             .getSubcommand();
 
-        // ---------- PLAY SONG ----------
+        // ===================== PLAY SONG =====================
 
         if (
-          sub === "song"
+          sub ===
+          "song"
         ) {
           const query =
             interaction.options
@@ -15260,19 +15127,31 @@ musicClient.on(
           await interaction.deferReply();
 
           try {
-            const result =
-              await playMusicQuery(
+            console.log(
+              `🎵 Play request: ${query}`
+            );
+
+            const {
+              track,
+              youtubeTitle,
+              convertedFromYouTube
+            } =
+              await resolveAndPlay(
                 query,
                 interaction.user
               );
 
-            const track =
-              result?.track;
-
-            if (!track) {
-              return interaction.editReply(
-                "❌ לא מצאתי את השיר."
+            let description =
+              formatTrackLine(
+                track
               );
+
+            if (
+              convertedFromYouTube
+            ) {
+              description +=
+                `\n\n🔗 **קישור YouTube זוהה:** ${safeText(youtubeTitle, 100)}` +
+                "\n☁️ הבוט מצא והשמיע גרסה מ-SoundCloud.";
             }
 
             return interaction.editReply({
@@ -15282,13 +15161,18 @@ musicClient.on(
                     0x57F287
                   )
                   .setTitle(
-                    "✅ השיר נוסף"
+                    "✅ נוסף לתור"
                   )
                   .setDescription(
-                    formatTrackLine(
-                      track
-                    )
+                    description
                   )
+                  .addFields({
+                    name:
+                      "☁️ מקור האודיו",
+
+                    value:
+                      "SoundCloud"
+                  })
                   .setFooter({
                     text:
                       `נוסף על ידי ${interaction.user.username}`
@@ -15305,15 +15189,18 @@ musicClient.on(
             );
 
             return interaction.editReply(
-              "❌ לא הצלחתי להפעיל את השיר. נסה שם אחר או קישור אחר."
+              getFriendlyMusicError(
+                error
+              )
             );
           }
         }
 
-        // ---------- PLAY PLAYLIST ----------
+        // ===================== PLAY PLAYLIST =====================
 
         if (
-          sub === "playlist"
+          sub ===
+          "playlist"
         ) {
           const name =
             interaction.options
@@ -15328,7 +15215,9 @@ musicClient.on(
               name
             );
 
-          if (!playlist) {
+          if (
+            !playlist
+          ) {
             return interaction.reply({
               content:
                 `❌ לא מצאתי פלייליסט בשם **${name}**.`,
@@ -15339,11 +15228,11 @@ musicClient.on(
           }
 
           if (
-            playlist.songs.length === 0
+            !playlist.songs.length
           ) {
             return interaction.reply({
               content:
-                `❌ הפלייליסט **${playlist.name}** ריק.`,
+                "❌ הפלייליסט ריק.",
 
               ephemeral:
                 true
@@ -15352,22 +15241,38 @@ musicClient.on(
 
           await interaction.deferReply();
 
-          let added = 0;
-          let failed = 0;
+          let added =
+            0;
+
+          let failed =
+            0;
 
           for (
             const song of
             playlist.songs
           ) {
             try {
-              await playMusicQuery(
-                song,
+              const resolved =
+                await resolveMusicInput(
+                  song,
+                  interaction.user
+                );
+
+              await playResolvedTrack(
+                resolved.track,
                 interaction.user
               );
 
               added++;
 
-            } catch {
+            } catch (
+              error
+            ) {
+              console.error(
+                "❌ Playlist track:",
+                error.message
+              );
+
               failed++;
             }
           }
@@ -15394,10 +15299,17 @@ musicClient.on(
                   `✅ נוספו: **${added} שירים**` +
                   (
                     failed
-                      ? `\n❌ לא הצליחו: **${failed}**`
+                      ? `\n❌ נכשלו: **${failed}**`
                       : ""
                   )
                 )
+                .addFields({
+                  name:
+                    "☁️ מקור",
+
+                  value:
+                    "SoundCloud"
+                })
             ]
           });
         }
@@ -15437,7 +15349,7 @@ musicClient.on(
             guild.id
           );
 
-        // ---------- PAUSE ----------
+        // ===================== PAUSE =====================
 
         if (
           interaction.commandName ===
@@ -15448,7 +15360,7 @@ musicClient.on(
           ) {
             return interaction.reply({
               content:
-                "❌ אין שיר שמתנגן כרגע.",
+                "❌ אין מוזיקה שמתנגנת כרגע.",
 
               ephemeral:
                 true
@@ -15467,16 +15379,14 @@ musicClient.on(
             });
           }
 
-          queue.node.setPaused(
-            true
-          );
+          queue.node.pause();
 
           return interaction.reply(
             "⏸️ המוזיקה נעצרה זמנית."
           );
         }
 
-        // ---------- RESUME ----------
+        // ===================== RESUME =====================
 
         if (
           interaction.commandName ===
@@ -15487,7 +15397,7 @@ musicClient.on(
           ) {
             return interaction.reply({
               content:
-                "❌ אין שיר שמתנגן כרגע.",
+                "❌ אין מוזיקה פעילה.",
 
               ephemeral:
                 true
@@ -15506,16 +15416,14 @@ musicClient.on(
             });
           }
 
-          queue.node.setPaused(
-            false
-          );
+          queue.node.resume();
 
           return interaction.reply(
             "▶️ המוזיקה ממשיכה."
           );
         }
 
-        // ---------- SKIP ----------
+        // ===================== SKIP =====================
 
         if (
           interaction.commandName ===
@@ -15533,7 +15441,7 @@ musicClient.on(
             });
           }
 
-          const skipped =
+          const title =
             getTrackTitle(
               queue.currentTrack
             );
@@ -15541,11 +15449,11 @@ musicClient.on(
           queue.node.skip();
 
           return interaction.reply(
-            `⏭️ דילגתי על **${skipped}**.`
+            `⏭️ דילגתי על **${title}**.`
           );
         }
 
-        // ---------- STOP ----------
+        // ===================== STOP =====================
 
         if (
           interaction.commandName ===
@@ -15573,17 +15481,22 @@ musicClient.on(
             );
           }
 
-          await ensureMusicConnection()
-            .catch(
-              () => {}
-            );
+          setTimeout(
+            () => {
+              ensureMusicConnection()
+                .catch(
+                  () => {}
+                );
+            },
+            1000
+          );
 
           return interaction.reply(
-            "⏹️ המוזיקה נעצרה והתור נוקה.\n🎧 הבוט נשאר בחדר הקולי."
+            "⏹️ המוזיקה נעצרה והתור נוקה.\n🎧 הבוט נשאר בחדר."
           );
         }
 
-        // ---------- QUEUE ----------
+        // ===================== QUEUE =====================
 
         if (
           interaction.commandName ===
@@ -15605,7 +15518,7 @@ musicClient.on(
             queue.tracks
               .toArray();
 
-          const nextTracks =
+          const next =
             tracks
               .slice(
                 0,
@@ -15635,24 +15548,24 @@ musicClient.on(
                   "🎶 תור המוזיקה"
                 )
                 .setDescription(
-                  `**🎵 מתנגן עכשיו:**\n${formatTrackLine(queue.currentTrack)}\n\n` +
+                  `**🎵 עכשיו:**\n${formatTrackLine(queue.currentTrack)}\n\n` +
                   (
-                    nextTracks
-                      ? `**⏭️ הבאים בתור:**\n${nextTracks}`
+                    next
+                      ? `**⏭️ הבאים:**\n${next}`
                       : "**⏭️ אין עוד שירים בתור.**"
                   )
                 )
                 .setFooter({
                   text:
                     tracks.length > 10
-                      ? `מוצגים 10 מתוך ${tracks.length} שירים`
+                      ? `מוצגים 10 מתוך ${tracks.length}`
                       : `${tracks.length} שירים ממתינים`
                 })
             ]
           });
         }
 
-        // ---------- NOWPLAYING ----------
+        // ===================== NOW PLAYING =====================
 
         if (
           interaction.commandName ===
@@ -15673,10 +15586,15 @@ musicClient.on(
           const track =
             queue.currentTrack;
 
-          const progress =
-            queue.node
-              .createProgressBar() ||
-            "▬▬▬▬▬▬▬▬▬▬";
+          let progress =
+            "";
+
+          try {
+            progress =
+              queue.node
+                .createProgressBar() ||
+              "";
+          } catch {}
 
           const embed =
             new EmbedBuilder()
@@ -15711,6 +15629,17 @@ musicClient.on(
 
                   inline:
                     true
+                },
+
+                {
+                  name:
+                    "☁️ מקור",
+
+                  value:
+                    "SoundCloud",
+
+                  inline:
+                    true
                 }
               );
 
@@ -15731,7 +15660,7 @@ musicClient.on(
       }
 
       // ==================================================
-      // Stuff ומעלה
+      // STUFF ומעלה
       // ==================================================
 
       if (
@@ -15765,14 +15694,14 @@ musicClient.on(
         ) {
           return interaction.reply({
             content:
-              "❌ אין כרגע תור מוזיקה פעיל.",
+              "❌ אין כרגע תור מוזיקה.",
 
             ephemeral:
               true
           });
         }
 
-        // ---------- VOLUME ----------
+        // ===================== VOLUME =====================
 
         if (
           interaction.commandName ===
@@ -15794,32 +15723,34 @@ musicClient.on(
           );
         }
 
-        // ---------- SHUFFLE ----------
+        // ===================== SHUFFLE =====================
 
         if (
           interaction.commandName ===
           "shuffle"
         ) {
           if (
-            queue.tracks.size < 2
+            queue.size < 2
           ) {
             return interaction.reply({
               content:
-                "❌ צריך לפחות 2 שירים שממתינים בתור.",
+                "❌ צריך לפחות שני שירים שממתינים בתור.",
 
               ephemeral:
                 true
             });
           }
 
-          queue.tracks.shuffle();
+          queue.enableShuffle(
+            false
+          );
 
           return interaction.reply(
-            `🔀 ערבבתי **${queue.tracks.size} שירים** בתור.`
+            `🔀 ערבבתי את השירים שבתור.`
           );
         }
 
-        // ---------- LOOP ----------
+        // ===================== LOOP =====================
 
         if (
           interaction.commandName ===
@@ -15855,7 +15786,9 @@ musicClient.on(
           };
 
           queue.setRepeatMode(
-            modes[mode]
+            modes[
+              mode
+            ]
           );
 
           return interaction.reply(
@@ -15863,7 +15796,7 @@ musicClient.on(
           );
         }
 
-        // ---------- REMOVE ----------
+        // ===================== REMOVE =====================
 
         if (
           interaction.commandName ===
@@ -15881,7 +15814,8 @@ musicClient.on(
               .toArray();
 
           const index =
-            position - 1;
+            position -
+            1;
 
           if (
             index < 0 ||
@@ -15898,10 +15832,12 @@ musicClient.on(
           }
 
           const track =
-            tracks[index];
+            tracks[
+              index
+            ];
 
           queue.removeTrack(
-            index
+            track
           );
 
           return interaction.reply(
@@ -15919,13 +15855,18 @@ musicClient.on(
       );
 
       try {
+        const message =
+          getFriendlyMusicError(
+            error
+          );
+
         if (
           interaction.deferred ||
           interaction.replied
         ) {
           await interaction.followUp({
             content:
-              "❌ קרתה שגיאה בפעולת המוזיקה.",
+              message,
 
             ephemeral:
               true
@@ -15934,7 +15875,7 @@ musicClient.on(
         } else {
           await interaction.reply({
             content:
-              "❌ קרתה שגיאה בפעולת המוזיקה.",
+              message,
 
             ephemeral:
               true
@@ -15946,7 +15887,9 @@ musicClient.on(
   }
 );
 
-// ===================== ERROR HANDLERS =====================
+// ========================================================
+// ERROR HANDLERS
+// ========================================================
 
 process.on(
   "unhandledRejection",
@@ -15968,7 +15911,9 @@ process.on(
   }
 );
 
-// ===================== LOGIN BOTH BOTS =====================
+// ========================================================
+// LOGIN BOTH BOTS
+// ========================================================
 
 if (
   !TOKEN ||
