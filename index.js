@@ -21,22 +21,7 @@ const {
 
 const crypto = require("crypto");
 
-const {
-  Player,
-  QueueRepeatMode
-} = require("discord-player");
-
-const {
-  SoundCloudExtractor
-} = require("@discord-player/extractor");
-
-const ffmpegPath =
-  require("ffmpeg-static");
-
-if (ffmpegPath) {
-  process.env.FFMPEG_PATH =
-    ffmpegPath;
-}
+const { createMusicRuntime, formatDuration, trackSource, progressBar } = require("./music-runtime");
 
 // ========================================================
 // CLIENTS
@@ -13053,16 +13038,18 @@ client.on(
   }
 );
 // ========================================================
-// ROEI MUSIC BOT — SOUNDCLOUD ONLY
+// ROEI MUSIC BOT — LAVALINK
 // ========================================================
 
-const musicPlayer =
-  new Player(
-    musicClient
-  );
-
-let musicExtractorReady =
-  false;
+const musicRuntime = createMusicRuntime({
+  client: musicClient,
+  guildId: GUILD_ID,
+  channelId: MUSIC_VOICE_CHANNEL_ID,
+  host: process.env.LAVALINK_HOST,
+  port: Number(process.env.LAVALINK_PORT || 2333),
+  password: process.env.LAVALINK_PASSWORD
+});
+const musicPlayer = musicRuntime.manager;
 
 // ========================================================
 // MUSIC COMMANDS
@@ -13093,7 +13080,7 @@ const musicPlayCommand =
                   "query"
                 )
                 .setDescription(
-                  "שם שיר, קישור SoundCloud או קישור YouTube"
+                  "שם שיר או קישור YouTube, SoundCloud או שירות מוזיקה"
                 )
                 .setRequired(
                   true
@@ -13199,7 +13186,7 @@ const musicPlaylistCommand =
                   "song"
                 )
                 .setDescription(
-                  "שם שיר, SoundCloud או YouTube"
+                  "שם שיר או קישור לשירות מוזיקה"
                 )
                 .setRequired(
                   true
@@ -13491,27 +13478,6 @@ const musicCommands = [
 // MUSIC EXTRACTOR
 // ========================================================
 
-async function ensureMusicExtractor() {
-  if (
-    musicExtractorReady
-  ) {
-    return;
-  }
-
-  await musicPlayer
-    .extractors
-    .register(
-      SoundCloudExtractor
-    );
-
-  musicExtractorReady =
-    true;
-
-  console.log(
-    "✅ SoundCloud Music Extractor נטען"
-  );
-}
-
 // ========================================================
 // MUSIC HELPERS
 // ========================================================
@@ -13533,570 +13499,20 @@ async function fetchMusicMember(
     );
 }
 
-function getMusicQueue(
-  guildId =
-    GUILD_ID
-) {
-  return (
-    musicPlayer.nodes.get(
-      guildId
-    ) ||
-    null
-  );
+function getMusicQueue(guildId = GUILD_ID) {
+  return musicPlayer.getPlayer(guildId) || null;
 }
 
-function isYouTubeUrl(
-  input
-) {
-  try {
-    const url =
-      new URL(
-        input
-      );
-
-    const host =
-      url.hostname
-        .toLowerCase()
-        .replace(
-          /^www\./,
-          ""
-        );
-
-    return (
-      host ===
-        "youtube.com" ||
-      host ===
-        "m.youtube.com" ||
-      host ===
-        "music.youtube.com" ||
-      host ===
-        "youtu.be"
-    );
-
-  } catch {
-    return false;
-  }
-}
-
-function isSoundCloudUrl(
-  input
-) {
-  try {
-    const url =
-      new URL(
-        input
-      );
-
-    const host =
-      url.hostname
-        .toLowerCase()
-        .replace(
-          /^www\./,
-          ""
-        );
-
-    return (
-      host ===
-        "soundcloud.com" ||
-      host.endsWith(
-        ".soundcloud.com"
-      )
-    );
-
-  } catch {
-    return false;
-  }
-}
-
-// ========================================================
-// YOUTUBE LINK -> TITLE ONLY
-// אנחנו לא משמיעים את YouTube.
-// רק לוקחים את שם הסרטון ומחפשים אותו ב-SoundCloud.
-// ========================================================
-
-async function getYouTubeTitle(
-  youtubeUrl
-) {
-  try {
-    const response =
-      await fetch(
-        `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`,
-        {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0"
-          }
-        }
-      );
-
-    if (
-      response.ok
-    ) {
-      const data =
-        await response.json();
-
-      if (
-        data?.title
-      ) {
-        return String(
-          data.title
-        ).trim();
-      }
-    }
-  } catch {}
-
-  // fallback — ננסה לקרוא רק את הכותרת מהעמוד
-
-  try {
-    const response =
-      await fetch(
-        youtubeUrl,
-        {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0"
-          }
-        }
-      );
-
-    if (
-      !response.ok
-    ) {
-      return null;
-    }
-
-    const html =
-      await response.text();
-
-    const ogMatch =
-      html.match(
-        /<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i
-      );
-
-    if (
-      ogMatch?.[1]
-    ) {
-      return decodeXml(
-        ogMatch[1]
-      );
-    }
-
-    const titleMatch =
-      html.match(
-        /<title>([^<]+)<\/title>/i
-      );
-
-    if (
-      titleMatch?.[1]
-    ) {
-      return decodeXml(
-        titleMatch[1]
-      )
-        .replace(
-          /\s*-\s*YouTube\s*$/i,
-          ""
-        )
-        .trim();
-    }
-
-  } catch {}
-
-  return null;
-}
-
-function cleanSearchTitle(
-  title
-) {
-  return String(
-    title ||
-    ""
-  )
-    .replace(
-      /\[(official|lyrics?|audio|video|music video)[^\]]*\]/gi,
-      " "
-    )
-    .replace(
-      /\((official|lyrics?|audio|video|music video)[^)]*\)/gi,
-      " "
-    )
-    .replace(
-      /\bofficial\s+(music\s+)?video\b/gi,
-      " "
-    )
-    .replace(
-      /\bofficial\s+audio\b/gi,
-      " "
-    )
-    .replace(
-      /\blyrics?\b/gi,
-      " "
-    )
-    .replace(
-      /\s+/g,
-      " "
-    )
-    .trim();
-}
-
-async function searchSoundCloud(
-  query,
-  requestedBy
-) {
-  await ensureMusicExtractor();
-
-  const result =
-    await musicPlayer.search(
-      query,
-      {
-        requestedBy,
-
-        searchEngine:
-          `ext:${SoundCloudExtractor.identifier}`
-      }
-    );
-
-  return result;
-}
-
-async function resolveMusicInput(
-  input,
-  requestedBy
-) {
-  const query =
-    String(
-      input ||
-      ""
-    ).trim();
-
-  if (
-    !query
-  ) {
-    throw new Error(
-      "EMPTY_QUERY"
-    );
-  }
-
-  // ===================== YOUTUBE LINK =====================
-
-  if (
-    isYouTubeUrl(
-      query
-    )
-  ) {
-    console.log(
-      `🔗 YouTube link received: ${query}`
-    );
-
-    const youtubeTitle =
-      await getYouTubeTitle(
-        query
-      );
-
-    if (
-      !youtubeTitle
-    ) {
-      throw new Error(
-        "YOUTUBE_TITLE_NOT_FOUND"
-      );
-    }
-
-    const searchTitle =
-      cleanSearchTitle(
-        youtubeTitle
-      );
-
-    console.log(
-      `🔎 YouTube title -> SoundCloud: ${searchTitle}`
-    );
-
-    const result =
-      await searchSoundCloud(
-        searchTitle,
-        requestedBy
-      );
-
-    const track =
-      result.tracks[0];
-
-    if (
-      !track
-    ) {
-      throw new Error(
-        "SOUNDCLOUD_MATCH_NOT_FOUND"
-      );
-    }
-
-    return {
-      track,
-
-      originalQuery:
-        query,
-
-      youtubeTitle,
-
-      convertedFromYouTube:
-        true
-    };
-  }
-
-  // ===================== SOUNDCLOUD LINK =====================
-
-  if (
-    isSoundCloudUrl(
-      query
-    )
-  ) {
-    const result =
-      await searchSoundCloud(
-        query,
-        requestedBy
-      );
-
-    const track =
-      result.tracks[0];
-
-    if (
-      !track
-    ) {
-      throw new Error(
-        "SOUNDCLOUD_TRACK_NOT_FOUND"
-      );
-    }
-
-    return {
-      track,
-
-      originalQuery:
-        query,
-
-      youtubeTitle:
-        null,
-
-      convertedFromYouTube:
-        false
-    };
-  }
-
-  // ===================== NORMAL SONG NAME =====================
-
-  const result =
-    await searchSoundCloud(
-      query,
-      requestedBy
-    );
-
-  const track =
-    result.tracks[0];
-
-  if (
-    !track
-  ) {
-    throw new Error(
-      "SOUNDCLOUD_TRACK_NOT_FOUND"
-    );
-  }
-
-  return {
-    track,
-
-    originalQuery:
-      query,
-
-    youtubeTitle:
-      null,
-
-    convertedFromYouTube:
-      false
-  };
-}
-
-async function getMusicVoiceChannel() {
-  const guild =
-    await musicClient.guilds
-      .fetch(
-        GUILD_ID
-      )
-      .catch(
-        () => null
-      );
-
-  if (
-    !guild
-  ) {
-    throw new Error(
-      "MUSIC_GUILD_NOT_FOUND"
-    );
-  }
-
-  const voiceChannel =
-    await guild.channels
-      .fetch(
-        MUSIC_VOICE_CHANNEL_ID
-      )
-      .catch(
-        () => null
-      );
-
-  if (
-    !voiceChannel ||
-    voiceChannel.type !==
-      ChannelType.GuildVoice
-  ) {
-    throw new Error(
-      "MUSIC_VOICE_CHANNEL_NOT_FOUND"
-    );
-  }
-
-  return {
-    guild,
-    voiceChannel
-  };
+async function resolveMusicInput(input, requestedBy) {
+  return musicRuntime.resolve(input, requestedBy);
 }
 
 async function ensureMusicConnection() {
-  await ensureMusicExtractor();
-
-  const {
-    guild,
-    voiceChannel
-  } =
-    await getMusicVoiceChannel();
-
-  let queue =
-    getMusicQueue(
-      guild.id
-    );
-
-  if (
-    !queue ||
-    queue.deleted
-  ) {
-    queue =
-      musicPlayer.nodes.create(
-        guild,
-        {
-          metadata:
-            voiceChannel,
-
-          leaveOnEmpty:
-            false,
-
-          leaveOnEmptyCooldown:
-            0,
-
-          leaveOnEnd:
-            false,
-
-          leaveOnEndCooldown:
-            0,
-
-          leaveOnStop:
-            false,
-
-          leaveOnStopCooldown:
-            0,
-
-          pauseOnEmpty:
-            false,
-
-          selfDeaf:
-            true,
-
-          volume:
-            50,
-
-          bufferingTimeout:
-            30_000,
-
-          connectionTimeout:
-            30_000
-        }
-      );
-  }
-
-  queue.setMetadata(
-    voiceChannel
-  );
-
-  const me =
-    guild.members.me ||
-    await guild.members
-      .fetch(
-        musicClient.user.id
-      )
-      .catch(
-        () => null
-      );
-
-  if (
-    !queue.connection ||
-    me?.voice?.channelId !==
-      voiceChannel.id
-  ) {
-    await queue.connect(
-      voiceChannel,
-      {
-        deaf:
-          true,
-
-        timeout:
-          30_000
-      }
-    );
-  }
-
-  return {
-    guild,
-    voiceChannel,
-    queue
-  };
+  return musicRuntime.ensureConnection();
 }
 
-async function playResolvedTrack(
-  track,
-  requestedBy
-) {
-  const {
-    voiceChannel
-  } =
-    await ensureMusicConnection();
-
-  return musicPlayer.play(
-    voiceChannel,
-    track,
-    {
-      requestedBy,
-
-      nodeOptions: {
-        metadata:
-          voiceChannel,
-
-        leaveOnEmpty:
-          false,
-
-        leaveOnEnd:
-          false,
-
-        leaveOnStop:
-          false,
-
-        pauseOnEmpty:
-          false,
-
-        selfDeaf:
-          true,
-
-        volume:
-          50,
-
-        bufferingTimeout:
-          30_000,
-
-        connectionTimeout:
-          30_000
-      }
-    }
-  );
+async function playResolvedTrack(track, requestedBy) {
+  return musicRuntime.play(track);
 }
 
 async function resolveAndPlay(
@@ -14172,8 +13588,7 @@ function getTrackTitle(
   track
 ) {
   return (
-    track?.cleanTitle ||
-    track?.title ||
+    track?.info?.title ||
     "שיר לא ידוע"
   );
 }
@@ -14182,7 +13597,7 @@ function getTrackUrl(
   track
 ) {
   return (
-    track?.url ||
+    track?.info?.uri ||
     null
   );
 }
@@ -14222,63 +13637,28 @@ function formatTrackLine(
   );
 }
 
-function getFriendlyMusicError(
-  error
-) {
-  const message =
-    String(
-      error?.message ||
-      error ||
-      ""
-    );
-
-  if (
-    message.includes(
-      "YOUTUBE_TITLE_NOT_FOUND"
-    )
-  ) {
-    return (
-      "❌ לא הצלחתי לזהות את שם הסרטון מהקישור של YouTube."
-    );
-  }
-
-  if (
-    message.includes(
-      "SOUNDCLOUD_MATCH_NOT_FOUND"
-    )
-  ) {
-    return (
-      "❌ זיהיתי את הסרטון ב-YouTube, אבל לא מצאתי גרסה מתאימה ב-SoundCloud."
-    );
-  }
-
-  if (
-    message.includes(
-      "SOUNDCLOUD_TRACK_NOT_FOUND"
-    )
-  ) {
-    return (
-      "❌ לא מצאתי את השיר ב-SoundCloud."
-    );
-  }
-
-  return (
-    "❌ לא הצלחתי להפעיל את השיר."
-  );
+function getFriendlyMusicError(error) {
+  const message = String(error?.message || error || "");
+  if (message.includes("LAVALINK_CONFIG_MISSING")) return "❌ הגדרות החיבור למוזיקה חסרות. פנה למנהל הבוט.";
+  if (message.includes("LAVALINK_NOT_READY")) return "❌ שרת המוזיקה עדיין מתחבר. נסה שוב בעוד כמה שניות.";
+  if (message.includes("MUSIC_TRACK_NOT_FOUND")) return "❌ לא מצאתי שיר זמין במקורות המוזיקה. נסה שם שיר או קישור אחר.";
+  if (message.includes("MUSIC_UNSUPPORTED_LINK")) return "❌ הקישור צריך להתחיל ב־https:// או http://.";
+  return "❌ לא הצלחתי להפעיל את המוזיקה. נסה שוב או פנה למנהל הבוט.";
 }
 
 // ========================================================
 // MUSIC EVENTS
 // ========================================================
 
-musicPlayer.events.on(
-  "playerStart",
+musicPlayer.on(
+  "trackStart",
   async (
     queue,
     track
   ) => {
+    if (!track) return;
     console.log(
-      `▶️ Music started: ${track.title}`
+      `▶️ Music started: ${track.info.title}`
     );
 
     try {
@@ -14310,7 +13690,7 @@ musicPlayer.events.on(
                 "⏱️ אורך",
 
               value:
-                track.duration ||
+                formatDuration(track.info.duration, track.info.isStream) ||
                 "לא ידוע",
 
               inline:
@@ -14322,8 +13702,8 @@ musicPlayer.events.on(
                 "👤 ביקש",
 
               value:
-                track.requestedBy
-                  ? `${track.requestedBy}`
+                track.requester
+                  ? `${track.requester}`
                   : "לא ידוע",
 
               inline:
@@ -14335,7 +13715,7 @@ musicPlayer.events.on(
                 "☁️ מקור",
 
               value:
-                "SoundCloud",
+                trackSource(track),
 
               inline:
                 true
@@ -14344,10 +13724,10 @@ musicPlayer.events.on(
           .setTimestamp();
 
       if (
-        track.thumbnail
+        track.info.artworkUrl
       ) {
         embed.setThumbnail(
-          track.thumbnail
+          track.info.artworkUrl
         );
       }
 
@@ -14370,56 +13750,6 @@ musicPlayer.events.on(
   }
 );
 
-musicPlayer.events.on(
-  "playerError",
-  (
-    queue,
-    error,
-    track
-  ) => {
-    console.error(
-      `❌ Music player error (${track?.title || "unknown"}):`,
-      error
-    );
-  }
-);
-
-musicPlayer.events.on(
-  "error",
-  (
-    queue,
-    error
-  ) => {
-    console.error(
-      "❌ Music queue error:",
-      error
-    );
-  }
-);
-
-musicPlayer.events.on(
-  "disconnect",
-  queue => {
-    console.log(
-      "⚠️ Music disconnected — reconnecting..."
-    );
-
-    setTimeout(
-      () => {
-        ensureMusicConnection()
-          .catch(
-            error =>
-              console.error(
-                "❌ Music reconnect:",
-                error.message
-              )
-          );
-      },
-      3000
-    );
-  }
-);
-
 // ========================================================
 // MUSIC READY
 // ========================================================
@@ -14432,13 +13762,13 @@ musicClient.once(
     );
 
     try {
-      await ensureMusicExtractor();
+      await musicRuntime.init(readyClient.user);
 
     } catch (
       error
     ) {
       console.error(
-        "❌ SoundCloud Extractor:",
+        "❌ Lavalink connection:",
         error
       );
     }
@@ -14495,46 +13825,6 @@ musicClient.once(
         error
       );
     }
-  }
-);
-
-// ========================================================
-// MUSIC 24/7
-// ========================================================
-
-musicClient.on(
-  "voiceStateUpdate",
-  (
-    oldState,
-    newState
-  ) => {
-    if (
-      newState.member?.id !==
-      musicClient.user?.id
-    ) {
-      return;
-    }
-
-    if (
-      newState.channelId ===
-      MUSIC_VOICE_CHANNEL_ID
-    ) {
-      return;
-    }
-
-    setTimeout(
-      () => {
-        ensureMusicConnection()
-          .catch(
-            error =>
-              console.error(
-                "❌ Music 24/7 reconnect:",
-                error.message
-              )
-          );
-      },
-      2500
-    );
   }
 );
 
@@ -14754,7 +14044,7 @@ musicClient.on(
               );
 
             const storedSong =
-              resolved.track.url;
+              getTrackUrl(resolved.track);
 
             if (
               !storedSong
@@ -15171,7 +14461,7 @@ musicClient.on(
                       "☁️ מקור האודיו",
 
                     value:
-                      "SoundCloud"
+                      trackSource(track)
                   })
                   .setFooter({
                     text:
@@ -15308,7 +14598,7 @@ musicClient.on(
                     "☁️ מקור",
 
                   value:
-                    "SoundCloud"
+                    "לפי השירים בפלייליסט"
                 })
             ]
           });
@@ -15356,7 +14646,7 @@ musicClient.on(
           "pause"
         ) {
           if (
-            !queue?.currentTrack
+            !queue?.queue.current
           ) {
             return interaction.reply({
               content:
@@ -15368,7 +14658,7 @@ musicClient.on(
           }
 
           if (
-            queue.node.isPaused()
+            queue.paused
           ) {
             return interaction.reply({
               content:
@@ -15379,9 +14669,10 @@ musicClient.on(
             });
           }
 
-          queue.node.pause();
+          await interaction.deferReply();
+          await queue.pause();
 
-          return interaction.reply(
+          return interaction.editReply(
             "⏸️ המוזיקה נעצרה זמנית."
           );
         }
@@ -15393,7 +14684,7 @@ musicClient.on(
           "resume"
         ) {
           if (
-            !queue?.currentTrack
+            !queue?.queue.current
           ) {
             return interaction.reply({
               content:
@@ -15405,7 +14696,7 @@ musicClient.on(
           }
 
           if (
-            !queue.node.isPaused()
+            !queue.paused
           ) {
             return interaction.reply({
               content:
@@ -15416,9 +14707,10 @@ musicClient.on(
             });
           }
 
-          queue.node.resume();
+          await interaction.deferReply();
+          await queue.resume();
 
-          return interaction.reply(
+          return interaction.editReply(
             "▶️ המוזיקה ממשיכה."
           );
         }
@@ -15430,7 +14722,7 @@ musicClient.on(
           "skip"
         ) {
           if (
-            !queue?.currentTrack
+            !queue?.queue.current
           ) {
             return interaction.reply({
               content:
@@ -15443,12 +14735,14 @@ musicClient.on(
 
           const title =
             getTrackTitle(
-              queue.currentTrack
+              queue.queue.current
             );
 
-          queue.node.skip();
+          await interaction.deferReply();
+          musicRuntime.cancelPending(queue);
+          await queue.skip(0, false);
 
-          return interaction.reply(
+          return interaction.editReply(
             `⏭️ דילגתי על **${title}**.`
           );
         }
@@ -15471,27 +14765,11 @@ musicClient.on(
             });
           }
 
-          queue.clear();
+          await interaction.deferReply();
+          musicRuntime.cancelPending(queue);
+          await musicRuntime.withPlaybackLock(queue, () => queue.stopPlaying(true, false));
 
-          if (
-            queue.currentTrack
-          ) {
-            queue.node.stop(
-              true
-            );
-          }
-
-          setTimeout(
-            () => {
-              ensureMusicConnection()
-                .catch(
-                  () => {}
-                );
-            },
-            1000
-          );
-
-          return interaction.reply(
+          return interaction.editReply(
             "⏹️ המוזיקה נעצרה והתור נוקה.\n🎧 הבוט נשאר בחדר."
           );
         }
@@ -15503,7 +14781,7 @@ musicClient.on(
           "queue"
         ) {
           if (
-            !queue?.currentTrack
+            !queue?.queue.current
           ) {
             return interaction.reply({
               content:
@@ -15515,8 +14793,7 @@ musicClient.on(
           }
 
           const tracks =
-            queue.tracks
-              .toArray();
+            queue.queue.tracks;
 
           const next =
             tracks
@@ -15548,7 +14825,7 @@ musicClient.on(
                   "🎶 תור המוזיקה"
                 )
                 .setDescription(
-                  `**🎵 עכשיו:**\n${formatTrackLine(queue.currentTrack)}\n\n` +
+                  `**🎵 עכשיו:**\n${formatTrackLine(queue.queue.current)}\n\n` +
                   (
                     next
                       ? `**⏭️ הבאים:**\n${next}`
@@ -15572,7 +14849,7 @@ musicClient.on(
           "nowplaying"
         ) {
           if (
-            !queue?.currentTrack
+            !queue?.queue.current
           ) {
             return interaction.reply({
               content:
@@ -15584,15 +14861,14 @@ musicClient.on(
           }
 
           const track =
-            queue.currentTrack;
+            queue.queue.current;
 
           let progress =
             "";
 
           try {
             progress =
-              queue.node
-                .createProgressBar() ||
+              progressBar(queue) ||
               "";
           } catch {}
 
@@ -15613,7 +14889,7 @@ musicClient.on(
                     "⏱️ אורך",
 
                   value:
-                    track.duration ||
+                    formatDuration(track.info.duration, track.info.isStream) ||
                     "לא ידוע",
 
                   inline:
@@ -15625,7 +14901,7 @@ musicClient.on(
                     "🔊 עוצמה",
 
                   value:
-                    `${queue.node.volume}%`,
+                    `${queue.volume}%`,
 
                   inline:
                     true
@@ -15636,7 +14912,7 @@ musicClient.on(
                     "☁️ מקור",
 
                   value:
-                    "SoundCloud",
+                    trackSource(track),
 
                   inline:
                     true
@@ -15644,10 +14920,10 @@ musicClient.on(
               );
 
           if (
-            track.thumbnail
+            track.info.artworkUrl
           ) {
             embed.setThumbnail(
-              track.thumbnail
+              track.info.artworkUrl
             );
           }
 
@@ -15714,11 +14990,12 @@ musicClient.on(
                 true
               );
 
-          queue.node.setVolume(
+          await interaction.deferReply();
+          await queue.setVolume(
             amount
           );
 
-          return interaction.reply(
+          return interaction.editReply(
             `🔊 העוצמה שונתה ל-**${amount}%**.`
           );
         }
@@ -15730,7 +15007,7 @@ musicClient.on(
           "shuffle"
         ) {
           if (
-            queue.size < 2
+            queue.queue.tracks.length < 2
           ) {
             return interaction.reply({
               content:
@@ -15741,11 +15018,10 @@ musicClient.on(
             });
           }
 
-          queue.enableShuffle(
-            false
-          );
+          await interaction.deferReply();
+          await queue.queue.shuffle();
 
-          return interaction.reply(
+          return interaction.editReply(
             `🔀 ערבבתי את השירים שבתור.`
           );
         }
@@ -15765,13 +15041,13 @@ musicClient.on(
 
           const modes = {
             off:
-              QueueRepeatMode.OFF,
+              "off",
 
             track:
-              QueueRepeatMode.TRACK,
+              "track",
 
             queue:
-              QueueRepeatMode.QUEUE
+              "queue"
           };
 
           const labels = {
@@ -15785,13 +15061,14 @@ musicClient.on(
               "חזרה על כל התור 🔁"
           };
 
-          queue.setRepeatMode(
+          await interaction.deferReply();
+          await queue.setRepeatMode(
             modes[
               mode
             ]
           );
 
-          return interaction.reply(
+          return interaction.editReply(
             `🔁 מצב החזרה: **${labels[mode]}**`
           );
         }
@@ -15810,8 +15087,7 @@ musicClient.on(
               );
 
           const tracks =
-            queue.tracks
-              .toArray();
+            queue.queue.tracks;
 
           const index =
             position -
@@ -15836,11 +15112,10 @@ musicClient.on(
               index
             ];
 
-          queue.removeTrack(
-            track
-          );
+          await interaction.deferReply();
+          await queue.queue.remove(index);
 
-          return interaction.reply(
+          return interaction.editReply(
             `🗑️ **${getTrackTitle(track)}** הוסר מהתור.`
           );
         }
@@ -15944,3 +15219,4 @@ if (
     MUSIC_BOT_TOKEN
   );
 }
+

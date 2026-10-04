@@ -1,19 +1,9 @@
 {
   "name": "roei-ticket-bot",
   "version": "1.0.0",
-  "description": "Roei Discord main bot + music bot",
+  "description": "Roei Discord main bot + Lavalink music bot",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "engines": {
-    "node": ">=22"
-  },
-  "dependencies": {
-    "@discord-player/extractor": "7.2.0",
-    "@snazzah/davey": "0.1.12",
-    "discord.js": "14.27.0",
-    "discord-player": "7.2.0",
-    "ffmpeg-static": "5.3.0"
-  }
+  "scripts": { "start": "node index.js", "test": "node --test music-runtime.test.js music-commands.test.js" },
+  "engines": { "node": ">=22" },
+  "dependencies": { "discord.js": "14.27.0", "lavalink-client": "2.11.0" }
 }
