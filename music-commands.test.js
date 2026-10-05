@@ -13,6 +13,30 @@ const context = new Function("require", "process", "console", source + "\nreturn
 context.setLoaded(true);
 const handler = context.musicClient.listeners("interactionCreate")[0];
 
+test('Roei Bot is shared, protected, seeded once and preserves additions after restart', async () => {
+  const { Collection } = require('discord.js');
+  const ledger = [];
+  context.setStorage({ isTextBased: () => true, async send({ content }) { ledger.push({ id: String(ledger.length + 1), content, createdTimestamp: ledger.length }); }, messages: { async fetch() { return new Collection(ledger.map(m => [m.id, m])); } } });
+  const request = (sub, user = 'user') => { const r = interaction('playlist'); r.user.id = user; r.options = { getSubcommand: () => sub, getString: name => name === 'name' ? 'Roei Bot' : 'extra' }; return r; };
+  const list = request('list'); await handler(list);
+  assert.match(list.responses[0].value.embeds[0].toJSON().description, /Roei Bot.*30/);
+  for (const sub of ['create', 'remove', 'delete']) { const r = request(sub); await handler(r); assert.match(r.responses[0].value.content, /מוגן/); }
+  assert.equal(ledger.length, 0);
+  const resolve = context.musicRuntime.resolve;
+  context.musicRuntime.resolve = async () => ({ track: { info: { title: 'extra', uri: 'https://soundcloud.com/artist/extra' } } });
+  await handler(request('add', 'another-user'));
+  assert.match(ledger[0].content, /MUSIC_PL_ADD\|__roei_system__/);
+  context.musicPlaylists.clear();
+  await context.loadPersistentBotData();
+  await context.loadPersistentBotData();
+  const restored = request('list'); await handler(restored);
+  assert.match(restored.responses[0].value.embeds[0].toJSON().description, /Roei Bot.*31/);
+  const saved = context.musicPlaylists.get('__roei_system__').get('roei bot');
+  assert.deepEqual(saved.songs.slice(0, 30), require('./roei-playlist.json'));
+  assert.equal(saved.songs.at(-1), 'https://soundcloud.com/artist/extra');
+  context.musicRuntime.resolve = resolve;
+});
+
 function interaction(commandName, roles = [], channelId = context.MUSIC_VOICE_CHANNEL_ID) {
   const responses = [];
   const member = { id: "user", roles: { cache: new Map(roles.map(id => [id, {}])) } };

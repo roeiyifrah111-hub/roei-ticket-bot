@@ -360,6 +360,13 @@ const musicPlaylists =
   new Map();
 let musicPlaylistsLoaded = false;
 const playlistOperations = new Set();
+const BUILTIN_PLAYLIST_OWNER = "__roei_system__";
+const isBuiltinPlaylist = name => normalizePlaylistName(name) === "roei bot";
+function builtinPlaylist() {
+  const map = getUserPlaylistMap(BUILTIN_PLAYLIST_OWNER, true);
+  if (!map.has("roei bot")) map.set("roei bot", { name: "Roei Bot", songs: [...require("./roei-playlist.json")] });
+  return map.get("roei bot");
+}
 
 // ========================================================
 // BOT DATA
@@ -754,6 +761,7 @@ function getUserPlaylist(
   userId,
   name
 ) {
+  if (isBuiltinPlaylist(name)) return builtinPlaylist();
   const map =
     getUserPlaylistMap(
       userId,
@@ -778,6 +786,7 @@ function createUserPlaylistLocal(
   userId,
   name
 ) {
+  if (userId === BUILTIN_PLAYLIST_OWNER && isBuiltinPlaylist(name)) return builtinPlaylist();
   const clean =
     String(
       name || ""
@@ -1751,7 +1760,7 @@ async function loadPersistentBotData() {
             )
           );
 
-        if (playlist) {
+        if (playlist && (userId !== BUILTIN_PLAYLIST_OWNER || !playlist.songs.includes(decodeSmall(encodedSong)))) {
           playlist.songs.push(
             decodeSmall(
               encodedSong
@@ -1791,6 +1800,7 @@ async function loadPersistentBotData() {
 
       if (
         playlist &&
+        !isBuiltinPlaylist(playlist.name) &&
         Number.isInteger(
           index
         ) &&
@@ -8575,6 +8585,7 @@ client.once(
       );
 
       await loadPersistentBotData();
+      builtinPlaylist();
       musicPlaylistsLoaded = true;
       console.log(`Music playlists restored: ${[...musicPlaylists.values()].reduce((n, map) => n + map.size, 0)} playlists`);
 
@@ -13489,8 +13500,8 @@ async function ensureMusicConnection() {
   return musicRuntime.ensureConnection();
 }
 
-async function playResolvedTrack(track, requestedBy) {
-  return musicRuntime.play(track);
+async function playResolvedTrack(track, requestedBy, options) {
+  return musicRuntime.play(track, options);
 }
 
 async function resolveAndPlay(
@@ -13637,7 +13648,7 @@ musicPlayer.on(
     track
   ) => {
     if (!track) return;
-    const components = musicControls.start(queue);
+    const components = musicControls.start(queue, track);
     console.log(
       `▶️ Music started: ${track.info.title}`
     );
@@ -13827,6 +13838,7 @@ musicClient.on(
     }
 
     let ownsPlaylistLock = false;
+    let playlistLockKey = interaction.user.id;
     try {
       if (
         interaction.guildId !==
@@ -13844,8 +13856,9 @@ musicClient.on(
       }
 
       if (interaction.commandName === "playlist" || (interaction.commandName === "play" && interaction.options.getSubcommand() === "playlist")) {
-        if (playlistOperations.has(interaction.user.id)) return interaction.reply({ content: "⏳ פעולה קודמת בפלייליסט עדיין נשמרת. נסה שוב בעוד רגע.", ephemeral: true });
-        playlistOperations.add(interaction.user.id);
+        playlistLockKey = isBuiltinPlaylist(interaction.options.getString("name")) ? BUILTIN_PLAYLIST_OWNER : interaction.user.id;
+        if (playlistOperations.has(playlistLockKey)) return interaction.reply({ content: "⏳ פעולה קודמת בפלייליסט עדיין נשמרת. נסה שוב בעוד רגע.", ephemeral: true });
+        playlistOperations.add(playlistLockKey);
         ownsPlaylistLock = true;
       }
 
@@ -13893,6 +13906,10 @@ musicClient.on(
         const sub =
           interaction.options
             .getSubcommand();
+
+        if (isBuiltinPlaylist(interaction.options.getString("name")) && ["create", "remove", "delete"].includes(sub)) {
+          return interaction.reply({ content: "👑 Roei Bot הוא פלייליסט קבוע ומוגן. אפשר להוסיף אליו שירים, אך אי אפשר למחוק אותו או להסיר ממנו שירים.", ephemeral: true });
+        }
 
         // ===================== CREATE =====================
 
@@ -14052,7 +14069,7 @@ musicClient.on(
               );
             }
 
-            if (!await logBotData(`MUSIC_PL_ADD|${interaction.user.id}|${encodeSmall(playlist.name)}|${encodeSmall(storedSong)}`)) {
+            if (!await logBotData(`MUSIC_PL_ADD|${isBuiltinPlaylist(playlist.name) ? BUILTIN_PLAYLIST_OWNER : interaction.user.id}|${encodeSmall(playlist.name)}|${encodeSmall(storedSong)}`)) {
               return interaction.editReply("❌ השמירה הקבועה נכשלה. השיר לא נוסף; נסה שוב.");
             }
             playlist.songs.push(storedSong);
@@ -14096,11 +14113,8 @@ musicClient.on(
           sub ===
           "list"
         ) {
-          const map =
-            getUserPlaylistMap(
-              interaction.user.id,
-              false
-            );
+          const map = new Map(getUserPlaylistMap(interaction.user.id, false) || []);
+          map.set("roei bot", builtinPlaylist());
 
           if (
             !map ||
@@ -14538,7 +14552,8 @@ musicClient.on(
 
               await playResolvedTrack(
                 resolved.track,
-                interaction.user
+                interaction.user,
+                { systemPlaylist: isBuiltinPlaylist(playlist.name) }
               );
 
               added++;
@@ -15151,7 +15166,7 @@ musicClient.on(
 
       } catch {}
     } finally {
-      if (ownsPlaylistLock) playlistOperations.delete(interaction.user.id);
+      if (ownsPlaylistLock) playlistOperations.delete(playlistLockKey);
     }
   }
 );

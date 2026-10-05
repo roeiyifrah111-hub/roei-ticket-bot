@@ -185,7 +185,7 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
       }
       throw new Error("MUSIC_TRACK_NOT_FOUND");
     }
-    for (const source of ["ytmsearch", "ytsearch", "scsearch"]) {
+    for (const source of ["ytsearch", "ytmsearch", "scsearch"]) {
       try {
         const track = await search(query, requester, source);
         if (track) return { track, originalQuery: query, youtubeTitle: null, convertedFromYouTube: false };
@@ -197,14 +197,15 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
     throw new Error("MUSIC_TRACK_NOT_FOUND");
   }
 
-  async function play(track) {
+  async function play(track, { systemPlaylist = false } = {}) {
     const { queue: player } = await ensureConnection();
     return withPlaybackLock(player, async () => {
       const waiting = player.queue.tracks;
       const sameSong = other => (track.info.identifier && other.info.sourceName === track.info.sourceName && other.info.identifier === track.info.identifier) || (track.info.uri && other.info.uri === track.info.uri) || other.encoded === track.encoded;
       if ([player.queue.current, ...waiting].filter(Boolean).some(sameSong)) throw new Error("MUSIC_DUPLICATE_TRACK");
       const requesterId = track.requester?.id || track.requester;
-      if (requesterId && waiting.filter(t => (t.requester?.id || t.requester) === requesterId).length >= 5) throw new Error("MUSIC_QUEUE_LIMIT");
+      if (waiting.length >= 100) throw new Error("MUSIC_QUEUE_LIMIT");
+      if (!systemPlaylist && requesterId && waiting.filter(t => (t.requester?.id || t.requester) === requesterId).length >= 5) throw new Error("MUSIC_QUEUE_LIMIT");
       await player.queue.add(track);
       if (!player.playing && !player.paused && !player.queue.current) await player.play();
       return { track, queue: player };

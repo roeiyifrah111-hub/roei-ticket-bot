@@ -5,12 +5,12 @@ const canControl = member => Boolean(member?.roles?.cache?.has(CONTROL_ROLE));
 function createMusicControls({ client, runtime, guildId, channelId }) {
   const states = new Map();
   let sequence = 0;
-  function start(player) {
+  function start(player, track = player.queue.current) {
     const state = { token: `${Date.now().toString(36)}-${++sequence}`, votes: new Set(), busy: false };
     states.set(player.guildId || guildId, state);
     const button = (action, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(`music:${state.token}:${action}`).setLabel(label).setStyle(style);
     return [new ActionRowBuilder().addComponents(button('pause', '⏯️ השהיה / המשך'), button('skip', '⏭️ דילוג'), button('stop', '⏹️ עצירה', ButtonStyle.Danger), button('queue', '📜 תור')),
-      new ActionRowBuilder().addComponents(button('vote', '🗳️ הצבעה לדילוג', ButtonStyle.Primary))];
+      new ActionRowBuilder().addComponents(button('vote', '🗳️ הצבעה לדילוג', ButtonStyle.Primary), new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('🎬 חיפוש הקליפ').setURL('https://www.youtube.com/results?search_query=' + encodeURIComponent([track?.info?.author, track?.info?.title, 'official music video'].filter(Boolean).join(' ').slice(0, 350))))];
   }
   runtime.manager.on('queueEnd', () => states.delete(guildId));
   runtime.manager.on('playerDestroy', () => states.delete(guildId));

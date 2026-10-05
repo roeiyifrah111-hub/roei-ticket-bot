@@ -6,13 +6,21 @@ const { createMusicControls, CONTROL_ROLE, canControl } = require('./music-contr
 const { createSpamDetector } = require('./anti-spam');
 const { createSongVotes } = require('./song-votes');
 
+test('clip button searches YouTube using the playing song and artist', () => {
+  const f = controlsFixture();
+  const rows = f.controls.start(f.player, { info: { title: 'שיר & song', author: 'Artist' } });
+  const link = rows.flatMap(row => row.toJSON().components).find(button => button.style === 5);
+  assert.equal(new URL(link.url).searchParams.get('search_query'), 'Artist שיר & song official music video');
+  assert.equal(link.custom_id, undefined);
+});
+
 function controlsFixture() {
   const manager = new EventEmitter();
   const player = { guildId: 'guild', queue: { current: {}, tracks: [] }, skips: 0, async skip() { this.skips++; }, async pause() { this.paused = true; } };
   manager.getPlayer = () => player;
   const controls = createMusicControls({ runtime: { manager, cancelPending() {} }, guildId: 'guild', channelId: 'voice' });
   const rows = controls.start(player);
-  const ids = rows.flatMap(row => row.toJSON().components).map(button => button.custom_id);
+  const ids = rows.flatMap(row => row.toJSON().components).map(button => button.custom_id).filter(Boolean);
   const listeners = new Collection(['a', 'b', 'c'].map(id => [id, { user: { bot: false } }]));
   function request(user, action = 'vote', role = false, voice = 'voice', customId) {
     const member = { id: user, roles: { cache: new Map(role ? [[CONTROL_ROLE, {}]] : []) }, voice: { channelId: voice, channel: { members: listeners } } };

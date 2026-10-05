@@ -4,6 +4,21 @@ const { EventEmitter } = require("node:events");
 const { createMusicRuntime, formatDuration, progressBar } = require("./music-runtime");
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('YouTube success stops source search immediately', async () => {
+  const { runtime, calls } = setup(async () => ({ tracks: [track('found')] }));
+  await runtime.init({ id: 'music', username: 'Roei' });
+  await runtime.resolve('song', {});
+  assert.deepEqual(calls, [{ query: 'song', source: 'ytsearch' }]);
+});
+
+test('system playlist admits thirty songs while normal requests retain the waiting limit', async () => {
+  const { runtime } = setup();
+  await runtime.init({ id: 'music', username: 'Roei' });
+  for (let i = 0; i < 30; i++) await runtime.play(track(`seed-${i}`), { systemPlaylist: true });
+  assert.equal(runtime.manager.getPlayer('guild').queue.tracks.length, 29);
+  await assert.rejects(runtime.play(track('ordinary')), /MUSIC_QUEUE_LIMIT/);
+});
 function track(title, source = "youtube") {
   return { encoded: title, info: { title, author: "artist", uri: `https://${source}.com/${title}`, duration: 65000, sourceName: source, isStream: false }, requester: { id: "requester" } };
 }
@@ -52,12 +67,12 @@ test("YouTube links are resolved directly and retain the original track", async 
   assert.deepEqual(calls[0], { query: "https://youtu.be/abc" });
 });
 
-test("song search tries YouTube Music, YouTube, then SoundCloud", async () => {
+test("song search tries YouTube, YouTube Music, then SoundCloud", async () => {
   const { runtime, calls } = setup(async ({ source }) => ({ tracks: source === "scsearch" ? [track("fallback", "soundcloud")] : [] }));
   await runtime.init({ id: "music", username: "Roei" });
   const result = await runtime.resolve("song name", {});
   assert.equal(result.track.info.sourceName, "soundcloud");
-  assert.deepEqual(calls.map(call => call.source), ["ytmsearch", "ytsearch", "scsearch"]);
+  assert.deepEqual(calls.map(call => call.source), ["ytsearch", "ytmsearch", "scsearch"]);
 });
 
 test("existing saved SoundCloud songs keep working", async () => {
