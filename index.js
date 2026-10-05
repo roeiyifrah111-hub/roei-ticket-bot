@@ -358,6 +358,8 @@ const arcadeBombaGames =
 
 const musicPlaylists =
   new Map();
+let musicPlaylistsLoaded = false;
+const playlistOperations = new Set();
 
 // ========================================================
 // BOT DATA
@@ -1033,7 +1035,7 @@ async function loadPersistentBotData() {
     await getBotDataChannel();
 
   if (!channel) {
-    return;
+    throw new Error("Playlist storage channel unavailable");
   }
 
   const all =
@@ -1077,6 +1079,17 @@ async function loadPersistentBotData() {
       batch.size < 100
     ) {
       break;
+    }
+  }
+
+  // Keep the shared-state scan bounded, but never truncate playlist history.
+  if (scanned >= 30000 && before) {
+    while (true) {
+      const batch = await channel.messages.fetch({ limit: 100, before });
+      if (!batch.size) break;
+      all.push(...[...batch.values()].filter(message => message.content?.startsWith("MUSIC_PL_")));
+      before = batch.last()?.id;
+      if (!before || batch.size < 100) break;
     }
   }
 
@@ -8562,6 +8575,8 @@ client.once(
       );
 
       await loadPersistentBotData();
+      musicPlaylistsLoaded = true;
+      console.log(`Music playlists restored: ${[...musicPlaylists.values()].reduce((n, map) => n + map.size, 0)} playlists`);
 
       await loadApplicationState();
 
@@ -13811,6 +13826,7 @@ musicClient.on(
       return;
     }
 
+    let ownsPlaylistLock = false;
     try {
       if (
         interaction.guildId !==
@@ -13821,6 +13837,16 @@ musicClient.on(
         return musicWrongChannelReply(
           interaction
         );
+      }
+
+      if (!musicPlaylistsLoaded && (interaction.commandName === "playlist" || (interaction.commandName === "play" && interaction.options.getSubcommand() === "playlist"))) {
+        return interaction.reply({ content: "⏳ הפלייליסטים עדיין נטענים מהשמירה. נסה שוב בעוד רגע; אין צורך ליצור אותם מחדש.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "playlist" || (interaction.commandName === "play" && interaction.options.getSubcommand() === "playlist")) {
+        if (playlistOperations.has(interaction.user.id)) return interaction.reply({ content: "⏳ פעולה קודמת בפלייליסט עדיין נשמרת. נסה שוב בעוד רגע.", ephemeral: true });
+        playlistOperations.add(interaction.user.id);
+        ownsPlaylistLock = true;
       }
 
       const guild =
@@ -13925,11 +13951,13 @@ musicClient.on(
             });
           }
 
-          await logBotData(
-            `MUSIC_PL_CREATE|${interaction.user.id}|${encodeSmall(playlist.name)}`
-          );
+          await interaction.deferReply({ ephemeral: true });
+          if (!await logBotData(`MUSIC_PL_CREATE|${interaction.user.id}|${encodeSmall(playlist.name)}`)) {
+            map.delete(key);
+            return interaction.editReply("❌ השמירה הקבועה נכשלה. הפלייליסט לא נוצר; נסה שוב.");
+          }
 
-          return interaction.reply({
+          return interaction.editReply({
             embeds: [
               new EmbedBuilder()
                 .setColor(
@@ -14024,13 +14052,10 @@ musicClient.on(
               );
             }
 
-            playlist.songs.push(
-              storedSong
-            );
-
-            await logBotData(
-              `MUSIC_PL_ADD|${interaction.user.id}|${encodeSmall(playlist.name)}|${encodeSmall(storedSong)}`
-            );
+            if (!await logBotData(`MUSIC_PL_ADD|${interaction.user.id}|${encodeSmall(playlist.name)}|${encodeSmall(storedSong)}`)) {
+              return interaction.editReply("❌ השמירה הקבועה נכשלה. השיר לא נוסף; נסה שוב.");
+            }
+            playlist.songs.push(storedSong);
 
             let extra =
               "";
@@ -14269,16 +14294,13 @@ musicClient.on(
             });
           }
 
-          playlist.songs.splice(
-            index,
-            1
-          );
+          await interaction.deferReply({ ephemeral: true });
+          if (!await logBotData(`MUSIC_PL_REMOVE|${interaction.user.id}|${encodeSmall(playlist.name)}|${index}`)) {
+            return interaction.editReply("❌ השמירה נכשלה. השיר לא הוסר.");
+          }
+          playlist.songs.splice(index, 1);
 
-          await logBotData(
-            `MUSIC_PL_REMOVE|${interaction.user.id}|${encodeSmall(playlist.name)}|${index}`
-          );
-
-          return interaction.reply({
+          return interaction.editReply({
             content:
               `🗑️ שיר מספר **${position}** הוסר מ-**${playlist.name}**.`,
 
@@ -14325,17 +14347,13 @@ musicClient.on(
             });
           }
 
-          map.delete(
-            normalizePlaylistName(
-              playlist.name
-            )
-          );
+          await interaction.deferReply({ ephemeral: true });
+          if (!await logBotData(`MUSIC_PL_DELETE|${interaction.user.id}|${encodeSmall(playlist.name)}`)) {
+            return interaction.editReply("❌ השמירה נכשלה. הפלייליסט לא נמחק.");
+          }
+          map.delete(normalizePlaylistName(playlist.name));
 
-          await logBotData(
-            `MUSIC_PL_DELETE|${interaction.user.id}|${encodeSmall(playlist.name)}`
-          );
-
-          return interaction.reply({
+          return interaction.editReply({
             content:
               `🗑️ הפלייליסט **${playlist.name}** נמחק.`,
 
@@ -15132,6 +15150,8 @@ musicClient.on(
         }
 
       } catch {}
+    } finally {
+      if (ownsPlaylistLock) playlistOperations.delete(interaction.user.id);
     }
   }
 );

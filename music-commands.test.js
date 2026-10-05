@@ -5,11 +5,12 @@ const { createRequire } = require("node:module");
 
 // Load command handlers without signing in either bot or altering global process listeners.
 const source = fs.readFileSync(`${__dirname}/index.js`, "utf8");
-const context = new Function("require", "process", "console", source + "\nreturn { musicClient, musicRuntime, musicCommands, MUSIC_VOICE_CHANNEL_ID, OWNER_USER_ID, ROLE_HELPER, ROLE_STAFF, CONTROL_ROLE, musicPlaylists }; ")(
+const context = new Function("require", "process", "console", source + "\nreturn { musicClient, musicRuntime, musicCommands, MUSIC_VOICE_CHANNEL_ID, OWNER_USER_ID, ROLE_HELPER, ROLE_STAFF, CONTROL_ROLE, musicPlaylists, loadPersistentBotData, setLoaded(value) { musicPlaylistsLoaded = value; }, setStorage(channel) { botDataChannelId = 'storage'; client.channels.cache.set('storage', channel); } }; ")(
   createRequire(`${__dirname}/index.js`),
   { env: { GUILD_ID: "guild" }, on() {} },
   { log() {}, error() {} }
 );
+context.setLoaded(true);
 const handler = context.musicClient.listeners("interactionCreate")[0];
 
 function interaction(commandName, roles = [], channelId = context.MUSIC_VOICE_CHANNEL_ID) {
@@ -95,4 +96,36 @@ test("playlist starts in queue loop by default and accepts loop false", async ()
   assert.deepEqual(modes, ["queue", "off"]);
   const playlist = context.musicCommands.map(c => c.toJSON()).find(c => c.name === "play").options.find(c => c.name === "playlist");
   assert.equal(playlist.options.find(o => o.name === "loop").type, 5);
+});
+
+test("playlists wait for restore and survive a simulated restart", async () => {
+  const { Collection } = require('discord.js');
+  const ledger = [];
+  context.setStorage({ isTextBased: () => true, async send({ content }) { ledger.push({ id: String(ledger.length + 1), content, createdTimestamp: ledger.length }); }, messages: { async fetch() { return new Collection(ledger.map(m => [m.id, m])); } } });
+  const request = sub => { const r = interaction('playlist'); r.options = { getSubcommand: () => sub, getString: name => name === 'name' ? 'saved' : 'song' }; return r; };
+  context.setLoaded(false);
+  const waiting = request('create'); await handler(waiting); assert.match(waiting.responses[0].value.content, /נטענים/); assert.equal(ledger.length, 0);
+  context.setLoaded(true);
+  await handler(request('create'));
+  context.musicRuntime.resolve = async () => ({ track: { info: { title: 'song', uri: 'https://soundcloud.com/artist/song' } } });
+  await handler(request('add'));
+  assert.equal(ledger.length, 2);
+  context.musicPlaylists.clear();
+  await context.loadPersistentBotData();
+  assert.deepEqual(context.musicPlaylists.get('user').get('saved').songs, ['https://soundcloud.com/artist/song']);
+});
+
+test("failed permanent writes never report success or change saved playlists", async () => {
+  context.setStorage({ isTextBased: () => true, async send() { throw new Error('write unavailable'); } });
+  const request = (sub, name) => { const r = interaction('playlist'); r.options = { getSubcommand: () => sub, getString: key => key === 'name' ? name : 'song', getInteger: () => 1 }; return r; };
+  const create = request('create', 'failed'); await handler(create);
+  assert.equal(context.musicPlaylists.get('user').has('failed'), false);
+  assert.match(create.responses.at(-1).value, /השמירה הקבועה נכשלה/);
+  const playlist = context.musicPlaylists.get('user').get('saved');
+  for (const sub of ['add', 'remove', 'delete']) {
+    const r = request(sub, 'saved'); await handler(r);
+    assert.match(r.responses.at(-1).value, /השמירה/);
+    assert.equal(playlist.songs.length, 1);
+    assert.equal(context.musicPlaylists.get('user').get('saved'), playlist);
+  }
 });
