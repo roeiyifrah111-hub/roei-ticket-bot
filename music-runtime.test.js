@@ -12,7 +12,7 @@ function setup(search = async () => ({ tracks: [] })) {
   const calls = [];
   const client = new EventEmitter();
   client.user = { id: "music", username: "Roei" };
-  const channel = { id: "voice", isVoiceBased: () => true, isTextBased: () => true };
+  const channel = { id: "voice", isVoiceBased: () => true, isTextBased: () => true, send: async message => calls.push({ notification: message }) };
   const guild = { id: "guild", channels: { fetch: async () => channel }, members: { me: { voice: { channelId: "voice" } } }, shard: { send: packet => calls.push(packet) } };
   client.guilds = { cache: new Map([["guild", guild]]), fetch: async () => guild };
   class Manager extends EventEmitter {
@@ -108,6 +108,30 @@ test("last-track playback failure also gets a fallback", async () => {
   const { queue: player } = await runtime.ensureConnection();
   runtime.manager.emit("queueEnd", player, track("failed"), { reason: "loadFailed" });
   await tick(); assert.equal(player.queue.current, fallback);
+});
+
+test("failed production YouTube title falls back to a short song search", async () => {
+  const replacement = track("איך שהיא רוקדת", "soundcloud");
+  const { runtime, calls } = setup(async ({ query }) => ({ tracks: query === "איך שהיא רוקדת" ? [replacement] : [] }));
+  await runtime.init({ id: "music", username: "Roei" });
+  const { queue: player } = await runtime.ensureConnection();
+  runtime.manager.emit("queueEnd", player, track("עדן חסון & אופק אדנק & אגם בוחבוט - איך שהיא רוקדת (Prod. By Nuri)"), { reason: "loadFailed" });
+  await tick();
+  assert.equal(player.queue.current, replacement);
+  assert.deepEqual(calls.filter(c => c.source).map(c => c.query), ["עדן חסון & אופק אדנק & אגם בוחבוט - איך שהיא רוקדת", "איך שהיא רוקדת"]);
+});
+
+test("empty fallback results notify the channel and continue the queue", async () => {
+  const { runtime, calls } = setup();
+  await runtime.init({ id: "music", username: "Roei" });
+  const { queue: player } = await runtime.ensureConnection();
+  const next = track("next"); player.queue.current = next;
+  runtime.manager.emit("trackEnd", player, track("artist - song (official)"), { reason: "loadFailed" });
+  await tick();
+  assert.equal(player.queue.current, next);
+  assert.equal(calls.filter(c => c.notification).length, 1);
+  assert.deepEqual(calls.find(c => c.notification).notification.allowedMentions, { parse: [] });
+  assert.equal(calls.filter(c => c.play).length, 1);
 });
 
 test("stop or skip cancels an in-flight fallback", async () => {

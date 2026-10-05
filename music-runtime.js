@@ -32,6 +32,12 @@ function isYouTubeUrl(input) {
   } catch { return false; }
 }
 
+function fallbackQueries(title) {
+  const clean = String(title || "").replace(/\([^)]*\)|\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+  const song = clean.split(/\s+[-–—]\s+/).at(-1).trim();
+  return [...new Set([clean, song].filter(Boolean))];
+}
+
 function createMusicRuntime({ client, guildId, channelId, host, port = 2333, password, Manager = LavalinkManager }) {
   const manager = new Manager({
     nodes: host && password ? [{ id: "roei-music", host, port, authorization: password, secure: false, retryAmount: 100, retryDelay: 5000, requestSignalTimeoutMS: 15000 }] : [],
@@ -140,6 +146,25 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
     return null;
   }
 
+  async function soundcloudFallback(title, requester, cancelled = () => false) {
+    for (const query of fallbackQueries(title)) {
+      if (cancelled()) return null;
+      try {
+        const track = await search(query, requester, "scsearch");
+        if (track) return track;
+      } catch (error) { console.error("Music fallback search:", error.message); }
+    }
+    return null;
+  }
+
+  async function notifyFailure(track) {
+    try {
+      const guild = await client.guilds.fetch(guildId);
+      const channel = await guild.channels.fetch(channelId);
+      await channel.send({ content: `❌ לא הצלחתי לנגן את השיר «${track?.info?.title || "לא ידוע"}». מקור השמע נכשל ולא נמצא גיבוי מתאים. נסה קישור ישיר ל־SoundCloud או שם שיר קצר.`, allowedMentions: { parse: [] } });
+    } catch (error) { console.error("Music failure notification:", error.message); }
+  }
+
   async function resolve(input, requester) {
     const query = String(input || "").trim();
     if (!query) throw new Error("EMPTY_QUERY");
@@ -155,7 +180,7 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
       }
       if (isYouTubeUrl(query)) {
         const title = await youtubeTitle(query);
-        const track = title ? await search(title, requester, "scsearch") : null;
+        const track = title ? await soundcloudFallback(title, requester) : null;
         if (track) return { track, originalQuery: query, youtubeTitle: title, convertedFromYouTube: true };
       }
       throw new Error("MUSIC_TRACK_NOT_FOUND");
@@ -191,7 +216,7 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
       if (payload.reason === "loadFailed" && failedTrack?.info?.sourceName === "youtube") {
         let fallback = null;
         try {
-          fallback = await search(`${failedTrack.info.author} ${failedTrack.info.title}`, failedTrack.requester, "scsearch");
+          fallback = await soundcloudFallback(failedTrack.info.title, failedTrack.requester, () => (revisions.get(player) || 0) !== revision);
         } catch (error) { console.error("Music fallback:", error.message); }
         if ((revisions.get(player) || 0) !== revision) return;
         if (fallback) {
@@ -206,7 +231,11 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
           return;
         }
       }
-      if (player.queue.current) await player.play({ noReplace: false });
+      if (payload.reason === "loadFailed") {
+        console.error(`Music playback failed without fallback: ${failedTrack?.info?.title || "unknown"}`);
+        await notifyFailure(failedTrack);
+      }
+      if ((revisions.get(player) || 0) === revision && player.queue.current) await player.play({ noReplace: false });
     });
   }
 
@@ -225,4 +254,4 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
   return { manager, init, ready, ensureConnection, resolve, play, cancelPending, withPlaybackLock };
 }
 
-module.exports = { createMusicRuntime, formatDuration, trackSource, progressBar, isYouTubeUrl };
+module.exports = { createMusicRuntime, formatDuration, trackSource, progressBar, isYouTubeUrl, fallbackQueries };
