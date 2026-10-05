@@ -4,6 +4,7 @@ const { EventEmitter } = require('node:events');
 const { Collection } = require('discord.js');
 const { createMusicControls, CONTROL_ROLE, canControl } = require('./music-controls');
 const { createSpamDetector } = require('./anti-spam');
+const { createSongVotes } = require('./song-votes');
 
 function controlsFixture() {
   const manager = new EventEmitter();
@@ -61,4 +62,41 @@ test('spam detector tolerates normal traffic, isolates users, and expires histor
 test('mention flooding is caught without access to message text', () => {
   const detector = createSpamDetector();
   assert.ok(detector.inspect({ id: '1', guildId: 'g', author: { id: 'u' }, mentions: { users: { size: 6 } } }));
+});
+
+function songFixture() {
+  let time = 0, added = 0;
+  const listeners = new Collection(['a', 'b', 'c'].map(id => [id, { user: { bot: false } }]));
+  const runtime = { async resolve() { return { track: { info: { title: 'song' }, requester: { id: 'a' } } }; }, async play() { added++; } };
+  const votes = createSongVotes({ runtime, guildId: 'guild', channelId: 'voice', now: () => time });
+  function request(user, customId, voice = 'voice') {
+    return { user: { id: user }, guildId: 'guild', channelId: 'voice', guild: { members: { fetch: async () => ({ id: user, voice: { channelId: voice, channel: { members: listeners } } }) } }, commandName: 'votesong', customId, options: { getString: () => 'song' }, isButton: () => Boolean(customId), isChatInputCommand: () => !customId, responses: [], async reply(value) { this.responses.push(value); }, async deferReply() { this.deferred = true; }, async editReply(value) { this.responses.push(value); } };
+  }
+  return { votes, request, listeners, runtime, added: () => added, expire: () => { time = 130000; } };
+}
+test('any listener can propose a song; a unique majority adds it exactly once', async () => {
+  const f = songFixture(); const proposal = f.request('a'); await f.votes.handle(proposal);
+  const id = proposal.responses[0].components[0].toJSON().components[0].custom_id;
+  await f.votes.handle(f.request('a', id)); await f.votes.handle(f.request('a', id)); assert.equal(f.added(), 0);
+  await Promise.all([f.votes.handle(f.request('b', id)), f.votes.handle(f.request('c', id))]); assert.equal(f.added(), 1);
+  await f.votes.handle(f.request('c', id)); assert.equal(f.added(), 1);
+  assert.equal(proposal.responses.at(-1).components.length, 0);
+});
+test('song proposals reject outsiders, expire, and limit simultaneous proposals', async () => {
+  const f = songFixture(); const outsider = f.request('a', null, 'elsewhere'); await f.votes.handle(outsider);
+  assert.match(outsider.responses[0].content, /❌/);
+  const proposal = f.request('a'); await f.votes.handle(proposal);
+  const duplicate = f.request('a'); await f.votes.handle(duplicate); assert.match(duplicate.responses[0].content, /⏳/);
+  f.expire(); const id = proposal.responses[0].components[0].toJSON().components[0].custom_id;
+  const expired = f.request('b', id); await f.votes.handle(expired); assert.equal(f.added(), 0); assert.match(expired.responses[0].content, /⌛/);
+});
+test('negative majority rejects a song; queue errors are shown publicly', async () => {
+  for (const fail of [false, true]) {
+    const f = songFixture(); if (fail) f.runtime.play = async () => { throw new Error('MUSIC_QUEUE_LIMIT'); };
+    const proposal = f.request('a'); await f.votes.handle(proposal);
+    const id = proposal.responses[0].components[0].toJSON().components[fail ? 0 : 1].custom_id;
+    await f.votes.handle(f.request('a', id)); await f.votes.handle(f.request('b', id));
+    assert.equal(f.added(), 0); assert.equal(proposal.responses.at(-1).components.length, 0);
+    assert.match(proposal.responses.at(-1).embeds[0].toJSON().fields[0].value, fail ? /5 שירים/ : /נדחתה/);
+  }
 });

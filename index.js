@@ -21,6 +21,7 @@ const {
 
 const crypto = require("crypto");
 const { CONTROL_ROLE, canControl, createMusicControls } = require("./music-controls");
+const { createSongVotes } = require("./song-votes");
 const { installAntiSpam } = require("./anti-spam");
 
 const { createMusicRuntime, formatDuration, trackSource, progressBar } = require("./music-runtime");
@@ -13003,6 +13004,7 @@ const musicRuntime = createMusicRuntime({
 });
 const musicPlayer = musicRuntime.manager;
 const musicControls = createMusicControls({ client: musicClient, runtime: musicRuntime, guildId: GUILD_ID, channelId: MUSIC_VOICE_CHANNEL_ID });
+const songVotes = createSongVotes({ runtime: musicRuntime, guildId: GUILD_ID, channelId: MUSIC_VOICE_CHANNEL_ID });
 installAntiSpam(client, { guildId: GUILD_ID });
 
 // ========================================================
@@ -13070,6 +13072,7 @@ const musicPlayCommand =
                   60
                 )
           )
+          .addBooleanOption(option => option.setName("loop").setDescription("חזרה על תור הפלייליסט (ברירת מחדל: כן)"))
     );
 
 const musicPlaylistCommand =
@@ -13415,7 +13418,10 @@ const musicRemoveCommand =
 
 const musicVoteSkipCommand = new SlashCommandBuilder().setName("voteskip").setDescription("הצבעה לדילוג — רוב המאזינים בחדר");
 
+const musicVoteSongCommand = new SlashCommandBuilder().setName("votesong").setDescription("הצע שיר להצבעה של המאזינים").addStringOption(option => option.setName("query").setDescription("שם שיר או קישור").setRequired(true).setMaxLength(500));
+
 const musicCommands = [
+  musicVoteSongCommand,
   musicVoteSkipCommand,
   musicPlayCommand,
   musicPlaylistCommand,
@@ -13797,6 +13803,7 @@ musicClient.once(
 musicClient.on(
   "interactionCreate",
   async interaction => {
+    if (await songVotes.handle(interaction)) return;
     if (await musicControls.handle(interaction)) return;
     if (
       !interaction.isChatInputCommand()
@@ -14538,6 +14545,9 @@ musicClient.on(
             );
           }
 
+          const repeatPlaylist = interaction.options.getBoolean("loop") ?? true;
+          await getMusicQueue(guild.id).setRepeatMode(repeatPlaylist ? "queue" : "off");
+
           return interaction.editReply({
             embeds: [
               new EmbedBuilder()
@@ -14549,6 +14559,7 @@ musicClient.on(
                 )
                 .setDescription(
                   `**${playlist.name}**\n\n` +
+                  (repeatPlaylist ? "🔁 חזרה על כל התור פעילה (כולל שירים נוספים בתור). לכיבוי: `/loop mode:off`.\n" : "🔁 חזרה כבויה.\n") +
                   `✅ נוספו: **${added} שירים**` +
                   (
                     failed

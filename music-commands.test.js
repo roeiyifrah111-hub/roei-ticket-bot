@@ -5,7 +5,7 @@ const { createRequire } = require("node:module");
 
 // Load command handlers without signing in either bot or altering global process listeners.
 const source = fs.readFileSync(`${__dirname}/index.js`, "utf8");
-const context = new Function("require", "process", "console", source + "\nreturn { musicClient, musicRuntime, musicCommands, MUSIC_VOICE_CHANNEL_ID, OWNER_USER_ID, ROLE_HELPER, ROLE_STAFF, CONTROL_ROLE }; ")(
+const context = new Function("require", "process", "console", source + "\nreturn { musicClient, musicRuntime, musicCommands, MUSIC_VOICE_CHANNEL_ID, OWNER_USER_ID, ROLE_HELPER, ROLE_STAFF, CONTROL_ROLE, musicPlaylists }; ")(
   createRequire(`${__dirname}/index.js`),
   { env: { GUILD_ID: "guild" }, on() {} },
   { log() {}, error() {} }
@@ -30,9 +30,9 @@ function interaction(commandName, roles = [], channelId = context.MUSIC_VOICE_CH
 
 test("all existing music slash commands and subcommands serialize", () => {
   const commands = context.musicCommands.map(command => command.toJSON());
-  assert.deepEqual(commands.map(command => command.name), ["voteskip", "play", "playlist", "pause", "resume", "skip", "stop", "queue", "nowplaying", "volume", "shuffle", "loop", "remove"]);
-  assert.deepEqual(commands[1].options.map(option => option.name), ["song", "playlist"]);
-  assert.deepEqual(commands[2].options.map(option => option.name), ["create", "add", "list", "show", "remove", "delete"]);
+  assert.deepEqual(commands.map(command => command.name), ["votesong", "voteskip", "play", "playlist", "pause", "resume", "skip", "stop", "queue", "nowplaying", "volume", "shuffle", "loop", "remove"]);
+  assert.deepEqual(commands[2].options.map(option => option.name), ["song", "playlist"]);
+  assert.deepEqual(commands[3].options.map(option => option.name), ["create", "add", "list", "show", "remove", "delete"]);
 });
 
 test("music commands remain limited to the configured room", async () => {
@@ -78,4 +78,21 @@ test("stop clears playback without disconnecting the player", async () => {
   await handler(request);
   assert.deepEqual(args, [true, false]);
   assert.match(request.responses.at(-1).value, /הבוט נשאר בחדר/);
+});
+
+test("playlist starts in queue loop by default and accepts loop false", async () => {
+  context.musicPlaylists.set("user", new Map([["mix", { name: "mix", songs: ["song"] }]]));
+  context.musicRuntime.resolve = async () => ({ track: { info: { title: "song" } } });
+  context.musicRuntime.play = async () => ({});
+  const modes = [];
+  context.musicRuntime.manager.getPlayer = () => ({ async setRepeatMode(mode) { modes.push(mode); } });
+  for (const loop of [null, false]) {
+    const request = interaction("play", [context.CONTROL_ROLE]);
+    request.options = { getSubcommand: () => "playlist", getString: () => "mix", getBoolean: () => loop };
+    await handler(request);
+    assert.equal(request.responses.at(-1).type, "edit");
+  }
+  assert.deepEqual(modes, ["queue", "off"]);
+  const playlist = context.musicCommands.map(c => c.toJSON()).find(c => c.name === "play").options.find(c => c.name === "playlist");
+  assert.equal(playlist.options.find(o => o.name === "loop").type, 5);
 });
