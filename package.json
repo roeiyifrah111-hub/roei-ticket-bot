@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "description": "Roei Discord main bot + Lavalink music bot",
   "main": "index.js",
-  "scripts": { "start": "node index.js", "test": "node --test music-runtime.test.js music-commands.test.js" },
-  "engines": { "node": ">=22" },
-  "dependencies": { "discord.js": "14.27.0", "lavalink-client": "2.11.0" }
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test music-runtime.test.js music-commands.test.js server-features.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "discord.js": "14.27.0",
+    "lavalink-client": "2.11.0"
+  }
 }

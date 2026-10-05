@@ -20,6 +20,8 @@ const {
 } = require("discord.js");
 
 const crypto = require("crypto");
+const { CONTROL_ROLE, canControl, createMusicControls } = require("./music-controls");
+const { installAntiSpam } = require("./anti-spam");
 
 const { createMusicRuntime, formatDuration, trackSource, progressBar } = require("./music-runtime");
 
@@ -32,7 +34,8 @@ const client =
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMembers,
-      GatewayIntentBits.GuildVoiceStates
+      GatewayIntentBits.GuildVoiceStates,
+      GatewayIntentBits.GuildMessages
     ]
   });
 
@@ -463,60 +466,9 @@ function hasClearAccess(member) {
   );
 }
 
-function hasMusicBasicAccess(member) {
-  if (!member) {
-    return false;
-  }
+function hasMusicBasicAccess(member) { return canControl(member); }
 
-  if (
-    member.id ===
-    OWNER_USER_ID
-  ) {
-    return true;
-  }
-
-  return [
-    ROLE_HELPER,
-    ROLE_STAFF,
-    ROLE_PROMO_1,
-    ROLE_TEAM,
-    ROLE_ADMIN,
-    ROLE_HEAD_ADMIN,
-    ROLE_TOP
-  ].some(
-    id =>
-      member.roles.cache.has(
-        id
-      )
-  );
-}
-
-function hasMusicDJAccess(member) {
-  if (!member) {
-    return false;
-  }
-
-  if (
-    member.id ===
-    OWNER_USER_ID
-  ) {
-    return true;
-  }
-
-  return [
-    ROLE_STAFF,
-    ROLE_PROMO_1,
-    ROLE_TEAM,
-    ROLE_ADMIN,
-    ROLE_HEAD_ADMIN,
-    ROLE_TOP
-  ].some(
-    id =>
-      member.roles.cache.has(
-        id
-      )
-  );
-}
+function hasMusicDJAccess(member) { return canControl(member); }
 
 function getHighestLadderRoleId(
   member
@@ -13050,6 +13002,8 @@ const musicRuntime = createMusicRuntime({
   password: process.env.LAVALINK_PASSWORD
 });
 const musicPlayer = musicRuntime.manager;
+const musicControls = createMusicControls({ client: musicClient, runtime: musicRuntime, guildId: GUILD_ID, channelId: MUSIC_VOICE_CHANNEL_ID });
+installAntiSpam(client, { guildId: GUILD_ID });
 
 // ========================================================
 // MUSIC COMMANDS
@@ -13459,7 +13413,10 @@ const musicRemoveCommand =
           )
     );
 
+const musicVoteSkipCommand = new SlashCommandBuilder().setName("voteskip").setDescription("הצבעה לדילוג — רוב המאזינים בחדר");
+
 const musicCommands = [
+  musicVoteSkipCommand,
   musicPlayCommand,
   musicPlaylistCommand,
   musicPauseCommand,
@@ -13577,7 +13534,7 @@ function musicNoPermissionReply(
 ) {
   return interaction.reply({
     content:
-      `❌ הפקודה הזאת זמינה רק ל-**${minimum} ומעלה**.`,
+      `❌ השליטה במוזיקה זמינה רק לבעלי הרול <@&${CONTROL_ROLE}>.`,
 
     ephemeral:
       true
@@ -13641,6 +13598,8 @@ function getFriendlyMusicError(error) {
   const message = String(error?.message || error || "");
   if (message.includes("LAVALINK_CONFIG_MISSING")) return "❌ הגדרות החיבור למוזיקה חסרות. פנה למנהל הבוט.";
   if (message.includes("LAVALINK_NOT_READY")) return "❌ שרת המוזיקה עדיין מתחבר. נסה שוב בעוד כמה שניות.";
+  if (message.includes("MUSIC_DUPLICATE_TRACK")) return "❌ השיר כבר מתנגן או נמצא בתור.";
+  if (message.includes("MUSIC_QUEUE_LIMIT")) return "❌ אפשר להוסיף עד 5 שירים ממתינים לכל משתמש.";
   if (message.includes("MUSIC_TRACK_NOT_FOUND")) return "❌ לא מצאתי שיר זמין במקורות המוזיקה. נסה שם שיר או קישור אחר.";
   if (message.includes("MUSIC_UNSUPPORTED_LINK")) return "❌ הקישור צריך להתחיל ב־https:// או http://.";
   return "❌ לא הצלחתי להפעיל את המוזיקה. נסה שוב או פנה למנהל הבוט.";
@@ -13657,6 +13616,7 @@ musicPlayer.on(
     track
   ) => {
     if (!track) return;
+    const components = musicControls.start(queue);
     console.log(
       `▶️ Music started: ${track.info.title}`
     );
@@ -13732,6 +13692,8 @@ musicPlayer.on(
       }
 
       await channel.send({
+        components,
+        allowedMentions: { parse: [] },
         embeds: [
           embed
         ]
@@ -13835,6 +13797,7 @@ musicClient.once(
 musicClient.on(
   "interactionCreate",
   async interaction => {
+    if (await musicControls.handle(interaction)) return;
     if (
       !interaction.isChatInputCommand()
     ) {

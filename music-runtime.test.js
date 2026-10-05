@@ -166,6 +166,22 @@ test("voice packets are forwarded by the music client", () => {
   assert.deepEqual(calls[1], { op: 4 });
 });
 
+test("concurrent additions cannot exceed five waiting songs per requester", async () => {
+  const { runtime } = setup(); await runtime.init({ id: "music", username: "Roei" });
+  await runtime.play(track("current"));
+  const results = await Promise.allSettled(Array.from({ length: 8 }, (_, i) => runtime.play(track(`queued-${i}`))));
+  assert.equal(results.filter(r => r.status === "fulfilled").length, 5);
+  assert.equal(runtime.manager.player.queue.tracks.length, 5);
+  assert.match(results.find(r => r.status === "rejected").reason.message, /MUSIC_QUEUE_LIMIT/);
+});
+
+test("duplicate current and queued songs are rejected even for another requester", async () => {
+  const { runtime } = setup(); await runtime.init({ id: "music", username: "Roei" });
+  await runtime.play(track("current")); await runtime.play(track("waiting"));
+  await assert.rejects(runtime.play({ ...track("current"), requester: { id: "another" } }), /MUSIC_DUPLICATE_TRACK/);
+  await assert.rejects(runtime.play(track("waiting")), /MUSIC_DUPLICATE_TRACK/);
+});
+
 test("duration and progress support long songs and live streams", () => {
   assert.equal(formatDuration(3661000), "1:01:01");
   assert.equal(formatDuration(0, true), "LIVE");
