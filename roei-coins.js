@@ -5,15 +5,18 @@ const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { CoinsStore, CoinsError, RANKS, LIMIT } = require('./coins-store');
 const CHANNEL_ID = '1556736219038093484';
+const DROP_CHANNEL_ID = '1555552614878412940';
+const OWNER_ID = '1243097719262941224';
 const fmt = n => n.toLocaleString('en-US');
 const label = rank => `${rank.badge} ${rank.name}`;
 const baseEmbed = title => new EmbedBuilder().setColor(0xf5bc42).setTitle(title);
 const button = (id, text, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(text).setStyle(style);
-const commands = ['balance', 'daily', 'pay', 'coinleaderboard', 'addcoins', 'removecoins', 'setcoins', 'rankshop', 'rankhistory'].map(name => {
-  const descriptions = { balance: 'היתרה שלך או של חבר', daily: 'פרס יומי — פעם ב־24 שעות', pay: 'העברת Roei Coins לחבר', coinleaderboard: 'עשרת המובילים והמיקום האישי שלך', addcoins: 'ניהול: הוספת מטבעות', removecoins: 'ניהול: הסרת מטבעות', setcoins: 'ניהול: הגדרת יתרה', rankshop: 'הדרגה שלך וההתקדמות לדרגה הבאה', rankhistory: 'היסטוריית הדרגות וההישגים שלך' };
+const commands = ['balance', 'daily', 'pay', 'coinleaderboard', 'addcoins', 'removecoins', 'setcoins', 'rankshop', 'rankhistory', 'drop'].map(name => {
+  const descriptions = { drop: 'צוות: יצירת דרופ ידני', balance: 'היתרה שלך או של חבר', daily: 'פרס יומי — פעם ב־24 שעות', pay: 'העברת Roei Coins לחבר', coinleaderboard: 'עשרת המובילים והמיקום האישי שלך', addcoins: 'ניהול: הוספת מטבעות', removecoins: 'ניהול: הסרת מטבעות', setcoins: 'ניהול: הגדרת יתרה', rankshop: 'הדרגה שלך וההתקדמות לדרגה הבאה', rankhistory: 'היסטוריית הדרגות וההישגים שלך' };
   const cmd = new SlashCommandBuilder().setName(name).setDescription(descriptions[name]);
   if (['balance', 'pay', 'addcoins', 'removecoins', 'setcoins'].includes(name)) cmd.addUserOption(o => o.setName('user').setDescription('משתמש').setRequired(name !== 'balance'));
   if (['pay', 'addcoins', 'removecoins', 'setcoins'].includes(name)) cmd.addIntegerOption(o => o.setName('amount').setDescription('כמות Roei Coins').setMinValue(name === 'setcoins' ? 0 : 1).setMaxValue(LIMIT).setRequired(true));
+  if (name === 'drop') cmd.addStringOption(o => o.setName('type').setDescription('סוג הדרופ (ברירת מחדל Common)').addChoices(...['Common', 'Rare', 'Epic', 'Legendary', 'Golden'].map(name => ({ name, value: name }))));
   return cmd;
 });
 function rankEmbed(user) {
@@ -37,13 +40,51 @@ function errorText(error) {
   const d = error.details || {};
   if (error.code === 'FUNDS') return `❌ אין לך מספיק Roei Coins!\n🪙 יש לך: ${fmt(d.balance)}\n💰 צריך: ${fmt(d.price)}\n📉 חסרים לך: ${fmt(d.price - d.balance)}`;
   if (error.code === 'DAILY') return `📅 כבר קיבלת Daily. הפרס הבא זמין <t:${Math.ceil(d.next / 1000)}:R>.`;
-  return ({ SELF: '❌ אי אפשר להעביר מטבעות לעצמך.', AMOUNT: '❌ הכמות חייבת להיות מספר שלם בטווח המותר.', COOLDOWN: '⏳ המתן 5 שניות בין פעולות.', RANK: '🔒 אפשר לקנות רק את הדרגה הבאה.', PENDING: '⏳ יש רכישה שממתינה לסנכרון הרול. הכסף שמור עבורה ולא תחויב שוב.', DROP: '🎁 הדרופ כבר נלקח או שפג תוקפו.', ROLE: '❌ לא ניתן לעדכן דרגה: בדקו Manage Roles, קיום הרולים ומיקום רול הבוט מעל כל רולי החנות.', USER: '❌ המשתמש אינו זמין במערכת.', BOT: '❌ בוטים לא משתתפים במערכת המטבעות.', STALE: '⌛ הכפתור ישן או אינו שייך לך. פתח שוב את החנות.', ADMIN: '❌ הפעולה זמינה רק לצוות המורשה.' })[error.code] || '❌ הפעולה לא הושלמה. נסה שוב; אם הבעיה נמשכת פנה לצוות.';
+  return ({ ACTIVE_DROP: '🎁 כבר יש דרופ פעיל. יש להמתין לתביעה או לפקיעת התוקף שלו.', SELF: '❌ אי אפשר להעביר מטבעות לעצמך.', AMOUNT: '❌ הכמות חייבת להיות מספר שלם בטווח המותר.', COOLDOWN: '⏳ המתן 5 שניות בין פעולות.', RANK: '🔒 אפשר לקנות רק את הדרגה הבאה.', PENDING: '⏳ יש רכישה שממתינה לסנכרון הרול. הכסף שמור עבורה ולא תחויב שוב.', DROP: '🎁 הדרופ כבר נלקח או שפג תוקפו.', ROLE: '❌ לא ניתן לעדכן דרגה: בדקו Manage Roles, קיום הרולים ומיקום רול הבוט מעל כל רולי החנות.', USER: '❌ המשתמש אינו זמין במערכת.', BOT: '❌ בוטים לא משתתפים במערכת המטבעות.', STALE: '⌛ הכפתור ישן או אינו שייך לך. פתח שוב את החנות.', ADMIN: '❌ הפעולה זמינה רק לצוות המורשה.' })[error.code] || '❌ הפעולה לא הושלמה. נסה שוב; אם הבעיה נמשכת פנה לצוות.';
 }
 function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store: suppliedStore }) {
   let store = suppliedStore, ready = false, started = false, channel, guild, refreshBusy = false;
   const locks = new Set(), confirmations = new Map(), voice = new Map(), activity = new Map();
   let lastSync = 0;
   const report = error => console.error('Roei Coins:', error.code || error.message);
+  async function notify(id, text) {
+    try { const user = await client.users.fetch(id); await user.send({ embeds: [baseEmbed('🪙 Roei Coins — עדכון').setDescription(text).setTimestamp()], allowedMentions: { parse: [] } }); }
+    catch (error) { console.error(`Roei Coins DM unavailable: ${id} (${error.code || 'send failed'})`); }
+  }
+  async function notifyOnce(key, messages) {
+    if (store.meta(`notice:${key}`)) return;
+    store.meta(`notice:${key}`, true);
+    await Promise.all(messages.map(([id, text]) => notify(id, text)));
+  }
+  async function rewardNotice(id, earned, reason) {
+    if (earned > 0) await notify(id, `🎉 קיבלת **${fmt(earned)} Roei Coins** — ${reason}.\n🪙 יתרה: **${fmt(store.getBalance(id))}**`);
+  }
+  async function recoverDropMessages() {
+    const pending = store.drops().filter(d => !d.messageId);
+    for (const channelId of new Set(pending.map(d => d.channelId || CHANNEL_ID))) {
+      const target = await guild.channels.fetch(channelId); let before;
+      while (true) {
+        const batch = await target.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
+        if (!batch.size) break;
+        for (const message of batch.values()) if (message.author.id === client.user.id) {
+          const drop = pending.find(d => message.embeds[0]?.footer?.text === `roei-coins:drop:${d.id}`);
+          if (drop) { drop.messageId = message.id; store.saveDrop(drop); }
+        }
+        before = batch.last().id;
+        if (batch.size < 100 || pending.filter(d => (d.channelId || CHANNEL_ID) === channelId).every(d => d.messageId)) break;
+      }
+    }
+  }
+  async function publishDrop(drop) {
+    // Receipts may replay: always use the current persisted message ID.
+    const saved = store.drops().find(d => d.id === drop.id);
+    if (saved?.messageId) return saved;
+    const target = await guild.channels.fetch(drop.channelId || CHANNEL_ID);
+    try { const message = await target.send(dropPayload(drop)); drop.messageId = message.id; store.saveDrop(drop); }
+    catch (e) { await recoverDropMessages().catch(report); throw e; }
+    return drop;
+  }
+
   async function locked(id, fn) { if (locks.has(id)) throw new CoinsError('PENDING'); locks.add(id); try { return await fn(); } finally { locks.delete(id); } }
   async function fetchHuman(id) { const member = await guild.members.fetch({ user: id, force: true }); if (member.user.bot) throw new CoinsError('BOT'); return member; }
   function ensureUser(member) {
@@ -107,7 +148,7 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
     for (const drop of store.drops()) {
       if (!drop.messageId || drop.renderedEnd) continue;
       if (drop.winner || drop.expires <= Date.now()) {
-        try { const message = await channel.messages.fetch(drop.messageId); await message.edit(dropPayload(drop)); drop.renderedEnd = true; store.saveDrop(drop); } catch (e) { if (e.code === 10008) { drop.renderedEnd = true; store.saveDrop(drop); } else report(e); }
+        try { const target = await guild.channels.fetch(drop.channelId || CHANNEL_ID); const message = await target.messages.fetch(drop.messageId); await message.edit(dropPayload(drop)); drop.renderedEnd = true; store.saveDrop(drop); } catch (e) { if (e.code === 10008) { drop.renderedEnd = true; store.saveDrop(drop); } else report(e); }
       }
     }
   }
@@ -129,13 +170,13 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
       const m = guild.members.cache.get(id); if (!m) continue; ensureUser(m);
       const previous = voice.get(id) || { at: now, progress: 0 };
       const progress = previous.progress + Math.min(35000, Math.max(0, now - previous.at));
-      if (progress >= 600000) { store.activity(id, 'voice'); voice.set(id, { at: now, progress: progress - 600000 }); } else voice.set(id, { at: now, progress });
+      if (progress >= 600000) { const earned = store.activity(id, 'voice'); void rewardNotice(id, earned, 'פעילות בוויס'); voice.set(id, { at: now, progress: progress - 600000 }); } else voice.set(id, { at: now, progress });
     }
     for (const [id, value] of activity) if (now - value.at > 600000) activity.delete(id);
     const active = eligible.size >= 2 || (activity.size >= 2 && [...activity.values()].reduce((n,v) => n + v.count, 0) >= 5);
     if (now >= store.meta('nextDrop') && active && !store.drops().some(d => !d.winner && d.expires > now)) {
-      const drop = store.newDrop();
-      try { const message = await channel.send(dropPayload(drop)); drop.messageId = message.id; store.saveDrop(drop); } catch (e) { report(e); await getPanelMessages(); }
+      const drop = store.newDrop({ channelId: DROP_CHANNEL_ID });
+      try { await publishDrop(drop); } catch (e) { report(e); }
     }
     await updateDrops();
     for (const [id, c] of confirmations) if (c.expires <= now) confirmations.delete(id);
@@ -157,6 +198,7 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
       for (const rank of RANKS) if (!guild.roles.cache.has(rank.roleId) || !me.permissions.has(PermissionFlagsBits.ManageRoles) || me.roles.highest.comparePositionTo(guild.roles.cache.get(rank.roleId)) <= 0) console.error(`Roei Coins role unavailable: ${rank.name} ${rank.roleId}`);
       if (!store.meta('nextDrop')) store.meta('nextDrop', Date.now() + randomInt(120, 241) * 60000);
       await refreshPanels(true);
+      await recoverDropMessages();
       ready = true;
       console.log(`Roei Coins ready: persistent SQLite; users=${store.all().length}; panels=${JSON.stringify(store.meta('panels'))}`);
       const timer = setInterval(async () => { if (tickBusy) return; tickBusy = true; try { await tick(); } catch (e) { report(e); } finally { tickBusy = false; } }, 30000); timer.unref?.();
@@ -201,10 +243,20 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
           try { const user = await syncMember(await fetchHuman(member.id)); return send({ embeds: [baseEmbed('✅ הקנייה הושלמה!').setDescription(`👑 דרגה חדשה: **${label(RANKS[user.currentRank])}**\n💰 מחיר: **${fmt(RANKS[user.currentRank].price)}**\n🪙 יתרה: **${fmt(user.balance)}**`)] }); }
           catch (e) { report(e); return send('⏳ הסכום נשמר לרכישה, אבל הרול עדיין לא הסתנכרן. המערכת תנסה שוב אוטומטית ולא תחייב שוב. אם הבעיה נמשכת, פנה לצוות לבדיקת הרולים.'); }
         }
+        if (action === 'drop') {
+          if (!canAdmin(member)) throw new CoinsError('ADMIN');
+          const drop = await locked('__drop__', async () => {
+            const created = store.newDrop({ manual: true, type: i.options.getString('type') || 'Common', channelId: DROP_CHANNEL_ID, key: `manual:${i.id}` });
+            return publishDrop(created);
+          });
+          return send(`✅ נוצר דרופ **${drop.tier}** של **${fmt(drop.amount)} Coins** ב־<#${DROP_CHANNEL_ID}>.`);
+        }
         if (action === 'claim') {
-          if (i.channelId !== CHANNEL_ID) throw new CoinsError('DROP');
+          const saved = store.drops().find(d => d.id === i.customId.split(':')[2]);
+          if (!saved || i.channelId !== (saved.channelId || CHANNEL_ID)) throw new CoinsError('DROP');
           const drop = store.claim(i.customId.split(':')[2], member.id, i.message.id);
           await i.message.edit(dropPayload(drop)).catch(report);
+          await notifyOnce(`drop:${drop.id}`, [[member.id, `🎁 זכית בדרופ **${drop.tier}** וקיבלת **${fmt(drop.amount)} Roei Coins**.\n🪙 יתרה: **${fmt(store.getBalance(member.id))}**`]]);
           return send(`🎉 זכית ב־**${fmt(drop.amount)} Roei Coins!**`);
         }
         if (action === 'rank') {
@@ -222,13 +274,21 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
           if (!canAdmin(member)) throw new CoinsError('ADMIN');
           const target = await fetchHuman(i.options.getUser('user', true).id); ensureUser(target);
           const value = i.options.getInteger('amount', true), key = i.id;
+          const before = store.getBalance(target.id);
           const result = action === 'setcoins' ? store.setCoins(target.id, value, key) : action === 'addcoins' ? store.addCoins(target.id, value, 'admin', key) : store.removeCoins(target.id, value, 'admin', key);
+          const operation = { addcoins: 'הוספה', removecoins: 'הסרה', setcoins: 'הגדרת יתרה' }[action];
+          const detail = `🛠️ **${operation}**\nמבצע: <@${member.id}> (${member.id})\nמשתמש: <@${target.id}> (${target.id})\nערך הפקודה: **${fmt(value)}**\nלפני: **${fmt(before)}** → אחרי: **${fmt(result.balance)}**\nפעולה: ${i.id}`;
+          const notices = new Map([[OWNER_ID, detail]]);
+          if (target.id !== OWNER_ID) notices.set(target.id, `🛠️ <@${member.id}> ביצע **${operation}** בחשבונך.\nערך: **${fmt(value)} Coins**\nלפני: **${fmt(before)}** → יתרה: **${fmt(result.balance)}**`);
+          if (member.id !== OWNER_ID && member.id !== target.id) notices.set(member.id, detail);
+          await notifyOnce(i.id, [...notices]);
           return send(`✅ היתרה של <@${target.id}> עודכנה ל־**${fmt(result.balance)} Roei Coins**.`);
         }
-        if (action === 'daily') { const result = store.daily(member.id, i.id); return send(`📅 קיבלת **${fmt(result.amount)} Roei Coins!**\n🪙 יתרה: **${fmt(result.balance)}**`); }
+        if (action === 'daily') { const result = store.daily(member.id, i.id); await notifyOnce(i.id, [[member.id, `📅 קיבלת **${fmt(result.amount)} Roei Coins** מהפרס היומי.\n🪙 יתרה: **${fmt(result.balance)}**`]]); return send(`📅 קיבלת **${fmt(result.amount)} Roei Coins!**\n🪙 יתרה: **${fmt(result.balance)}**`); }
         if (action === 'pay') {
           const target = await fetchHuman(i.options.getUser('user', true).id); ensureUser(target);
           const result = store.pay(member.id, target.id, i.options.getInteger('amount', true), i.id);
+          await notifyOnce(i.id, [[member.id, `📤 העברת **${fmt(result.amount)} Roei Coins** ל־<@${target.id}>.\n🪙 יתרה: **${fmt(result.balance)}**`], [target.id, `📥 קיבלת **${fmt(result.amount)} Roei Coins** מ־<@${member.id}>.\n🪙 יתרה: **${fmt(store.getBalance(target.id))}**`]]);
           return send(`✅ העברת **${fmt(result.amount)} Roei Coins** ל־<@${target.id}>.\n🪙 יתרה: **${fmt(result.balance)}**`);
         }
         if (action === 'balance') {
@@ -248,7 +308,7 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
     try {
       const member = message.member || await fetchHuman(message.author.id);
       if (member.communicationDisabledUntilTimestamp > Date.now() || message.mentions.everyone || message.mentions.users.size + message.mentions.roles.size >= 6) return;
-      ensureUser(member); store.activity(member.id, 'chat');
+      ensureUser(member); const earned = store.activity(member.id, 'chat'); void rewardNotice(member.id, earned, 'פעילות בצ׳אט');
       const prior = activity.get(member.id); activity.set(member.id, { at: Date.now(), count: Math.min(5, (prior?.count || 0) + 1) });
     } catch (e) { report(e); }
   }
@@ -263,4 +323,4 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
   client.on('guildMemberUpdate', (old, member) => { if (ready && member.guild.id === guildId && !member.user.bot && store.read(member.id) && !locks.has(member.id) && RANKS.some(r => old.roles.cache.has(r.roleId) !== member.roles.cache.has(r.roleId))) locked(member.id, async () => syncMember(await fetchHuman(member.id))).catch(report); });
   return { start, handle, commands, get store() { return store; }, refreshPanels, syncMember, tick, get ready() { return ready; } };
 }
-module.exports = { createCoinsSystem, commands, rankEmbed, leaderboardEmbed, shopPayload, errorText, CHANNEL_ID };
+module.exports = { createCoinsSystem, commands, rankEmbed, leaderboardEmbed, shopPayload, errorText, CHANNEL_ID, DROP_CHANNEL_ID };

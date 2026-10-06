@@ -76,18 +76,20 @@ test('personal placement, progress, max rank and command schemas', () => {
   const board = leaderboardEmbed(store, '1').toJSON(); assert.match(board.description, /#47/);
   store.setCoins('1', 680); const embed = rankEmbed(store.user('1')).toJSON(); assert.match(embed.fields[0].value, /68%/);
   store.ensure('100', 9); assert.match(rankEmbed(store.user('100')).toJSON().fields[0].value, /God Tier/);
-  assert.equal(commands.length, 9); for (const cmd of commands) assert.ok(cmd.toJSON().name);
+  assert.equal(commands.length, 10); for (const cmd of commands) assert.ok(cmd.toJSON().name);
   assert.deepEqual(RANKS.map(r => r.roleId), ['1556733347517042708','1556733918072279040','1556734050230870036','1556734198872674454','1556734312282460323','1556734516444274780','1556734639240908961','1556735083073769622','1556735244999204894','1556735341098958968']);
   assert.equal(CHANNEL_ID, '1556736219038093484'); store.close();
 });
 
 async function discordFixture(existing) {
   const { store } = existing || fixture(); const client = new EventEmitter(); client.user = { id: 'bot' };
+  const dms = [], fetchedChannels = [];
+  client.users = { async fetch(id) { return { async send(payload) { dms.push({ id, payload }); } }; } };
   const messages = existing?.messages || new Collection(); let serial = messages.size + 100;
   const channel = { id: CHANNEL_ID, isTextBased: () => true, async send(payload) { const message = { id: String(++serial), author: client.user, embeds: payload.embeds.map(e => e.toJSON()), components: payload.components, async edit(value) { this.embeds = value.embeds?.map(e => e.toJSON()) || this.embeds; this.components = value.components || []; }, async delete() { messages.delete(this.id); } }; messages.set(message.id, message); return message; }, messages: { async fetch(arg) { if (typeof arg === 'string') { if (!messages.has(arg)) throw Object.assign(new Error('missing'), { code: 10008 }); return messages.get(arg); } return new Collection([...messages].reverse()); } } };
   const roles = new Collection(RANKS.map(r => [r.roleId, { id: r.roleId }]));
   const members = new Collection();
-  const guild = { id: 'guild', afkChannelId: 'afk', roles: { cache: roles, async fetch() { return roles; } }, channels: { cache: new Collection(), async fetch() { return channel; } } };
+  const guild = { id: 'guild', afkChannelId: 'afk', roles: { cache: roles, async fetch() { return roles; } }, channels: { cache: new Collection(), async fetch(id) { fetchedChannels.push(id); return channel; } } };
   for (const id of ['1','2','3']) { const member = { id, user: { id, bot: false }, guild, voice: {}, roles: { cache: new Collection([['unrelated', {}]]), async add(id) { this.cache.set(id, {}); }, async remove(ids) { for (const id of ids) this.cache.delete(id); } } }; members.set(id, member); }
   const me = { permissions: { has: () => true }, roles: { highest: { comparePositionTo: () => 1 } } };
   guild.members = { cache: members, async fetch(arg) { if (!arg) return members; const m = members.get(typeof arg === 'string' ? arg : arg.user); if (!m) throw Object.assign(new Error('left'), { code: 10007 }); return m; }, async fetchMe() { return me; } };
@@ -96,7 +98,7 @@ async function discordFixture(existing) {
   function request(command, { user = '1', target = '2', value = 100, customId, values, message } = {}) {
     const replies = []; return { id: Math.random().toString(), user: { id: user }, guildId: 'guild', channelId: CHANNEL_ID, commandName: command, customId, values, message, options: { getUser: () => members.get(target)?.user || { id: target }, getInteger: () => value }, isChatInputCommand: () => !customId, isButton: () => Boolean(customId && !values), isStringSelectMenu: () => Boolean(values), replies, async deferReply() { this.deferred = true; }, async reply(p) { replies.push(p); }, async editReply(p) { replies.push(p); } };
   }
-  return { system, store, messages, guild, members, client, me, request };
+  return { system, store, messages, guild, members, client, me, request, dms, fetchedChannels };
 }
 test('panel recovery edits existing messages in order and role sync preserves unrelated roles', async () => {
   const f = await discordFixture(); const ids = f.store.meta('panels'); assert.ok(BigInt(ids.leader) < BigInt(ids.shop));
@@ -169,4 +171,36 @@ test('a fresh system instance reuses stored panels without requesting all guild 
   const restarted = createCoinsSystem({ client: f.client, guildId: 'guild', canAdmin: () => false, store: f.store });
   await restarted.start(); assert.equal(restarted.ready, true); assert.equal(f.messages.size, 2); assert.deepEqual(f.store.meta('panels'), ids);
   f.store.close();
+});
+
+test('manual drop is staff only, uses drop room, preserves auto schedule and claims once', async () => {
+  const f = await discordFixture(); const next = f.store.meta('nextDrop');
+  const denied = f.request('drop', { user: '2' }); await f.system.handle(denied); assert.match(denied.replies[0].content, /מורשה/); assert.equal(f.store.drops().length, 0);
+  const allowed = f.request('drop'); allowed.options.getString = () => 'Epic'; await f.system.handle(allowed);
+  const drop = f.store.drops()[0]; assert.equal(drop.tier, 'Epic'); assert.equal(drop.channelId, '1555552614878412940'); assert.equal(f.store.meta('nextDrop'), next);
+  assert.ok(f.fetchedChannels.includes(drop.channelId));
+  const claim = f.request('', { user: '2', customId: `coins:claim:${drop.id}`, message: f.messages.get(drop.messageId) }); claim.channelId = drop.channelId;
+  await f.system.handle(claim); assert.equal(f.store.getBalance('2'), 500); assert.equal(f.dms.filter(n => n.id === '2').length, 1);
+  await f.system.handle(claim); assert.equal(f.store.getBalance('2'), 500); assert.equal(f.dms.filter(n => n.id === '2').length, 1);
+  f.store.close();
+});
+test('transfers notify both users once, admin changes privately notify owner, closed DMs do not undo payment', async () => {
+  const f = await discordFixture(); f.store.addCoins('1', 1000, 'test');
+  const pay = f.request('pay'); await f.system.handle(pay); await f.system.handle(pay);
+  assert.equal(f.store.getBalance('2'), 100); assert.deepEqual(f.dms.map(n => n.id), ['1','2']);
+  const admin = f.request('removecoins', { value: 20 }); await f.system.handle(admin);
+  assert.equal(f.store.getBalance('2'), 80); assert.ok(f.dms.some(n => n.id === '1243097719262941224'));
+  const audit = f.dms.find(n => n.id === '1243097719262941224').payload.embeds[0].toJSON().description;
+  assert.match(audit, /100.*80/s); assert.match(audit, /הסרה/);
+  f.client.users.fetch = async () => { throw Object.assign(new Error('closed'), { code: 50007 }); };
+  const daily = f.request('daily', { user: '2' }); await f.system.handle(daily);
+  assert.equal(f.store.getBalance('2'), 230); assert.match(daily.replies[0].content, /150/); f.store.close();
+});
+test('automatic drops use the configured drop room and legacy shop claims still work', async () => {
+  const f = await discordFixture();
+  const legacy = f.store.newDrop(); legacy.messageId = 'old'; f.store.saveDrop(legacy);
+  const oldClaim = f.request('', { customId: `coins:claim:${legacy.id}`, message: { id: 'old', async edit() {} } }); await f.system.handle(oldClaim); assert.equal(f.store.getBalance('1'), 2500);
+  f.store.meta('nextDrop', 1);
+  f.guild.channels.cache.set('voice', { id: 'voice', isVoiceBased: () => true, members: f.members });
+  await f.system.tick(); assert.equal(f.store.drops().at(-1).channelId, '1555552614878412940'); f.store.close();
 });

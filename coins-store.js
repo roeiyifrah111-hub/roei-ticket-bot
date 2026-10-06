@@ -76,7 +76,8 @@ class CoinsStore {
       const base = kind === 'voice' ? 5 : this.random(2, 5);
       const bonus = user.bonusRemainder + base * RANKS[user.currentRank].bonus;
       const earned = base + Math.floor(bonus / 100); user.bonusRemainder = bonus % 100;
-      user.balance = Math.min(LIMIT, user.balance + earned); this.save(user); return earned;
+      const credited = Math.min(earned, LIMIT - user.balance);
+      user.balance += credited; this.save(user); return credited;
     });
   }
   beginPurchase(id, target, key) {
@@ -99,12 +100,19 @@ class CoinsStore {
   all() { return this.db.prepare('SELECT data FROM users').all().map(row => JSON.parse(row.data)); }
   leaderboard() { return this.all().sort((a,b) => b.balance - a.balance || a.userId.localeCompare(b.userId)); }
   meta(key, value) { if (value === undefined) { const row = this.db.prepare('SELECT data FROM meta WHERE key=?').get(key); return row ? JSON.parse(row.data) : null; } this.db.prepare('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data').run(key, JSON.stringify(value)); return value; }
-  newDrop() {
-    return this.transaction(() => {
+  newDrop({ type, manual = false, channelId, key } = {}) {
+    return this.once(key, () => {
+      if (manual && this.drops().some(d => !d.winner && d.expires > this.now())) throw new CoinsError('ACTIVE_DROP');
+      if (manual && this.meta('lastManualDrop') && this.now() - this.meta('lastManualDrop') < 60000) throw new CoinsError('COOLDOWN');
       const roll = this.random(1, 10000);
-      const tier = roll <= 10 ? ['Golden', 2500, 5000, 0xffd700] : roll <= 100 ? ['Legendary', 1000, 2000, 0xffa500] : roll <= 600 ? ['Epic', 500, 800, 0xa855f7] : roll <= 2600 ? ['Rare', 200, 400, 0x3498db] : ['Common', 50, 150, 0x57f287];
-      const drop = { id: randomUUID(), tier: tier[0], amount: this.random(tier[1], tier[2]), color: tier[3], expires: this.now() + 600000, winner: null, messageId: null };
-      this.saveDrop(drop); this.meta('nextDrop', this.now() + this.random(120, 240) * 60000); return drop;
+      const tiers = { Common: ['Common', 50, 150, 0x57f287], Rare: ['Rare', 200, 400, 0x3498db], Epic: ['Epic', 500, 800, 0xa855f7], Legendary: ['Legendary', 1000, 2000, 0xffa500], Golden: ['Golden', 2500, 5000, 0xffd700] };
+      if (type && !tiers[type]) throw new CoinsError('DROP');
+      const tier = tiers[type || (roll <= 10 ? 'Golden' : roll <= 100 ? 'Legendary' : roll <= 600 ? 'Epic' : roll <= 2600 ? 'Rare' : 'Common')];
+      const drop = { id: randomUUID(), tier: tier[0], amount: this.random(tier[1], tier[2]), color: tier[3], expires: this.now() + 600000, winner: null, messageId: null, channelId, manual };
+      this.saveDrop(drop);
+      if (manual) this.meta('lastManualDrop', this.now());
+      else this.meta('nextDrop', this.now() + this.random(120, 240) * 60000);
+      return drop;
     });
   }
   saveDrop(drop) { this.db.prepare('INSERT INTO drops VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(drop.id, JSON.stringify(drop)); }

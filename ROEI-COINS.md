@@ -26,3 +26,8 @@ Default player volume is 75% instead of 50%; /volume remains bounded to 100%. Th
 
 ## Validation
 Automated coverage: balances, atomic transfers and rollback, replay IDs, cooldowns, daily, fractional bonuses, SQLite reopen, pending purchase recovery, all ranks in order, drop claim races and expiry, panel recovery/order, role sync, permissions, personal leaderboard placement, progress, milestones, voice eligibility, double confirmations, and existing music behavior.
+
+## Manual drops and private notifications
+/drop type:Common|Rare|Epic|Legendary|Golden is restricted to existing staff permissions. Default: Common. Manual and automatic drops go to channel 1555552614878412940; the shop remains in 1556736219038093484. One active drop at a time, manual cooldown 60 seconds; manual drops do not reset the automatic schedule. Legacy drops retain their original shop-channel claim handling.
+Admin additions/removals/set-balance send an owner DM audit with actor, recipient, requested amount, before/after balance, and interaction ID. Sender and recipient receive transfer DMs. Reward recipients receive daily/drop/chat/voice DMs, including the updated balance. Closed DMs never roll back the currency operation; delivery failures are logged. Interaction notices use persistent deduplication markers; failed or interrupted delivery is not retried automatically.
+Validation: all 54 tests pass, including staff-only drops, destination channel, legacy claims, dual transfer notifications, audit receipts and closed DMs.
