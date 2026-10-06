@@ -5,13 +5,16 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test music-runtime.test.js music-commands.test.js server-features.test.js coins.test.js"
+    "test": "node --test music-runtime.test.js music-commands.test.js server-features.test.js coins.test.js ai.test.js"
   },
   "engines": {
     "node": ">=22.13.0"
   },
   "dependencies": {
     "discord.js": "14.27.0",
-    "lavalink-client": "2.11.0"
+    "ipaddr.js": "2.5.0",
+    "lavalink-client": "2.11.0",
+    "node-html-parser": "9.0.4",
+    "openai": "7.28.0"
   }
 }
