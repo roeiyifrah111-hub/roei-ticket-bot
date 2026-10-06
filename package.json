@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test music-runtime.test.js music-commands.test.js server-features.test.js"
+    "test": "node --test music-runtime.test.js music-commands.test.js server-features.test.js coins.test.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13.0"
   },
   "dependencies": {
     "discord.js": "14.27.0",

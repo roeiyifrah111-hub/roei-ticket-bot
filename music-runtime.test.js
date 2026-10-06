@@ -12,6 +12,14 @@ test('YouTube success stops source search immediately', async () => {
   assert.deepEqual(calls, [{ query: 'song', source: 'ytsearch' }]);
 });
 
+test('new connections use 75 percent volume and improve a lower voice bitrate when permitted', async () => {
+  const { runtime, guild, calls } = setup();
+  const channel = await guild.channels.fetch('voice'); channel.bitrate = 64000;
+  channel.permissionsFor = () => ({ has: () => true }); channel.setBitrate = async n => { channel.bitrate = n; }; guild.maximumBitrate = 128000;
+  await runtime.init({ id: 'music', username: 'Roei' }); await runtime.ensureConnection();
+  assert.equal(channel.bitrate, 96000); assert.equal(calls.find(c => c?.voiceChannelId).volume, 75);
+});
+
 test('system playlist admits thirty songs while normal requests retain the waiting limit', async () => {
   const { runtime } = setup();
   await runtime.init({ id: 'music', username: 'Roei' });

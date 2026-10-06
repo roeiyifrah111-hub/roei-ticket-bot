@@ -20,6 +20,7 @@ const {
 } = require("discord.js");
 
 const crypto = require("crypto");
+const { createCoinsSystem } = require("./roei-coins");
 const { CONTROL_ROLE, canControl, createMusicControls } = require("./music-controls");
 const { createSongVotes } = require("./song-votes");
 const { installAntiSpam } = require("./anti-spam");
@@ -8531,9 +8532,12 @@ const clearCommand =
 // MAIN READY
 // ========================================================
 
+const coins = createCoinsSystem({ client, guildId: GUILD_ID, canAdmin: hasStaffAccess });
+
 client.once(
   Events.ClientReady,
   async readyClient => {
+    void coins.start();
     console.log(
       `✅ הבוט הראשי מחובר בתור ${readyClient.user.tag}`
     );
@@ -8556,7 +8560,8 @@ client.once(
           body: [
             staffManageCommand.toJSON(),
             giveawayCommand.toJSON(),
-            clearCommand.toJSON()
+            clearCommand.toJSON(),
+            ...coins.commands.map(command => command.toJSON())
           ]
         }
       );
@@ -8897,6 +8902,7 @@ client.on(
 client.on(
   "interactionCreate",
   async interaction => {
+    if (await coins.handle(interaction)) return;
     try {
 
       // ===================== CLEAR =====================

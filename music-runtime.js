@@ -112,7 +112,11 @@ function createMusicRuntime({ client, guildId, channelId, host, port = 2333, pas
       const guild = await client.guilds.fetch(guildId);
       const voiceChannel = await guild.channels.fetch(channelId);
       if (!voiceChannel?.isVoiceBased() || !voiceChannel.isTextBased()) throw new Error("MUSIC_VOICE_CHANNEL_NOT_FOUND");
-      const player = manager.getPlayer(guildId) || manager.createPlayer({ guildId, voiceChannelId: channelId, textChannelId: channelId, selfDeaf: true, selfMute: false, volume: 50 });
+      const targetBitrate = Math.min(guild.maximumBitrate || 96000, 96000);
+      if (voiceChannel.bitrate < targetBitrate && voiceChannel.permissionsFor?.(guild.members.me)?.has('ManageChannels')) {
+        await voiceChannel.setBitrate(targetBitrate, 'Improve music voice quality').catch(error => console.error('Music bitrate:', error.message));
+      }
+      const player = manager.getPlayer(guildId) || manager.createPlayer({ guildId, voiceChannelId: channelId, textChannelId: channelId, selfDeaf: true, selfMute: false, volume: 75 });
       if (guild.members.me?.voice.channelId !== channelId) await player.connect();
       return { guild, voiceChannel, queue: player };
     })().finally(() => { connectionTask = null; });
