@@ -149,7 +149,8 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
         if (!mount) throw new Error('Persistent Railway volume is required; Coins remains disabled to protect balances');
         mkdirSync(mount, { recursive: true }); store = new CoinsStore(join(mount, 'roei-coins.sqlite'));
       }
-      guild = await client.guilds.fetch(guildId); await guild.roles.fetch(); await guild.members.fetch();
+      // The main ready handler has already loaded the complete member cache.
+      guild = await client.guilds.fetch(guildId); await guild.roles.fetch();
       channel = await guild.channels.fetch(CHANNEL_ID);
       if (!channel?.isTextBased()) throw new Error('Coins shop channel unavailable');
       const me = await guild.members.fetchMe();

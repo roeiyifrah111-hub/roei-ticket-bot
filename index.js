@@ -8537,7 +8537,6 @@ const coins = createCoinsSystem({ client, guildId: GUILD_ID, canAdmin: hasStaffA
 client.once(
   Events.ClientReady,
   async readyClient => {
-    void coins.start();
     console.log(
       `✅ הבוט הראשי מחובר בתור ${readyClient.user.tag}`
     );
@@ -8597,6 +8596,8 @@ client.once(
       await loadApplicationState();
 
       await guild.members.fetch();
+
+      void coins.start();
 
       for (
         const member of

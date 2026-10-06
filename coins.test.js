@@ -162,3 +162,11 @@ test('concurrent confirms create only one purchase and one rank history entry', 
   assert.equal(f.store.getBalance('1'), 9000); assert.equal(f.store.user('1').currentRank, 1); assert.equal(f.store.user('1').rankHistory.length, 2);
   f.store.close();
 });
+
+test('a fresh system instance reuses stored panels without requesting all guild members', async () => {
+  const f = await discordFixture(); const ids = f.store.meta('panels'); const originalFetch = f.guild.members.fetch;
+  f.guild.members.fetch = async arg => { assert.ok(arg, 'Coins must reuse the main bot member cache'); return originalFetch(arg); };
+  const restarted = createCoinsSystem({ client: f.client, guildId: 'guild', canAdmin: () => false, store: f.store });
+  await restarted.start(); assert.equal(restarted.ready, true); assert.equal(f.messages.size, 2); assert.deepEqual(f.store.meta('panels'), ids);
+  f.store.close();
+});
