@@ -21,7 +21,6 @@ const {
 
 const crypto = require("crypto");
 const { createCoinsSystem } = require("./roei-coins");
-const { createAISystem } = require("./roei-ai");
 const { CONTROL_ROLE, canControl, createMusicControls } = require("./music-controls");
 const { createSongVotes } = require("./song-votes");
 const { installAntiSpam } = require("./anti-spam");
@@ -38,8 +37,7 @@ const client =
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildVoiceStates,
-      GatewayIntentBits.GuildMessages,
-      ...(process.env.GEMINI_API_KEY && process.env.AI_ENABLED !== "false" ? [GatewayIntentBits.MessageContent] : [])
+      GatewayIntentBits.GuildMessages
     ]
   });
 
@@ -8536,43 +8534,6 @@ const clearCommand =
 
 const coins = createCoinsSystem({ client, guildId: GUILD_ID, canAdmin: hasStaffAccess });
 
-// AI actions use a fixed bridge into existing handlers, never arbitrary methods.
-async function runExistingAIAction(ctx, spec, music = false) {
-  const bot = music ? musicClient : client;
-  const guild = await bot.guilds.fetch(GUILD_ID);
-  const member = await guild.members.fetch({ user: ctx.userId, force: true });
-  if (member.user.bot || member.communicationDisabledUntilTimestamp > Date.now()) throw new Error('PERMISSION');
-  const channelId = music ? MUSIC_VOICE_CHANNEL_ID : ctx.channelId;
-  const channel = await guild.channels.fetch(channelId);
-  if (!channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) throw new Error('PERMISSION');
-  if (music && spec.commandName !== 'playlist' && (!canControl(member) || member.voice.channelId !== MUSIC_VOICE_CHANNEL_ID)) throw new Error('PERMISSION');
-  let result;
-  const capture = async value => { result = value; return value; };
-  const interaction = {
-    id: ctx.actionId, guildId: GUILD_ID, guild, channelId, channel, user: member.user, member,
-    commandName: spec.commandName, customId: spec.customId, values: spec.values,
-    isChatInputCommand: () => !!spec.commandName, isStringSelectMenu: () => spec.kind === 'select',
-    isModalSubmit: () => spec.kind === 'modal', isButton: () => false, isUserSelectMenu: () => false,
-    fields: { getTextInputValue: () => spec.idea },
-    options: { getSubcommand: () => spec.sub, getString: key => spec.options?.[key] ?? null, getBoolean: () => true },
-    deferReply: async () => { interaction.deferred = true; }, reply: capture, editReply: capture, followUp: capture
-  };
-  await (music ? handleMusicInteraction : handleMainInteraction)(interaction);
-  return { content: typeof result === 'string' ? result : [result?.content, ...(result?.embeds || []).map(e => { const d = e.toJSON ? e.toJSON() : e; return [d.title, d.description, ...(d.fields || []).map(f => `${f.name}: ${f.value}`)].filter(Boolean).join('\n'); })].filter(Boolean).join('\n') || 'הפעולה הסתיימה ללא הודעת אישור; בדוק במערכת המקורית.' };
-}
-const roeiAI = createAISystem({ client, guildId: GUILD_ID, coins, adapters: {
-  systems: () => ({ tickets: PANEL_CHANNEL_ID, staffApplications: STAFF_APPLICATION_CHANNEL_ID, suggestions: SUGGESTIONS_PANEL_CHANNEL_ID, temporaryVoice: TEMP_VOICE_CREATE_CHANNEL_ID, arcade: ARCADE_PANEL_CHANNEL_ID, music: MUSIC_VOICE_CHANNEL_ID, coins: '1556736219038093484', help: 'Tickets: report/technical/general; staff applications from ticket panel with existing cooldown. Temporary voice: join creation voice channel. Arcade: use game panel. Giveaways: existing giveaway command with staff checks. Partner: use partner panel; no automatic approval.' }),
-  commands: async () => ({ main: (await client.application.commands.fetch({ guildId: GUILD_ID })).map(c => ({ name: c.name, description: c.description, options: c.options })), music: musicCommands.map(c => c.toJSON()) }),
-  musicState: userId => { const player = getMusicQueue(); return { current: player?.queue.current?.info || null, paused: player?.paused || false, volume: player?.volume, queue: player?.queue.tracks.slice(0,20).map(t => ({ title: t.info.title, author: t.info.author })) || [], playlists: [...(getUserPlaylistMap(userId,false)?.values() || []), builtinPlaylist()].map(p => ({ name: p.name, songs: p.songs })) }; },
-  ticket: (args,ctx) => runExistingAIAction(ctx,{ kind:'select', customId:'ticket_type', values:[args.type] }),
-  suggestion: (args,ctx) => runExistingAIAction(ctx,{ kind:'modal', customId:`suggestion_modal:${args.type}`, idea:args.text }),
-  arcade: async (args,ctx) => { const guild=await client.guilds.fetch(GUILD_ID),member=await guild.members.fetch({user:ctx.userId,force:true}),channel=await guild.channels.fetch(ARCADE_GAMES_CHANNEL_ID); if(!channel.permissionsFor(member)?.has([PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages]))throw new Error('PERMISSION');return runExistingAIAction(ctx,{kind:'select',customId:'arcade_game_select',values:[args.game]}); },
-  music: (args,ctx) => runExistingAIAction(ctx,{ commandName:args.action, sub:'song', options:{ query:args.query } },true),
-  playlist: (args,ctx) => runExistingAIAction(ctx,{ commandName:args.action==='play'?'play':'playlist', sub:args.action==='play'?'playlist':args.action, options:{ name:args.name,song:args.song } },true)
-} });
-client.on('messageCreate', message => { void roeiAI.onMessage(message).catch(() => console.error('Roei AI message unavailable')); });
-
-
 client.once(
   Events.ClientReady,
   async readyClient => {
@@ -8599,8 +8560,7 @@ client.once(
             staffManageCommand.toJSON(),
             giveawayCommand.toJSON(),
             clearCommand.toJSON(),
-            ...coins.commands.map(command => command.toJSON()),
-            ...roeiAI.commands.map(command => command.toJSON())
+            ...coins.commands.map(command => command.toJSON())
           ]
         }
       );
@@ -8637,7 +8597,20 @@ client.once(
 
       await guild.members.fetch();
 
-      void coins.start().then(() => roeiAI.start()).catch(() => console.error("Roei AI startup deferred"));
+      void coins.start().then(async () => {
+        // One-time retirement of the removed feature's entrance. Preserve user data.
+        const db = coins.store?.db;
+        if (!db || !db.prepare("SELECT name FROM sqlite_master WHERE name='ai_settings'").get()) return;
+        const old = db.prepare("SELECT data FROM ai_settings WHERE id='global'").get();
+        const settings = old ? JSON.parse(old.data) : {};
+        if (settings.retired || !settings.panelId) return;
+        const room = await guild.channels.fetch('1556887709568737360');
+        const panel = await room.messages.fetch(settings.panelId).catch(error => { if (error.code !== 10008) throw error; });
+        if (panel?.author.id === client.user.id) await panel.edit({ content: 'מערכת ה־AI הוסרה. מערכת ה־XP וההזמנות עוברת לבוט נפרד: Roei XP Bot.', embeds: [], components: [], allowedMentions: { parse: [] } });
+        settings.retired = true;
+        db.prepare("UPDATE ai_settings SET data=? WHERE id='global'").run(JSON.stringify(settings));
+        console.log('Legacy entrance retired; XP bot runs separately');
+      }).catch(() => console.error("Persistent systems initialization deferred"));
 
       for (
         const member of
@@ -8941,7 +8914,6 @@ client.on(
 // ========================================================
 
 async function handleMainInteraction(interaction) {
-    if (await roeiAI.handle(interaction)) return;
     if (await coins.handle(interaction)) return;
     try {
 

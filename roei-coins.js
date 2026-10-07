@@ -321,32 +321,6 @@ function createCoinsSystem({ client, guildId, canAdmin, env = process.env, store
   });
   client.on('guildMemberAdd', member => { if (ready && member.guild.id === guildId && !member.user.bot) locked(member.id, () => syncMember(member)).catch(report); });
   client.on('guildMemberUpdate', (old, member) => { if (ready && member.guild.id === guildId && !member.user.bot && store.read(member.id) && !locks.has(member.id) && RANKS.some(r => old.roles.cache.has(r.roleId) !== member.roles.cache.has(r.roleId))) locked(member.id, async () => syncMember(await fetchHuman(member.id))).catch(report); });
-  async function aiRead(id) {
-    if (!ready) throw new CoinsError('USER');
-    const user = ensureUser(await fetchHuman(id)), next = RANKS[user.currentRank + 1];
-    return { balance: user.balance, currentRank: RANKS[user.currentRank], nextRank: next || null, missing: next ? Math.max(0, next.price - user.balance) : 0 };
-  }
-  async function aiAction(action, id, args, key) {
-    if (!ready) throw new CoinsError('USER');
-    // The existing slash handler owns transfers, notifications, cooldowns and receipts.
-    if (['daily', 'pay'].includes(action)) {
-      let result;
-      const interaction = { id: key, guildId, user: { id, bot: false }, commandName: action,
-        isChatInputCommand: () => true, isButton: () => false, isStringSelectMenu: () => false,
-        options: { getUser: () => ({ id: args.recipient }), getInteger: () => args.amount },
-        deferReply: async () => { interaction.deferred = true; },
-        reply: async value => { result = value; }, editReply: async value => { result = value; } };
-      await handle(interaction); return { content: result?.content || result };
-    }
-    if (action !== 'rank') throw new CoinsError('RANK');
-    return locked(id, async () => {
-      const member = await fetchHuman(id); ensureUser(member);
-      await guild.roles.fetch(); await checkRoles(member);
-      store.beginPurchase(id, args.rank, key);
-      try { const user = await syncMember(await fetchHuman(id)); return { rank: RANKS[user.currentRank].name, balance: user.balance }; }
-      catch { return { status: 'pending_role_sync', message: 'הסכום שמור לרכישה והרול יסתנכרן אוטומטית, ללא חיוב נוסף.' }; }
-    });
-  }
-  return { start, handle, commands, aiRead, aiAction, get store() { return store; }, refreshPanels, syncMember, tick, get ready() { return ready; } };
+  return { start, handle, commands, get store() { return store; }, refreshPanels, syncMember, tick, get ready() { return ready; } };
 }
 module.exports = { createCoinsSystem, commands, rankEmbed, leaderboardEmbed, shopPayload, errorText, CHANNEL_ID, DROP_CHANNEL_ID };

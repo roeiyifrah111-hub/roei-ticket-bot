@@ -101,17 +101,7 @@ async function discordFixture(existing) {
   return { system, store, messages, guild, members, client, me, request, dms, fetchedChannels };
 }
 
-test('AI adapters reuse daily/pay receipts, participant notices and sequential rank purchases', async () => {
-  const f=await discordFixture(); f.store.addCoins('1',10000,'fixture');
-  const result=await f.system.aiAction('pay','1',{recipient:'2',amount:250},'ai:transfer');
-  assert.match(result.content,/250/);assert.equal(f.store.getBalance('2'),250);
-  await f.system.aiAction('pay','1',{recipient:'2',amount:250},'ai:transfer');
-  assert.equal(f.store.getBalance('2'),250);assert.equal(f.dms.filter(m=>m.id==='2').length,1);
-  const daily=await f.system.aiAction('daily','3',{},'ai:daily');assert.match(daily.content,/קיבלת/);
-  await assert.rejects(f.system.aiAction('rank','1',{rank:3},'ai:skip'),/RANK/);
-  await f.system.aiAction('rank','1',{rank:1},'ai:rank');assert.equal(f.store.user('1').currentRank,1);
-  assert.equal((await f.system.aiRead('1')).nextRank.index,2);f.store.close();
-});
+
 test('panel recovery edits existing messages in order and role sync preserves unrelated roles', async () => {
   const f = await discordFixture(); const ids = f.store.meta('panels'); assert.ok(BigInt(ids.leader) < BigInt(ids.shop));
   await f.system.refreshPanels(true); assert.equal(f.messages.size, 2); assert.deepEqual(f.store.meta('panels'), ids);
