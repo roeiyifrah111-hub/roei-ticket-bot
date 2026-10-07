@@ -23,7 +23,11 @@ function createGeminiAPI({apiKey,db,fetchImpl=fetch}) {
     const response=await fetchImpl(ROOT+model+(body?':generateContent':''),{method:body?'POST':'GET',headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(45000)]):AbortSignal.timeout(45000)});
     const json=await response.json();
     // Never propagate provider messages: they may contain input or credentials.
-    if(!response.ok)throw fail(response.status,/^[A-Z_]{1,60}$/.test(json.error?.status||'')?json.error.status:'GEMINI_REQUEST_FAILED');
+    if(!response.ok){
+      const error=fail(response.status,/^[A-Z_]{1,60}$/.test(json.error?.status||'')?json.error.status:'GEMINI_REQUEST_FAILED');
+      error.quota=(json.error?.details||[]).flatMap(d=>d.violations||[]).slice(0,4).map(v=>({metric:String(v.quotaMetric||'').replace(/[^a-zA-Z0-9_./-]/g,'').slice(0,160),id:String(v.quotaId||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,160),value:/^\d+$/.test(String(v.quotaValue))?String(v.quotaValue):undefined}));
+      throw error;
+    }
     return json;
   }
   function parts(content) {
