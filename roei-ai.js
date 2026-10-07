@@ -1,5 +1,5 @@
 'use strict';
-const OpenAI = require('openai');
+const {createGeminiAPI,migrateGemini}=require('./ai-gemini');
 const { randomUUID } = require('node:crypto');
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits: P } = require('discord.js');
 const { AIStore, cleanName } = require('./ai-store');
@@ -24,13 +24,14 @@ ai.addSubcommand(s=>s.setName('settings').setDescription('העדפות אישי�
 ai.addSubcommand(s=>s.setName('config').setDescription('בעלים: יכולות ומגבלות').addStringOption(o=>o.setName('setting').setDescription('הגדרה').setRequired(true).addChoices(...['enabled','web','memory','actions','vision','files','maxOutputTokens','dailyRequests','dailyTokens','dailyWeb','concurrent'].map(value=>({name:value,value})))).addStringOption(string('value','true / false או מספר',true,12)));
 ai.addSubcommand(s=>s.setName('knowledge').setDescription('בעלים: הוספה או הסרה של חדר ידע ציבורי').addChannelOption(o=>o.setName('channel').setDescription('חדר חוקים/מידע').setRequired(true).addChannelTypes(ChannelType.GuildText)).addBooleanOption(o=>o.setName('enabled').setDescription('להוסיף כמקור ידע').setRequired(true)));
 const commands=[ai,new SlashCommandBuilder().setName('ai-name').setDescription('שם אישי ל־Roei AI').addStringOption(string('name','2–24 תווים',true,24)),...['reset','profile','help'].map(name=>new SlashCommandBuilder().setName(`ai-${name}`).setDescription({reset:'איפוס השיחה האישית',profile:'פרופיל ה־AI שלך',help:'עזרה ל־Roei AI'}[name]))];
-const HELP='🤖 **Roei AI**\nלחצו על **פתיחת השיחה הפרטית שלי** או השתמשו ב־`/ai private`. דברו עם ה־AI בתוך השרשור האישי: שאלות, קוד, תמונות, PDF וחיפוש באינטרנט.\n`/ai name` שם אישי · `/ai settings` שפה וסגנון · `/ai memory` זיכרון · `/ai reset` שיחה חדשה · `/ai forget` מחיקת זיכרון.\nפעולות שמשנות דברים דורשות אישור אישי. החדר הראשי הוא חדר כניסה; ה־AI אינו עונה בו לשיחות. הודעות ישנות בחדר הראשי נשארות גלויות.\nמנהלים בעלי הרשאה מתאימה עשויים לראות שרשורים פרטיים. תוכן השיחה נשלח ל־OpenAI לצורך מענה.';
+const HELP='🤖 **Roei AI**\nלחצו על **פתיחת השיחה הפרטית שלי** או השתמשו ב־`/ai private`. דברו עם ה־AI בתוך השרשור האישי: שאלות, קוד, תמונות, PDF וחיפוש באינטרנט.\n`/ai name` שם אישי · `/ai settings` שפה וסגנון · `/ai memory` זיכרון · `/ai reset` שיחה חדשה · `/ai forget` מחיקת זיכרון.\nפעולות שמשנות דברים דורשות אישור אישי. החדר הראשי הוא חדר כניסה; ה־AI אינו עונה בו לשיחות. הודעות ישנות בחדר הראשי נשארות גלויות.\nמנהלים בעלי הרשאה מתאימה עשויים לראות שרשורים פרטיים. תוכן השיחה נשלח ל־Google Gemini לצורך מענה.';
 function friendly(e) {
-  const texts={BUSY:'⏳ בקשה קודמת שלך עדיין פועלת. אפשר לעצור אותה בכפתור.',CAPACITY:'⏳ המערכת עמוסה כרגע. נסה שוב בעוד רגע.',COOLDOWN:'⏳ המתן 3 שניות בין בקשות.',BUDGET:'הגעת למגבלת השימוש היומית. המגבלה מתחדשת בחצות UTC.',WEB_BUDGET:'החיפוש ברשת כבוי או שמכסת החיפוש היומית הסתיימה.',WEB_UNAVAILABLE:'החיפוש ברשת אינו זמין כרגע. לא הצגתי תוצאות שלא בדקתי.',DISABLED:'מערכת ה־AI כבויה כרגע.',NAME:'השם צריך להכיל 2–24 תווים, ללא תיוגים או עיצוב.',STALE:'האישור פג תוקף או שייך למשתמש אחר.',PERMISSION:'אין הרשאה לפעולה הזאת.',ATTACHMENT_SIZE:'הקובץ גדול מדי. עד 4 MB לתמונה/PDF ועד 64 KB לקובץ טקסט.',ATTACHMENT_TYPE:'סוג הקובץ אינו נתמך או שהיכולת כבויה.',CLEANUP_PENDING:'הזיכרון המקומי נותק ונמחק. מחיקת עותק השיחה אצל הספק עדיין לא הושלמה; הפעל שוב /ai forget כדי לנסות שוב.'};
+  const texts={LEGACY_CLEANUP_PENDING:'הזיכרון המקומי נמחק. עותקי שיחות ישנים ב־OpenAI לא נמחקו: המפתח הישן אינו מחובר. הבוט אינו משתמש בהם.',BUSY:'⏳ בקשה קודמת שלך עדיין פועלת. אפשר לעצור אותה בכפתור.',CAPACITY:'⏳ המערכת עמוסה כרגע. נסה שוב בעוד רגע.',COOLDOWN:'⏳ המתן 3 שניות בין בקשות.',BUDGET:'הגעת למגבלת השימוש היומית. המגבלה מתחדשת בחצות UTC.',WEB_BUDGET:'החיפוש ברשת כבוי או שמכסת החיפוש היומית הסתיימה.',WEB_UNAVAILABLE:'החיפוש ברשת אינו זמין כרגע. לא הצגתי תוצאות שלא בדקתי.',DISABLED:'מערכת ה־AI כבויה כרגע.',NAME:'השם צריך להכיל 2–24 תווים, ללא תיוגים או עיצוב.',STALE:'האישור פג תוקף או שייך למשתמש אחר.',PERMISSION:'אין הרשאה לפעולה הזאת.',ATTACHMENT_SIZE:'הקובץ גדול מדי. עד 4 MB לתמונה/PDF ועד 64 KB לקובץ טקסט.',ATTACHMENT_TYPE:'סוג הקובץ אינו נתמך או שהיכולת כבויה.',CLEANUP_PENDING:'הזיכרון המקומי נותק ונמחק. מחיקת עותק השיחה אצל הספק עדיין לא הושלמה; הפעל שוב /ai forget כדי לנסות שוב.'};
   if(e.name==='AbortError' || e.name==='APIUserAbortError')return 'הבקשה נעצרה או הגיעה למגבלת הזמן.';
   if(e.status===401 || e.status===403)return 'חיבור ה־AI נדחה. בעל השרת צריך לבדוק את מפתח ה־API והרשאותיו.';
-  if(e.status===429 && (e.type==='insufficient_quota' || ['insufficient_quota','credit_balance_exhausted','organization_spend_limit_exceeded','project_spend_limit_exceeded','organization_usage_limit_exceeded'].includes(e.code)))return 'אין כרגע מכסה זמינה בחשבון OpenAI של הבוט. בעל השרת צריך לבדוק יתרה וחיוב ב־OpenAI; זו לא מגבלת ההודעות שלך בבוט.';
-  if(e.status===429)return 'OpenAI מגביל כרגע את קצב הבקשות. זו לא מגבלת ההודעות היומית שלך בבוט. נסה שוב בעוד דקה.';
+  if(e.status===429 && (e.type==='insufficient_quota' || ['insufficient_quota','credit_balance_exhausted','organization_spend_limit_exceeded','project_spend_limit_exceeded','organization_usage_limit_exceeded'].includes(e.code)))return 'אין כרגע מכסה זמינה בחשבון Google Gemini של הבוט. בעל השרת צריך לבדוק יתרה וחיוב ב־Google Gemini; זו לא מגבלת ההודעות שלך בבוט.';
+  if(e.status===429 && e.code==='RESOURCE_EXHAUSTED')return 'מכסת Google Gemini נוצלה או שקצב הבקשות גבוה מדי. אפשר להמתין ולנסות שוב; בעל השרת יכול לבדוק את המכסה ב־Google AI Studio.';
+  if(e.status===429)return 'Google Gemini מגביל כרגע את קצב הבקשות. זו לא מגבלת ההודעות היומית שלך בבוט. נסה שוב בעוד דקה.';
   return texts[e.message] || 'לא הצלחתי להשלים את הבקשה. אפשר לנסות שוב; שאר מערכות הבוט ממשיכות לעבוד.';
 }
 function payload(text) { return text.length<=1900?{content:text,...safe}:{content:'התשובה המלאה מצורפת כדי לשמור על הטקסט והקוד ללא חיתוך.',files:[{attachment:Buffer.from(text,'utf8'),name:'Roei-AI-answer.txt'}],...safe}; }
@@ -39,13 +40,14 @@ function createAISystem({client,guildId,coins,adapters,env=process.env,api:provi
   const report=e=>console.error(`Roei AI error: ${Number(e.status)||'local'} code=${/^[a-zA-Z0-9_]{2,60}$/.test(e.code||'')?e.code:/^[A-Z_]{2,40}$/.test(e.message)?e.message:'request_failed'}`);
   async function start() {
     if(ready)return;
-    if(!env.OPENAI_API_KEY && !provided){console.log('Roei AI disabled: OPENAI_API_KEY is missing');return;}
+    if(!env.GEMINI_API_KEY && !provided){console.log('Roei AI disabled: GEMINI_API_KEY is missing');return;}
     if(!coins.store){console.log('Roei AI waiting for persistent storage');const retry=setTimeout(()=>void start(),15000);retry.unref?.();return;}
     try {
       store=new AIStore(coins.store.db);
-      const api=provided || new OpenAI({apiKey:env.OPENAI_API_KEY,maxRetries:0,timeout:45000});
-      const registry=createRegistry({client,guildId,coins,adapters,store});service=new AIService({api,store,registry,model:env.AI_MODEL||'gpt-6-luna',env});ready=true;
-      console.log('Roei AI ready: persistent memory, Responses/Conversations, web search');
+      if(!provided)migrateGemini(store);
+      const api=provided || createGeminiAPI({apiKey:env.GEMINI_API_KEY,db:store.db});
+      const registry=createRegistry({client,guildId,coins,adapters,store});service=new AIService({api,store,registry,model:env.GEMINI_MODEL||'gemini-3.8-flash',env});ready=true;
+      console.log('Roei AI ready: persistent local memory, Gemini, Google Search');
       // Read-only connectivity probe: no prompt, token or credential is logged.
       try {await api.models.retrieve(service.model);service.health.api='model_access_ok';console.log('Roei AI model access: OK');void probeAI(api,service.model,store,service.health);}catch(e){service.health.api=`error_${Number(e.status)||'connection'}`;report(e);}
       const guild=await client.guilds.fetch(guildId),channel=await guild.channels.fetch(CHANNEL_ID);
@@ -139,7 +141,7 @@ function createAISystem({client,guildId,coins,adapters,env=process.env,api:provi
       }
       const action=i.commandName==='ai'?i.options.getSubcommand():i.commandName.slice(3);
       if(action==='help'){await send(HELP);return true;}
-      if(action==='status') {if(i.user.id!==OWNER_ID)throw new Error('PERMISSION');await send(JSON.stringify({model:service.model,health:service.health,persistentStorage:'SQLite /data',active:service.active,lockedUsers:service.running.size,settings:service.settings()},null,2));return true;}
+      if(action==='status') {if(i.user.id!==OWNER_ID)throw new Error('PERMISSION');await send(JSON.stringify({provider:'Google Gemini',model:service.model,health:service.health,persistentStorage:'SQLite /data',active:service.active,lockedUsers:service.running.size,settings:service.settings()},null,2));return true;}
       if(action==='config' || action==='knowledge') {
         if(i.user.id!==OWNER_ID)throw new Error('PERMISSION');
         if(action==='knowledge'){const c=i.options.getChannel('channel'),enabled=i.options.getBoolean('enabled');const ids=new Set(store.settings().knowledgeChannels);if(enabled){if(!c.permissionsFor(i.guild.roles.everyone)?.has([P.ViewChannel,P.ReadMessageHistory]))throw new Error('PERMISSION');ids.add(c.id);}else ids.delete(c.id);if(ids.size>5)throw new Error('LIMIT');store.settings({knowledgeChannels:[...ids]});}

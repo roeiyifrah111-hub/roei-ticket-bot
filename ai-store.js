@@ -13,7 +13,7 @@ class AIStore {
   get(id) {
     if (!/^\d{1,22}$/.test(id)) throw new Error('USER');
     const row = this.db.prepare('SELECT data FROM ai_profiles WHERE id=?').get(id);
-    return row ? JSON.parse(row.data) : this.save({ userId: id, assistantName: 'Roei AI', preferredLanguage: 'auto', responseStyle: 'רגיל', preferences: '', memorySummary: '', recentMessages: [], conversationId: null, privateConversationId: null, turns: 0, privateTurns: 0, privateSummary: '', privateRecent: [], messageCount: 0, createdAt: Date.now() });
+    return row ? JSON.parse(row.data) : this.save({ provider: 'gemini', userId: id, assistantName: 'Roei AI', preferredLanguage: 'auto', responseStyle: 'רגיל', preferences: '', memorySummary: '', recentMessages: [], conversationId: null, privateConversationId: null, turns: 0, privateTurns: 0, privateSummary: '', privateRecent: [], messageCount: 0, createdAt: Date.now() });
   }
   save(p) { p.updatedAt = Date.now(); this.db.prepare('INSERT INTO ai_profiles VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(p.userId, JSON.stringify(p)); return p; }
   settings(patch) {

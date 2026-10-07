@@ -39,7 +39,7 @@ const client =
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildVoiceStates,
       GatewayIntentBits.GuildMessages,
-      ...(process.env.OPENAI_API_KEY && process.env.AI_ENABLED !== "false" ? [GatewayIntentBits.MessageContent] : [])
+      ...(process.env.GEMINI_API_KEY && process.env.AI_ENABLED !== "false" ? [GatewayIntentBits.MessageContent] : [])
     ]
   });
 

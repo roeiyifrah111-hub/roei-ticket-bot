@@ -17,6 +17,30 @@ function fixture(output) {
   return {db,store,api,service,calls,get executed(){return executed;}};
 }
 const ctx=id=>({userId:id,guildId:'10',channelId:'20'}),content=[{type:'input_text',text:'שלום'}];
+
+test('Gemini migration retains memories and thread IDs without mixing provider conversation IDs',()=>{
+  const {migrateGemini}=require('./ai-gemini'),f=fixture();const p=f.store.get('1');Object.assign(p,{provider:'openai',conversationId:'openai-a',privateConversationId:'openai-b',privateThreadId:'123',privateSummary:'remember',privateRecent:[{role:'user',text:'old'}]});f.store.save(p);
+  migrateGemini(f.store);const moved=f.store.get('1');assert.equal(moved.privateThreadId,'123');assert.equal(moved.privateSummary,'remember');assert.equal(moved.privateRecent[0].text,'old');assert.equal(moved.privateConversationId,null);assert.deepEqual(moved.legacyOpenAIConversationIds,['openai-a','openai-b']);moved.privateConversationId='gemini_new';f.store.save(moved);migrateGemini(f.store);assert.equal(f.store.get('1').privateConversationId,'gemini_new');f.db.close();
+});
+test('Gemini stores local history, preserves signed tool parts, isolates users and deletes history',async()=>{
+  const {createGeminiAPI}=require('./ai-gemini'),f=fixture(),requests=[];
+  const mock=async(url,opts)=>{assert.ok(url.startsWith('https://generativelanguage.googleapis.com/'));assert.equal(opts.headers['x-goog-api-key'],'test');requests.push(JSON.parse(opts.body));return {ok:true,json:async()=>({candidates:[{content:{role:'model',parts:requests.length===1?[{thoughtSignature:'opaque',functionCall:{id:'call1',name:'my_profile',args:{}}}]:[{text:'done'}]}}],usageMetadata:{totalTokenCount:12}})};};
+  let api=createGeminiAPI({apiKey:'test',db:f.db,fetchImpl:mock});const a=await api.conversations.create(),b=await api.conversations.create();
+  const first=await api.responses.create({model:'gemini-3.8-flash',conversation:a.id,input:[{role:'user',content}],tools:[{type:'function',name:'my_profile',description:'profile',parameters:{type:'object',properties:{}}}]});assert.equal(first.output.find(o=>o.type==='function_call').call_id,'call1');
+  api=createGeminiAPI({apiKey:'test',db:f.db,fetchImpl:mock});await api.responses.create({model:'gemini-3.8-flash',conversation:a.id,input:[{type:'function_call_output',call_id:'call1',output:'{"ok":true}'}]});assert.equal(requests[1].contents[1].parts[0].thoughtSignature,'opaque');assert.equal(requests[1].contents[2].parts[0].functionResponse.name,'my_profile');
+  await api.responses.create({model:'gemini-3.8-flash',conversation:b.id,input:'other user'});assert.equal(requests[2].contents.length,1);
+  for(const item of (await api.conversations.items.list(a.id)).data)await api.conversations.items.delete(item.id,{conversation_id:a.id});assert.equal((await api.conversations.items.list(a.id)).data.length,0);await api.conversations.delete(a.id);assert.equal(f.db.prepare('SELECT count(*) n FROM ai_gemini_conversations').get().n,1);f.db.close();
+});
+test('Gemini grounding uses real metadata and converts attachments without persisting their bytes',async()=>{
+  const {createGeminiAPI}=require('./ai-gemini'),f=fixture();let body;
+  const api=createGeminiAPI({apiKey:'test',db:f.db,fetchImpl:async(_,o)=>{body=JSON.parse(o.body);return {ok:true,json:async()=>({candidates:[{content:{role:'model',parts:[{text:'answer'}]},groundingMetadata:{webSearchQueries:['query'],groundingChunks:[{web:{uri:'https://example.com',title:'source'}}]}}]})};}});
+  const c=await api.conversations.create();const r=await api.responses.create({model:'gemini-3.8-flash',conversation:c.id,input:[{role:'user',content:[{type:'input_file',file_data:'data:application/pdf;base64,YQ=='}]}],tools:[{type:'web_search'},{type:'function',name:'pay'}],tool_choice:{type:'web_search'}});
+  assert.deepEqual(body.tools,[{googleSearch:{}}]);assert.equal(body.contents[0].parts[0].inlineData.mimeType,'application/pdf');assert.ok(r.output.some(o=>o.type==='web_search_call'));assert.equal(r.output.find(o=>o.type==='message').content[0].annotations[0].url,'https://example.com');assert.ok(!f.db.prepare('SELECT data FROM ai_gemini_conversations').get().data.includes('YQ=='));f.db.close();
+});
+test('Gemini provider errors never expose raw error text and aborted requests propagate signals',async()=>{
+  const {createGeminiAPI}=require('./ai-gemini'),f=fixture();const api=createGeminiAPI({apiKey:'secret',db:f.db,fetchImpl:async(_,o)=>{assert.ok(o.signal);return {ok:false,status:429,json:async()=>({error:{status:'RESOURCE_EXHAUSTED',message:'secret raw'}})};}});
+  await assert.rejects(api.responses.create({model:'gemini-3.8-flash',input:'hi'}),e=>e.status===429&&e.code==='RESOURCE_EXHAUSTED'&&!e.message.includes('secret'));f.db.close();
+});
 test('persistent profiles, names, settings and separated users survive reopening',()=>{
   const dir=mkdtempSync(join(tmpdir(),'roei-ai-')),file=join(dir,'data.sqlite');let db=new DatabaseSync(file),store=new AIStore(db);
   const a=store.get('1');a.assistantName=cleanName('Jarvis');a.conversationId='a';a.memorySummary='private A';store.save(a);store.get('2');store.settings({web:false});db.close();
@@ -73,7 +97,7 @@ test('daily budgets prevent additional API calls',async()=>{const f=fixture();f.
 test('registry excludes arbitrary code, admin and credential methods',()=>{const registry=createRegistry({store:{settings:()=>({})}});for(const name of ['eval','exec','ban','addcoins','setcoins','grant_admin','read_env'])assert.equal(registry.registry.has(name),false);for(const tool of registry.registry.values())assert.ok(tool.riskLevel && Array.isArray(tool.requiredPermissions));});
 test('channel permissions require both user and bot and private thread membership',async()=>{const member={id:'1'},me={id:'2'},channel={permissionsFor:()=>({has:()=>false})};assert.equal(await visible(channel,member,me),false);channel.permissionsFor=()=>({has:()=>true});channel.type=12;channel.members={fetch:async()=>new Map([['2',{}]])};assert.equal(await visible(channel,member,me),false);});
 test('all slash command schemas valid, distinct and long code preserved in attachment',()=>{const json=commands.map(c=>c.toJSON());assert.equal(new Set(json.map(c=>c.name)).size,json.length);const text='```js\n'+'x'.repeat(3000)+'\n```';assert.equal(payload(text).files[0].attachment.toString(),text);});
-test('missing API key disables only AI and still exposes command handlers',async()=>{const logs=[],old=console.log;console.log=s=>logs.push(s);try{const ai=createAISystem({client:{},guildId:'1',coins:{},adapters:{},env:{}});await ai.start();assert.equal(ai.ready,false);assert.ok(ai.commands.length);assert.ok(logs.includes('Roei AI disabled: OPENAI_API_KEY is missing'));}finally{console.log=old;}});
+test('missing API key disables only AI and still exposes command handlers',async()=>{const logs=[],old=console.log;console.log=s=>logs.push(s);try{const ai=createAISystem({client:{},guildId:'1',coins:{},adapters:{},env:{}});await ai.start();assert.equal(ai.ready,false);assert.ok(ai.commands.length);assert.ok(logs.includes('Roei AI disabled: GEMINI_API_KEY is missing'));}finally{console.log=old;}});
 test('Discord routing answers only the owner inside a private thread, never the public entrance',async()=>{
   const {Collection}=require('discord.js'),f=fixture();let sent=0;
   f.api.models={retrieve:async()=>{throw Object.assign(new Error('test_model_probe_disabled'),{status:403});}};

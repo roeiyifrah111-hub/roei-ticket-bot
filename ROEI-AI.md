@@ -1,5 +1,7 @@
 # Roei AI
 
+**Current provider: Google Gemini. See [GEMINI-MIGRATION.md](GEMINI-MIGRATION.md) for the current configuration, storage and verification details. OpenAI-specific details below document the previous implementation.**
+
 Integrated in the existing **main bot**, in channel `1556887709568737360`.
 The entrance panel button or `/ai private` opens/reuses a personal private thread. Only its assigned user's messages trigger AI replies. Public messages, public threads, bots/webhooks and other channels are ignored.
 Startup makes the entrance read-only for the everyone role and enables sending inside threads. Bot-specific permissions permit creating private threads and posting the panel. Existing role/member overwrites and administrators may still permit public posting, but AI never answers those messages. Old public messages are not deleted.
