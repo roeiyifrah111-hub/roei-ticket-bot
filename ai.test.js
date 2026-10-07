@@ -74,14 +74,50 @@ test('registry excludes arbitrary code, admin and credential methods',()=>{const
 test('channel permissions require both user and bot and private thread membership',async()=>{const member={id:'1'},me={id:'2'},channel={permissionsFor:()=>({has:()=>false})};assert.equal(await visible(channel,member,me),false);channel.permissionsFor=()=>({has:()=>true});channel.type=12;channel.members={fetch:async()=>new Map([['2',{}]])};assert.equal(await visible(channel,member,me),false);});
 test('all slash command schemas valid, distinct and long code preserved in attachment',()=>{const json=commands.map(c=>c.toJSON());assert.equal(new Set(json.map(c=>c.name)).size,json.length);const text='```js\n'+'x'.repeat(3000)+'\n```';assert.equal(payload(text).files[0].attachment.toString(),text);});
 test('missing API key disables only AI and still exposes command handlers',async()=>{const logs=[],old=console.log;console.log=s=>logs.push(s);try{const ai=createAISystem({client:{},guildId:'1',coins:{},adapters:{},env:{}});await ai.start();assert.equal(ai.ready,false);assert.ok(ai.commands.length);assert.ok(logs.includes('Roei AI disabled: OPENAI_API_KEY is missing'));}finally{console.log=old;}});
-test('Discord routing ignores other channels, bots, webhooks and unowned threads; replies to humans',async()=>{
+test('Discord routing answers only the owner inside a private thread, never the public entrance',async()=>{
   const {Collection}=require('discord.js'),f=fixture();let sent=0;
   f.api.models={retrieve:async()=>{throw Object.assign(new Error('test_model_probe_disabled'),{status:403});}};
-  const channel={id:CHANNEL_ID,messages:{fetch:async()=>new Collection()},permissionsFor:()=>({has:()=>true}),send:async()=>({id:'panel'}),sendTyping:async()=>{}};
-  const guild={members:{fetch:async({user})=>({id:user,user:{bot:false}}),fetchMe:async()=>({id:'bot'})},channels:{fetch:async()=>channel}};
+  const overwrites=[];
+  const channel={id:CHANNEL_ID,permissionOverwrites:{edit:async(id,p)=>overwrites.push([id,p])},messages:{fetch:async()=>new Collection()},permissionsFor:()=>({has:()=>true}),send:async()=>({id:'panel'}),sendTyping:async()=>{}};
+  const guild={roles:{everyone:{id:'everyone'}},members:{fetch:async({user})=>({id:user,user:{bot:false}}),fetchMe:async()=>({id:'bot'})},channels:{fetch:async()=>channel}};
   const client={user:{id:'bot'},guilds:{fetch:async()=>guild}};
   const system=createAISystem({client,guildId:'10',coins:{store:{db:f.db}},adapters:{},env:{},api:f.api});await system.start();
   const message=(id,overrides={})=>({id:'m'+id,guildId:'10',guild,channelId:CHANNEL_ID,channel,author:{id,bot:false},content:'שלום',attachments:new Map(),reply:async()=>{sent++;return {id:'answer',edit:async()=>{}};},...overrides});
   await system.onMessage(message('1',{channelId:'elsewhere'}));await system.onMessage(message('1',{author:{id:'1',bot:true}}));await system.onMessage(message('1',{webhookId:'hook'}));await system.onMessage(message('1',{channelId:'private-other',channel:{parentId:CHANNEL_ID}}));
-  assert.equal(sent,0);assert.equal(f.calls.length,0);await system.onMessage(message('1'));assert.equal(sent,1);assert.equal(f.calls.length,1);assert.match(f.store.get('1').recentMessages[0].text,/שלום/);f.db.close();
+  await system.onMessage(message('1'));assert.equal(sent,0);assert.equal(f.calls.length,0);
+  assert.equal(overwrites.find(([id])=>id==='everyone')[1].SendMessages,false);
+  const p=f.store.get('1');p.privateThreadId='private-own';f.store.save(p);
+  const thread={...channel,id:'private-own',parentId:CHANNEL_ID,type:12,members:{fetch:async()=>new Map([['1',{}],['bot',{}]])}};
+  await system.onMessage(message('2',{channelId:thread.id,channel:thread}));assert.equal(sent,0);
+  await system.onMessage(message('1',{channelId:thread.id,channel:thread}));assert.equal(sent,1);assert.equal(f.calls.length,1);assert.match(f.store.get('1').privateRecent[0].text,/שלום/);assert.deepEqual(f.store.get('1').recentMessages,[]);f.db.close();
+});
+
+test('provider 429 before output preserves conversation and refunds unused local allowances',async()=>{
+  const f=fixture();const p=f.store.get('1');p.conversationId='existing';f.store.save(p);
+  f.api.responses.create=async()=>{throw Object.assign(new Error('quota'),{status:429,code:'credit_balance_exhausted'});};
+  await assert.rejects(f.service.run(ctx('1'),content,'hello'),{status:429});
+  assert.equal(f.store.get('1').conversationId,'existing');assert.equal(f.store.usage('1').requests,0);assert.equal(f.store.usage('1').web,0);f.db.close();
+});
+test('provider 429 after a tool call detaches incomplete conversation',async()=>{
+  const f=fixture(()=>({output:[{type:'function_call',name:'pay',arguments:'{"amount":5}',call_id:'c'}]}));
+  const create=f.api.responses.create;let count=0;f.api.responses.create=async p=>{if(++count===2)throw Object.assign(new Error('rate'),{status:429});return create(p);};
+  await assert.rejects(f.service.run(ctx('1'),content,'pay'),{status:429});assert.equal(f.store.get('1').conversationId,null);assert.equal(f.store.get('1').cleanup.length,1);assert.equal(f.service.pending.size,0);f.db.close();
+});
+test('billing errors are distinct from temporary rate limits',()=>{
+  const {friendly}=require('./roei-ai');
+  for(const code of ['insufficient_quota','credit_balance_exhausted','project_spend_limit_exceeded'])assert.match(friendly({status:429,code}),/יתרה וחיוב/);
+  assert.match(friendly({status:429,type:'insufficient_quota'}),/יתרה וחיוב/);assert.match(friendly({status:429,code:'rate_limit_exceeded'}),/קצב הבקשות/);
+});
+
+test('private entrance button serializes creation, restores membership and refuses public replacements',async()=>{
+  const {Collection}=require('discord.js'),f=fixture();let creates=0,adds=0,reopened=0,createdOptions;
+  f.api.models={retrieve:async()=>{throw Object.assign(new Error('probe disabled'),{status:403});}};
+  const thread={id:'555',parentId:CHANNEL_ID,type:12,ownerId:'bot',archived:false,members:{add:async()=>{adds++;}},setArchived:async()=>{reopened++;thread.archived=false;}};
+  const channel={id:CHANNEL_ID,permissionOverwrites:{edit:async()=>{}},messages:{fetch:async()=>new Collection()},permissionsFor:()=>({has:()=>true}),send:async()=>({id:'panel'}),threads:{create:async options=>{creates++;createdOptions=options;return thread;}}};
+  const guild={roles:{everyone:{id:'everyone'}},members:{fetch:async({user})=>({id:user}),fetchMe:async()=>({id:'bot'})},channels:{fetch:async id=>id===CHANNEL_ID?channel:thread}};
+  const system=createAISystem({client:{user:{id:'bot'},guilds:{fetch:async()=>guild}},guildId:'10',coins:{store:{db:f.db}},adapters:{},env:{},api:f.api});await system.start();
+  const replies=[];const interaction=()=>({isButton:()=>true,customId:'ai:private',guildId:'10',guild,user:{id:'1'},channelId:CHANNEL_ID,deferReply:async options=>assert.equal(options.ephemeral,true),editReply:async data=>replies.push(data.content)});
+  await Promise.all([system.handle(interaction()),system.handle(interaction())]);assert.equal(creates,1);assert.equal(adds,1);assert.equal(createdOptions.type,12);assert.equal(createdOptions.invitable,false);assert.equal(f.store.get('1').privateThreadId,'555');assert.ok(replies.every(s=>s.includes('<#555>')));
+  thread.archived=true;await system.handle(interaction());assert.equal(creates,1);assert.equal(reopened,1);assert.equal(adds,2);
+  thread.type=11;await system.handle(interaction());assert.equal(adds,2);assert.match(replies.at(-1),/אין הרשאה/);assert.equal(f.calls.length,0);f.db.close();
 });

@@ -24,39 +24,64 @@ ai.addSubcommand(s=>s.setName('settings').setDescription('העדפות אישי�
 ai.addSubcommand(s=>s.setName('config').setDescription('בעלים: יכולות ומגבלות').addStringOption(o=>o.setName('setting').setDescription('הגדרה').setRequired(true).addChoices(...['enabled','web','memory','actions','vision','files','maxOutputTokens','dailyRequests','dailyTokens','dailyWeb','concurrent'].map(value=>({name:value,value})))).addStringOption(string('value','true / false או מספר',true,12)));
 ai.addSubcommand(s=>s.setName('knowledge').setDescription('בעלים: הוספה או הסרה של חדר ידע ציבורי').addChannelOption(o=>o.setName('channel').setDescription('חדר חוקים/מידע').setRequired(true).addChannelTypes(ChannelType.GuildText)).addBooleanOption(o=>o.setName('enabled').setDescription('להוסיף כמקור ידע').setRequired(true)));
 const commands=[ai,new SlashCommandBuilder().setName('ai-name').setDescription('שם אישי ל־Roei AI').addStringOption(string('name','2–24 תווים',true,24)),...['reset','profile','help'].map(name=>new SlashCommandBuilder().setName(`ai-${name}`).setDescription({reset:'איפוס השיחה האישית',profile:'פרופיל ה־AI שלך',help:'עזרה ל־Roei AI'}[name]))];
-const HELP='🤖 **Roei AI**\nכתבו הודעה רגילה כאן — שאלות, קוד, תמונות, PDF או קישור לאתר. אפשר לבקש חיפוש עדכני באינטרנט.\n`/ai name` שם אישי · `/ai settings` שפה וסגנון · `/ai memory` זיכרון · `/ai reset` שיחה חדשה · `/ai forget` מחיקת זיכרון · `/ai private` שרשור פרטי.\nאפשר לבקש מידע חי על השרת, Coins, חנות הדרגות ומוזיקה. פעולות משנות דורשות אישור אישי.\n**ההודעות בחדר הזה גלויות למי שרואה אותו.** ההיסטוריה הפנימית מופרדת לכל משתמש. תוכן השיחה נשלח ל־OpenAI לצורך מענה. גם שרשור פרטי עשוי להיות נגיש למנהלי השרת.';
+const HELP='🤖 **Roei AI**\nלחצו על **פתיחת השיחה הפרטית שלי** או השתמשו ב־`/ai private`. דברו עם ה־AI בתוך השרשור האישי: שאלות, קוד, תמונות, PDF וחיפוש באינטרנט.\n`/ai name` שם אישי · `/ai settings` שפה וסגנון · `/ai memory` זיכרון · `/ai reset` שיחה חדשה · `/ai forget` מחיקת זיכרון.\nפעולות שמשנות דברים דורשות אישור אישי. החדר הראשי הוא חדר כניסה; ה־AI אינו עונה בו לשיחות. הודעות ישנות בחדר הראשי נשארות גלויות.\nמנהלים בעלי הרשאה מתאימה עשויים לראות שרשורים פרטיים. תוכן השיחה נשלח ל־OpenAI לצורך מענה.';
 function friendly(e) {
   const texts={BUSY:'⏳ בקשה קודמת שלך עדיין פועלת. אפשר לעצור אותה בכפתור.',CAPACITY:'⏳ המערכת עמוסה כרגע. נסה שוב בעוד רגע.',COOLDOWN:'⏳ המתן 3 שניות בין בקשות.',BUDGET:'הגעת למגבלת השימוש היומית. המגבלה מתחדשת בחצות UTC.',WEB_BUDGET:'החיפוש ברשת כבוי או שמכסת החיפוש היומית הסתיימה.',WEB_UNAVAILABLE:'החיפוש ברשת אינו זמין כרגע. לא הצגתי תוצאות שלא בדקתי.',DISABLED:'מערכת ה־AI כבויה כרגע.',NAME:'השם צריך להכיל 2–24 תווים, ללא תיוגים או עיצוב.',STALE:'האישור פג תוקף או שייך למשתמש אחר.',PERMISSION:'אין הרשאה לפעולה הזאת.',ATTACHMENT_SIZE:'הקובץ גדול מדי. עד 4 MB לתמונה/PDF ועד 64 KB לקובץ טקסט.',ATTACHMENT_TYPE:'סוג הקובץ אינו נתמך או שהיכולת כבויה.',CLEANUP_PENDING:'הזיכרון המקומי נותק ונמחק. מחיקת עותק השיחה אצל הספק עדיין לא הושלמה; הפעל שוב /ai forget כדי לנסות שוב.'};
   if(e.name==='AbortError' || e.name==='APIUserAbortError')return 'הבקשה נעצרה או הגיעה למגבלת הזמן.';
   if(e.status===401 || e.status===403)return 'חיבור ה־AI נדחה. בעל השרת צריך לבדוק את מפתח ה־API והרשאותיו.';
-  if(e.status===429)return 'שירות ה־AI מוגבל כרגע. ייתכן שחסרה יתרה ב־OpenAI או שהגעתם למגבלת בקשות.';
+  if(e.status===429 && (e.type==='insufficient_quota' || ['insufficient_quota','credit_balance_exhausted','organization_spend_limit_exceeded','project_spend_limit_exceeded','organization_usage_limit_exceeded'].includes(e.code)))return 'אין כרגע מכסה זמינה בחשבון OpenAI של הבוט. בעל השרת צריך לבדוק יתרה וחיוב ב־OpenAI; זו לא מגבלת ההודעות שלך בבוט.';
+  if(e.status===429)return 'OpenAI מגביל כרגע את קצב הבקשות. זו לא מגבלת ההודעות היומית שלך בבוט. נסה שוב בעוד דקה.';
   return texts[e.message] || 'לא הצלחתי להשלים את הבקשה. אפשר לנסות שוב; שאר מערכות הבוט ממשיכות לעבוד.';
 }
 function payload(text) { return text.length<=1900?{content:text,...safe}:{content:'התשובה המלאה מצורפת כדי לשמור על הטקסט והקוד ללא חיתוך.',files:[{attachment:Buffer.from(text,'utf8'),name:'Roei-AI-answer.txt'}],...safe}; }
 function createAISystem({client,guildId,coins,adapters,env=process.env,api:provided}) {
-  let store,service,ready=false;const destructive=new Map(),lastMessages=new Map();
-  const report=e=>console.error(`Roei AI error: ${Number(e.status)||'local'} ${/^[A-Z_]{2,40}$/.test(e.message)?e.message:'request_failed'}`);
+  let store,service,ready=false;const destructive=new Map(),lastMessages=new Map(),opening=new Map();
+  const report=e=>console.error(`Roei AI error: ${Number(e.status)||'local'} code=${/^[a-zA-Z0-9_]{2,60}$/.test(e.code||'')?e.code:/^[A-Z_]{2,40}$/.test(e.message)?e.message:'request_failed'}`);
   async function start() {
     if(ready)return;
     if(!env.OPENAI_API_KEY && !provided){console.log('Roei AI disabled: OPENAI_API_KEY is missing');return;}
     if(!coins.store){console.log('Roei AI waiting for persistent storage');const retry=setTimeout(()=>void start(),15000);retry.unref?.();return;}
     try {
       store=new AIStore(coins.store.db);
-      const api=provided || new OpenAI({apiKey:env.OPENAI_API_KEY,maxRetries:1,timeout:45000});
+      const api=provided || new OpenAI({apiKey:env.OPENAI_API_KEY,maxRetries:0,timeout:45000});
       const registry=createRegistry({client,guildId,coins,adapters,store});service=new AIService({api,store,registry,model:env.AI_MODEL||'gpt-6-luna',env});ready=true;
       console.log('Roei AI ready: persistent memory, Responses/Conversations, web search');
       // Read-only connectivity probe: no prompt, token or credential is logged.
       try {await api.models.retrieve(service.model);service.health.api='model_access_ok';console.log('Roei AI model access: OK');void probeAI(api,service.model,store,service.health);}catch(e){service.health.api=`error_${Number(e.status)||'connection'}`;report(e);}
       const guild=await client.guilds.fetch(guildId),channel=await guild.channels.fetch(CHANNEL_ID);
+      // Scope permission changes to the AI entrance, never other server channels.
+      const me=await guild.members.fetchMe();
+      await channel.permissionOverwrites.edit(me.id,{SendMessages:true,SendMessagesInThreads:true,CreatePrivateThreads:true});
+      await channel.permissionOverwrites.edit(guild.roles.everyone.id,{SendMessages:false,SendMessagesInThreads:true,CreatePublicThreads:false,CreatePrivateThreads:false});
+      console.log('Roei AI private entrance: configured; public AI replies disabled');
       const settings=store.settings();let panel=settings.panelId?await channel.messages.fetch(settings.panelId).catch(e=>{if(e.code!==10008)throw e;}):null;
       if(!panel){let before;for(let page=0;page<20 && !panel;page++){const batch=await channel.messages.fetch({limit:100,...(before?{before}:{})});panel=batch.find(m=>m.author.id===client.user.id && m.embeds[0]?.footer?.text==='roei-ai:panel:v1');if(batch.size<100)break;before=batch.last().id;}}
-      const data={embeds:[{title:'🤖 Roei AI',description:HELP,color:0x5865f2,footer:{text:'roei-ai:panel:v1'}}],...safe};
+      const data={components:[row(btn('ai:private','פתיחת השיחה הפרטית שלי',ButtonStyle.Primary))],embeds:[{title:'🤖 Roei AI',description:HELP,color:0x5865f2,footer:{text:'roei-ai:panel:v1'}}],...safe};
       if(panel)await panel.edit(data);else panel=await channel.send(data);store.settings({panelId:panel.id});
     }catch(e){report(e);}
   }
+  async function privateThread(i) {
+    const userId=i.user.id;
+    if(opening.has(userId))return opening.get(userId);
+    const pending=(async()=>{
+      const channel=await i.guild.channels.fetch(CHANNEL_ID),member=await i.guild.members.fetch({user:userId,force:true}),me=await i.guild.members.fetchMe();
+      if(member.communicationDisabledUntilTimestamp>Date.now() || !await visible(channel,member,me) || !channel.permissionsFor(member).has(P.SendMessagesInThreads) || !channel.permissionsFor(me).has([P.CreatePrivateThreads,P.SendMessagesInThreads]))throw new Error('PERMISSION');
+      const p=store.get(userId);
+      let thread=p.privateThreadId?await i.guild.channels.fetch(p.privateThreadId).catch(e=>{if(e.code!==10003)throw e;return null;}):null;
+      if(thread && (thread.type!==ChannelType.PrivateThread || thread.parentId!==CHANNEL_ID || thread.ownerId!==me.id))throw new Error('PERMISSION');
+      if(thread?.archived)await thread.setArchived(false);
+      if(thread?.invitable)await thread.setInvitable(false);
+      if(!thread){thread=await channel.threads.create({name:`Roei AI ${userId.slice(-5)}`,type:ChannelType.PrivateThread,invitable:false,autoArchiveDuration:1440});const fresh=store.get(userId);fresh.privateThreadId=thread.id;store.save(fresh);}
+      await thread.members.add(userId);
+      return `השיחה הפרטית שלך: <#${thread.id}>. כתוב שם כדי לדבר עם ה־AI. מנהלים בעלי הרשאה מתאימה עשויים לראות את השרשור.`;
+    })();
+    opening.set(userId,pending);
+    try{return await pending;}finally{opening.delete(userId);}
+  }
   async function onMessage(message,{regenerate=false}={}) {
     if(!ready || message.guildId!==guildId || message.author.bot || message.webhookId || message.system)return;
-    if(message.channelId!==CHANNEL_ID && message.channel?.parentId!==CHANNEL_ID)return;
+    // Fail closed even if a staff overwrite still permits posting in the entrance.
+    if(message.channelId===CHANNEL_ID || message.channel?.parentId!==CHANNEL_ID || message.channel.type!==ChannelType.PrivateThread)return;
     const profile=store.get(message.author.id),privateMode=message.channelId!==CHANNEL_ID && profile.privateThreadId===message.channelId;
     if(message.channelId!==CHANNEL_ID && !privateMode)return;
     if(!service.settings().enabled)return;
@@ -98,6 +123,7 @@ function createAISystem({client,guildId,coins,adapters,env=process.env,api:provi
       const send=text=>i.editReply(payload(text));
       if(component) {
         const [,action,id,messageId]=i.customId.split(':');
+        if(action==='private'){await send(await privateThread(i));return true;}
         if(['stop','regen'].includes(action)) {
           if(id!==i.user.id)throw new Error('PERMISSION');
           if(action==='stop')return await send(service.stop(id)?'עוצר את הבקשה…':'אין בקשה פעילה.'),true;
@@ -129,14 +155,7 @@ function createAISystem({client,guildId,coins,adapters,env=process.env,api:provi
       if(action==='name'){p.assistantName=cleanName(i.options.getString('name'));store.save(p);await send(`השם האישי שלך: **${p.assistantName}**`);return true;}
       if(action==='settings'){p.preferredLanguage=i.options.getString('language')||p.preferredLanguage;p.responseStyle=i.options.getString('style')||p.responseStyle;p.preferences=i.options.getString('interests')??p.preferences;store.save(p);await send('ההעדפות נשמרו.');return true;}
       if(action==='memory' || action==='profile'){await send(`שם: ${p.assistantName}\nשפה: ${p.preferredLanguage}\nסגנון: ${p.responseStyle}\nתחומי עניין: ${p.preferences||'לא הוגדרו'}\nסיכום ציבורי: ${p.memorySummary||'עדיין אין סיכום'}\nסיכום פרטי: ${p.privateSummary||'עדיין אין סיכום'}\nהודעות אחרונות:\n${[...(p.recentMessages||[]),...(p.privateRecent||[])].map(m=>`${m.role}: ${m.text}`).join('\n').slice(0,14000)}`);return true;}
-      if(action==='private') {
-        const channel=await i.guild.channels.fetch(CHANNEL_ID),member=await i.guild.members.fetch({user:i.user.id,force:true}),me=await i.guild.members.fetchMe();
-        if(!await visible(channel,member,me) || !channel.permissionsFor(me).has([P.CreatePrivateThreads,P.SendMessagesInThreads]))throw new Error('PERMISSION');
-        let thread=p.privateThreadId?await i.guild.channels.fetch(p.privateThreadId).catch(()=>null):null;
-        if(thread?.archived)await thread.setArchived(false);
-        if(!thread){thread=await channel.threads.create({name:`Roei AI ${i.user.id.slice(-5)}`,type:ChannelType.PrivateThread,invitable:false,autoArchiveDuration:1440});await thread.members.add(i.user.id);p.privateThreadId=thread.id;store.save(p);}
-        await send(`השיחה שלך: <#${thread.id}>. גם מנהלי שרת בעלי הרשאה מתאימה עשויים לראות שרשורים פרטיים.`);return true;
-      }
+      if(action==='private'){await send(await privateThread(i));return true;}
     }catch(e){report(e);await i.editReply({content:friendly(e),...safe}).catch(()=>{});}
     return true;
   }

@@ -1,8 +1,8 @@
 # Roei AI
 
 Integrated in the existing **main bot**, in channel `1556887709568737360`.
-Normal human messages trigger replies. Bots/webhooks and other channels are ignored.
-Private threads created by `/ai private` accept messages only from their assigned user.
+The entrance panel button or `/ai private` opens/reuses a personal private thread. Only its assigned user's messages trigger AI replies. Public messages, public threads, bots/webhooks and other channels are ignored.
+Startup makes the entrance read-only for the everyone role and enables sending inside threads. Bot-specific permissions permit creating private threads and posting the panel. Existing role/member overwrites and administrators may still permit public posting, but AI never answers those messages. Old public messages are not deleted.
 
 ## Setup
 
@@ -24,7 +24,7 @@ Private threads created by `/ai private` accept messages only from their assigne
 - `/ai help`, `/ai-help`: help and privacy explanation.
 - Owner-only `/ai config`, `/ai knowledge`, `/ai status`: feature flags, limits, public knowledge sources and health. Owner ID `1243097719262941224`.
 
-The main room is public. Internal memory is per user, and private-thread conversation IDs/history are additionally isolated from public answers. Profile changes cannot race an active AI generation.
+The main room is a public entrance only. Private threads disable member invitations and retain the same thread after restart; archived threads reopen. Moderators with appropriate Discord permissions may access them. Internal memory is per user, with private-thread history isolated from legacy public conversations. Profile changes cannot race an active AI generation.
 
 ## Responses, tools and web
 
@@ -41,7 +41,7 @@ Confirmations are random, single-use, user/channel/guild-bound, expire after one
 ## Limits and operations
 
 Defaults: 3 concurrent AI requests, one active request per user, 3-second cooldown, 6,000 input characters, 1,800 output tokens, 60 requests/150,000 tokens/20 web-enabled calls per user/day (UTC). Owner can tune within bounded ranges. API failures conservatively consume reserved web allowance; successful non-search responses refund it. Costs depend on provider pricing; set an account-level provider budget as well.
-Generation timeout 90 seconds, SDK request timeout 45 seconds and one retry. Stop button aborts in-flight requests. Long replies are delivered as UTF-8 text attachments to preserve complete code fences. Allowed mentions are disabled.
+Generation timeout 90 seconds, SDK request timeout 45 seconds and no automatic SDK retries (billing failures cannot be fixed by retrying). Provider 429 errors distinguish missing credit/billing quotas from temporary rate limits. A 429 before a response preserves the conversation and refunds unused local request/web allowances; interrupted tool sequences still detach safely. Stop button aborts in-flight requests. Long replies are delivered as UTF-8 text attachments to preserve complete code fences. Allowed mentions are disabled.
 Technical logs include status/tool/user IDs, never credentials or AI prompt/response bodies. `/ai status` reports actual API/search probe state. A one-time deployment probe uses synthetic messages to check Responses, conversation continuity, real web search/citations and a public URL. Passing is persisted; failed probes do not disable other bot systems.
 
 ## Validation

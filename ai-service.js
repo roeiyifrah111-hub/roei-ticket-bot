@@ -38,11 +38,13 @@ class AIService {
       this.active++;this.last.set(ctx.userId,Date.now());if(this.last.size>5000)this.last.delete(this.last.keys().next().value);
       this.store.usage(ctx.userId,{requests:1});
       const timer=setTimeout(()=>this.running.get(ctx.userId)?.abort(),90000);timer.unref?.();
-      try { return await this.generate({...ctx,signal},typeof content==='function'?await content(signal):content,text,s); }
+      const request={...ctx,signal,accepted:false};
+      try { return await this.generate(request,typeof content==='function'?await content(signal):content,text,s); }
       catch(e) {
         // An interrupted function-call sequence must not poison the next conversation request.
         const p=this.store.get(ctx.userId),key=ctx.private?'privateConversationId':'conversationId';
-        if(p[key]){p.cleanup=[...new Set([...(p.cleanup||[]),p[key]])];p[key]=null;this.store.save(p);}
+        if(e.status===429 && !request.accepted)this.store.usage(ctx.userId,{requests:-1});
+        if(p[key] && !(e.status===429 && !request.accepted)){p.cleanup=[...new Set([...(p.cleanup||[]),p[key]])];p[key]=null;this.store.save(p);}
         for(const [id,c] of this.pending)if(c.userId===ctx.userId)this.pending.delete(id);
         throw e;
       } finally {clearTimeout(timer);this.active--;}
@@ -69,8 +71,9 @@ class AIService {
       const params={model:this.model,instructions,input,tools,parallel_tool_calls:false,max_output_tokens:s.maxOutputTokens,max_tool_calls:1,...(s.memory?{conversation:p[conv]}:{store:false}),...(requestedWeb && !didWeb && webAvailable?{tool_choice:{type:'web_search'}}:{})};
       // Reserve before the API call so failed searches cannot bypass daily limits.
       if(webAvailable && !didWeb)this.store.usage(ctx.userId,{web:1});
-      try {response=await this.api.responses.create(params,{signal:ctx.signal});this.health.api='ok';}
+      try {response=await this.api.responses.create(params,{signal:ctx.signal});ctx.accepted=true;this.health.api='ok';}
       catch(e) {
+        if(e.status===429 && webAvailable && !didWeb)this.store.usage(ctx.userId,{web:-1});
         this.health.api=`error_${Number(e.status)||'connection'}`;
         if(e.status===404 && s.memory && p[conv] && e.param==='conversation') {p[conv]=(await this.api.conversations.create({}, {signal:ctx.signal})).id;this.store.save(p);continue;}
         if(e.status===400 && webAvailable && /web_search/.test(String(e.message))) {this.health.web='unavailable';if(requestedWeb)throw new Error('WEB_UNAVAILABLE');webAvailable=false;continue;}
